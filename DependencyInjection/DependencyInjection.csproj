@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Macaron.DependencyInjection</RootNamespace>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Macaron.DependencyInjection</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Gyu Song</Authors>
+    <PackageLicenseExpression>Unlicense</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/songkyoo/DependencyInjection</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PolySharp" Version="1.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework) == 'netstandard2.1'">
+    <PackageReference Include="System.Collections.Immutable" Version="6.0.1" />
+  </ItemGroup>
+  
+  <Target Name="TransformT4TextTemplates" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet tool restore" />
+    <Exec Command="dotnet t4 DependencyContainerBuilderExtensions.Register.tt" />
+  </Target>
+ 
+</Project>
