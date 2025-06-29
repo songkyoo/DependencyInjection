@@ -26,6 +26,36 @@ public sealed class DependencyContainerBuilder
         Register(key, factory: dependencyResolver => factory.Invoke(dependencyResolver, key.Type), lifeTime);
     }
 
+    public void Register<T>(Key<T> key, Func<T> factory, LifeTime lifeTime)
+        where T : notnull
+    {
+        Register(key, factory: _ => factory.Invoke(), lifeTime);
+    }
+
+    public void Register<T>(Func<IDependencyResolver, T> factory, LifeTime lifeTime)
+        where T : notnull
+    {
+        Register(Key.Of<T>(), factory, lifeTime);
+    }
+
+    public void Register<T>(Func<T> factory, LifeTime lifeTime)
+        where T : notnull
+    {
+        Register(Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
+    }
+
+    public void Register<T>(Key<T> key, LifeTime lifeTime)
+        where T : notnull, new()
+    {
+        Register(key, factory: _ => new T(), lifeTime);
+    }
+
+    public void Register<T>(LifeTime lifeTime)
+        where T : notnull, new()
+    {
+        Register(Key.Of<T>(), factory: _ => new T(), lifeTime);
+    }
+
     public DependencyContainer Build(DependencyContainer? parent = null)
     {
         return new DependencyContainer(parent, registry: _typeRegistrations.ToImmutable());
