@@ -4,7 +4,7 @@ public static class DependencyContainerExtensions
 {
     public static DependencyContainer CreateScope(
         this DependencyContainer dependencyContainer,
-        Action<DependencyContainerBuilder>? configure = null
+        Action<IDependencyRegistrar>? configure = null
     )
     {
         var builder = new DependencyContainerBuilder();
