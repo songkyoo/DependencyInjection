@@ -2,11 +2,13 @@
 
 public class DependencyContainerErrorTests
 {
+    #pragma warning disable CS9113
     private sealed class A(B b);
 
     private sealed class B(C c);
 
     private sealed class C(A a);
+    #pragma warning restore CS9113
 
     [Test]
     public void CyclicDependency_ShouldThrow_WithResolutionPath()
