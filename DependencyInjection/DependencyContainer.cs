@@ -15,16 +15,16 @@ public sealed class DependencyContainer(
     #endregion
 
     #region IDependencyResolver Interface
-    public object Resolve(IKey key)
+    object IDependencyResolver.Resolve(IKey key)
     {
         return ResolveRecursively(key, scopedInstances: _instances, dependencyResolver: this);
     }
 
-    public bool Contains(IKey key)
+    bool IDependencyResolver.Contains(IKey key)
     {
         ThrowIfDisposed();
 
-        return registry.ContainsKey(key) || parent?.Contains(key) is true;
+        return registry.ContainsKey(key) || (parent as IDependencyResolver)?.Contains(key) is true;
     }
     #endregion
 
@@ -51,11 +51,6 @@ public sealed class DependencyContainer(
     #endregion
 
     #region Methods
-    public T Resolve<T>(Key<T> key)
-    {
-        return (T)Resolve((IKey)key);
-    }
-
     private object ResolveRecursively(
         IKey key,
         Dictionary<IKey, object> scopedInstances,
