@@ -11,7 +11,7 @@ public class DependencyContainerScopeTests
         builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Scoped);
 
         var root = builder.Build();
-        var child = root.CreateScopedContainer();
+        var child = root.CreateScope();
 
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
@@ -26,7 +26,7 @@ public class DependencyContainerScopeTests
         builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
 
         var root = builder.Build();
-        var child = root.CreateScopedContainer();
+        var child = root.CreateScope();
 
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
@@ -62,7 +62,7 @@ public class DependencyContainerScopeTests
         builder.Register(key, factory: _ => new Foo(), LifeTime.Transient);
 
         var root = builder.Build();
-        var child = root.CreateScopedContainer();
+        var child = root.CreateScope();
 
         Assert.That(child.Resolve(key), Is.InstanceOf<Foo>());
     }

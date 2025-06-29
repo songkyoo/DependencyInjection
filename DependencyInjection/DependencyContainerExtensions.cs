@@ -2,7 +2,7 @@
 
 public static class DependencyContainerExtensions
 {
-    public static DependencyContainer CreateScopedContainer(
+    public static DependencyContainer CreateScope(
         this DependencyContainer dependencyContainer,
         Action<DependencyContainerBuilder>? configure = null
     )

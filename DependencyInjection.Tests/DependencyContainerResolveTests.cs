@@ -39,7 +39,7 @@ public class DependencyContainerResolveTests
         builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
 
         var root = builder.Build();
-        var child = root.CreateScopedContainer();
+        var child = root.CreateScope();
 
         var rootFoo = root.Resolve(Key.Of<Foo>());
         var childFoo = child.Resolve(Key.Of<Foo>());
