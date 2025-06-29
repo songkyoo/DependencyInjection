@@ -3,17 +3,6 @@ namespace Macaron.DependencyInjection;
 
 public static class DependencyContainerBuilderExtensions
 {
-    #region Instance
-    public static void RegisterSingleton<T>(
-        this DependencyContainerBuilder dependencyContainerBuilder,
-        Key<T> key,
-        T instance
-    ) where T : notnull
-    {
-        dependencyContainerBuilder.Register(key, factory: _ => instance, LifeTime.Singleton);
-    }
-    #endregion
-
     #region Transient
     public static void RegisterTransient<T>(
         this DependencyContainerBuilder dependencyContainerBuilder,
@@ -21,7 +10,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory, LifeTime.Transient);
+        dependencyContainerBuilder.Register(key, factory, lifeTime: LifeTime.Transient);
     }
 
     public static void RegisterTransient<T>(
@@ -30,7 +19,7 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), LifeTime.Transient);
+        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient);
     }
 
     public static void RegisterTransient<T>(
@@ -38,7 +27,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory, LifeTime.Transient);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory, lifeTime: LifeTime.Transient);
     }
 
     public static void RegisterTransient<T>(
@@ -46,7 +35,11 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => factory.Invoke(), LifeTime.Transient);
+        dependencyContainerBuilder.Register(
+            key: Key.Of<T>(),
+            factory: _ => factory.Invoke(),
+            lifeTime: LifeTime.Transient
+        );
     }
 
     public static void RegisterTransient<T>(
@@ -54,14 +47,37 @@ public static class DependencyContainerBuilderExtensions
         Key<T> key
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(key, factory: _ => new T(), LifeTime.Transient);
+        dependencyContainerBuilder.Register(key, factory: _ => new T(), lifeTime: LifeTime.Transient);
+    }
+
+    public static void RegisterTransient<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder,
+        Key<TInterface> key
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(key, factory: _ => new TImplementation(), lifeTime: LifeTime.Transient);
     }
 
     public static void RegisterTransient<T>(
         this DependencyContainerBuilder dependencyContainerBuilder
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => new T(), LifeTime.Transient);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Transient);
+    }
+
+    public static void RegisterTransient<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(
+            key: Key.Of<TInterface>(),
+            factory: _ => new TImplementation(),
+            lifeTime: LifeTime.Transient
+        );
     }
     #endregion
 
@@ -72,7 +88,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory, LifeTime.Scoped);
+        dependencyContainerBuilder.Register(key, factory, lifeTime: LifeTime.Scoped);
     }
 
     public static void RegisterScoped<T>(
@@ -81,7 +97,7 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), LifeTime.Scoped);
+        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped);
     }
 
     public static void RegisterScoped<T>(
@@ -89,7 +105,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory, LifeTime.Scoped);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory, lifeTime: LifeTime.Scoped);
     }
 
     public static void RegisterScoped<T>(
@@ -97,7 +113,11 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => factory.Invoke(), LifeTime.Scoped);
+        dependencyContainerBuilder.Register(
+            key: Key.Of<T>(),
+            factory: _ => factory.Invoke(),
+            lifeTime: LifeTime.Scoped
+        );
     }
 
     public static void RegisterScoped<T>(
@@ -105,14 +125,37 @@ public static class DependencyContainerBuilderExtensions
         Key<T> key
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(key, factory: _ => new T(), LifeTime.Scoped);
+        dependencyContainerBuilder.Register(key, factory: _ => new T(), lifeTime: LifeTime.Scoped);
+    }
+
+    public static void RegisterScoped<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder,
+        Key<TInterface> key
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(key, factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped);
     }
 
     public static void RegisterScoped<T>(
         this DependencyContainerBuilder dependencyContainerBuilder
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => new T(), LifeTime.Scoped);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Scoped);
+    }
+
+    public static void RegisterScoped<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(
+            key: Key.Of<TInterface>(),
+            factory: _ => new TImplementation(),
+            lifeTime: LifeTime.Scoped
+        );
     }
     #endregion
 
@@ -123,7 +166,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory, LifeTime.Singleton);
+        dependencyContainerBuilder.Register(key, factory, lifeTime: LifeTime.Singleton);
     }
 
     public static void RegisterSingleton<T>(
@@ -132,7 +175,7 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), LifeTime.Singleton);
+        dependencyContainerBuilder.Register(key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton);
     }
 
     public static void RegisterSingleton<T>(
@@ -140,7 +183,7 @@ public static class DependencyContainerBuilderExtensions
         Func<IDependencyResolver, T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory, LifeTime.Singleton);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory, lifeTime: LifeTime.Singleton);
     }
 
     public static void RegisterSingleton<T>(
@@ -148,7 +191,11 @@ public static class DependencyContainerBuilderExtensions
         Func<T> factory
     ) where T : notnull
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => factory.Invoke(), LifeTime.Singleton);
+        dependencyContainerBuilder.Register(
+            key: Key.Of<T>(),
+            factory: _ => factory.Invoke(),
+            lifeTime: LifeTime.Singleton
+        );
     }
 
     public static void RegisterSingleton<T>(
@@ -156,15 +203,48 @@ public static class DependencyContainerBuilderExtensions
         Key<T> key
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(key, factory: _ => new T(), LifeTime.Singleton);
+        dependencyContainerBuilder.Register(key, factory: _ => new T(), lifeTime: LifeTime.Singleton);
+    }
+
+    public static void RegisterSingleton<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder,
+        Key<TInterface> key
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(key, factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton);
     }
 
     public static void RegisterSingleton<T>(
         this DependencyContainerBuilder dependencyContainerBuilder
     ) where T : notnull, new()
     {
-        dependencyContainerBuilder.Register(Key.Of<T>(), factory: _ => new T(), LifeTime.Singleton);
+        dependencyContainerBuilder.Register(key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Singleton);
+    }
+
+    public static void RegisterSingleton<TInterface, TImplementation>(
+        this DependencyContainerBuilder dependencyContainerBuilder
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        dependencyContainerBuilder.Register(
+            key: Key.Of<TInterface>(),
+            factory: _ => new TImplementation(),
+            lifeTime: LifeTime.Singleton
+        );
     }
     #endregion
 
+    #region Instance
+    public static void RegisterSingleton<T>(
+        this DependencyContainerBuilder dependencyContainerBuilder,
+        Key<T> key,
+        T instance
+    ) where T : notnull
+    {
+        dependencyContainerBuilder.Register(key, factory: _ => instance, LifeTime.Singleton);
+    }
+    #endregion
 }

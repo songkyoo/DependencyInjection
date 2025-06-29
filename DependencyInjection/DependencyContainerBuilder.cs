@@ -26,13 +26,13 @@ public sealed class DependencyContainerBuilder
     public void Register<T>(Func<IDependencyResolver, T> factory, LifeTime lifeTime)
         where T : notnull
     {
-        Register(Key.Of<T>(), factory, lifeTime);
+        Register(key: Key.Of<T>(), factory, lifeTime);
     }
 
     public void Register<T>(Func<T> factory, LifeTime lifeTime)
         where T : notnull
     {
-        Register(Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
+        Register(key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
     }
 
     public void Register<T>(Key<T> key, LifeTime lifeTime)
@@ -41,10 +41,24 @@ public sealed class DependencyContainerBuilder
         Register(key, factory: _ => new T(), lifeTime);
     }
 
+    public void Register<TInterface, TImplementation>(Key<TInterface> key, LifeTime lifeTime)
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime);
+    }
+
     public void Register<T>(LifeTime lifeTime)
         where T : notnull, new()
     {
-        Register(Key.Of<T>(), factory: _ => new T(), lifeTime);
+        Register(key: Key.Of<T>(), factory: _ => new T(), lifeTime);
+    }
+
+    public void Register<TInterface, TImplementation>(LifeTime lifeTime)
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime);
     }
 
     public DependencyContainer Build(DependencyContainer? parent = null)
