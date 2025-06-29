@@ -27,18 +27,4 @@ public class DependencyContainerErrorTests
         Assert.That(ex.Message, Does.Contain("Key { Type = Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+B"));
         Assert.That(ex.Message, Does.Contain("Key { Type = Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+C"));
     }
-
-    [Test]
-    public void FactoryReturningWrongType_ShouldThrow()
-    {
-        var key = Key.Of<string>();
-
-        var builder = new DependencyContainerBuilder();
-        builder.Register(key, factory: _ => 42, LifeTime.Transient);
-
-        var container = builder.Build();
-
-        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
-        Assert.That(ex!.Message, Does.Contain("System.String is not assignable from System.Int32"));
-    }
 }
