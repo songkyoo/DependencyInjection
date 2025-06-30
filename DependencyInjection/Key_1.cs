@@ -1,7 +1,7 @@
 ﻿namespace Macaron.DependencyInjection;
 
 public sealed record Key<T>(
-    string Tag
+    string Tag = ""
 ) : IKey
 {
     #region Inheritance
