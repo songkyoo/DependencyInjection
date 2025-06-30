@@ -2,7 +2,7 @@
 
 public interface IDependencyResolver
 {
-    object Resolve(IKey key);
+    object Resolve(Type type, string tag);
 
-    bool Contains(IKey key);
+    bool Contains(Type type, string tag);
 }

@@ -5,14 +5,14 @@ namespace Macaron.DependencyInjection;
 public sealed class DependencyContainerBuilder : IDependencyRegistrar
 {
     #region Fields
-    private readonly ImmutableDictionary<IKey, TypeRegistration>.Builder _typeRegistrations =
-        ImmutableDictionary.CreateBuilder<IKey, TypeRegistration>();
+    private readonly ImmutableDictionary<(Type, string), TypeRegistration>.Builder _typeRegistrations =
+        ImmutableDictionary.CreateBuilder<(Type, string), TypeRegistration>();
     #endregion
 
     #region IDependencyRegistrar Inteface
     void IDependencyRegistrar.Register(IKey key, Func<IDependencyResolver, object> factory, LifeTime lifeTime)
     {
-        _typeRegistrations.Add(key, lifeTime switch
+        _typeRegistrations.Add((key.Type, key.Tag), lifeTime switch
         {
             LifeTime.Transient or LifeTime.Scoped or LifeTime.Singleton => new TypeRegistration(lifeTime, factory),
             _ => throw new ArgumentOutOfRangeException(paramName: nameof(lifeTime)),
