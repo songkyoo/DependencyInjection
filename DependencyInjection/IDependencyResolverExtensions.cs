@@ -97,6 +97,11 @@ public static class IDependencyResolverExtensions
             : factory.Invoke();
     }
 
+    public static bool Contains<T>(this IDependencyResolver dependencyResolver, Key<T> key)
+    {
+        return dependencyResolver.Contains(type: key.Type, tag: key.Tag);
+    }
+
     public static bool Contains<T>(this IDependencyResolver dependencyResolver)
     {
         return dependencyResolver.Contains(type: typeof(T), tag: "");
