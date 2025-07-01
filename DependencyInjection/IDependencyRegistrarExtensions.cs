@@ -306,5 +306,13 @@ public static partial class IDependencyRegistrarExtensions
     {
         Register(dependencyRegistrar, key, factory: _ => instance, LifeTime.Singleton);
     }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        T instance
+    ) where T : notnull
+    {
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => instance, LifeTime.Singleton);
+    }
     #endregion
 }
