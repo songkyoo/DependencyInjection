@@ -11,7 +11,7 @@
 
   <PropertyGroup>
     <PackageId>Macaron.DependencyInjection</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Gyu Song</Authors>
     <PackageLicenseExpression>Unlicense</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
