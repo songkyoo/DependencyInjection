@@ -30,7 +30,7 @@
   
   <Target Name="TransformT4TextTemplates" BeforeTargets="BeforeBuild">
     <Exec Command="dotnet tool restore" />
-    <Exec Command="dotnet t4 DependencyContainerBuilderExtensions.tt" />
+    <Exec Command="dotnet t4 IDependencyRegistrarExtensions.tt" />
   </Target>
  
 </Project>
