@@ -10,9 +10,10 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     #endregion
 
     #region IDependencyRegistrar Inteface
-    void IDependencyRegistrar.Register(IKey key, Func<IDependencyResolver, object> factory, LifeTime lifeTime)
+    void IDependencyRegistrar.Register(Type type, string tag, Func<IDependencyResolver, object> factory, LifeTime lifeTime)
     {
-        _typeRegistrations.Add((key.Type, key.Tag), lifeTime switch
+        var key = (type, tag);
+        _typeRegistrations.Add(key, lifeTime switch
         {
             LifeTime.Transient or LifeTime.Scoped or LifeTime.Singleton => new TypeRegistration(lifeTime, factory),
             _ => throw new ArgumentOutOfRangeException(paramName: nameof(lifeTime)),

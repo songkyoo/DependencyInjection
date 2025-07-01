@@ -2,5 +2,5 @@
 
 public interface IDependencyRegistrar
 {
-    void Register(IKey key, Func<IDependencyResolver, object> factory, LifeTime lifeTime);
+    void Register(Type type, string tag, Func<IDependencyResolver, object> factory, LifeTime lifeTime);
 }

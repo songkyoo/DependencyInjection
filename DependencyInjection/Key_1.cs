@@ -24,4 +24,12 @@ public sealed record Key<T>(
         return other is Key<T> key && key.Tag == Tag;
     }
     #endregion
+
+    #region Methods
+    public void Deconstruct(out Type type, out string tag)
+    {
+        type = Type;
+        tag = Tag;
+    }
+    #endregion
 }
