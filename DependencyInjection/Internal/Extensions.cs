@@ -10,7 +10,7 @@ internal static class Extensions
     {
         var instance = factory.Invoke(dependencyResolver);
 
-        if (!type.IsAssignableFrom(instance.GetType()))
+        if (!type.IsInstanceOfType(instance))
         {
             throw new InvalidOperationException($"{type} is not assignable from {instance.GetType()}");
         }

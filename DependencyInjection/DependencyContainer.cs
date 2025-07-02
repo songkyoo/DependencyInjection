@@ -17,7 +17,7 @@ public sealed class DependencyContainer(
     #region IDependencyResolver Interface
     object IDependencyResolver.Resolve(Type type, string tag)
     {
-        return ResolveRecursively((type, tag), scopedInstances: _instances, dependencyResolver: this);
+        return ResolveRecursively(type, tag, scopedInstances: _instances, dependencyResolver: this);
     }
 
     bool IDependencyResolver.Contains(Type type, string tag)
@@ -52,12 +52,15 @@ public sealed class DependencyContainer(
 
     #region Methods
     private object ResolveRecursively(
-        (Type, string) key,
+        Type type,
+        string tag,
         Dictionary<(Type, string), object> scopedInstances,
         IDependencyResolver dependencyResolver
     )
     {
         ThrowIfDisposed();
+
+        var key = (type, tag);
 
         if (_resolutionStack.Contains(key))
         {
@@ -74,9 +77,9 @@ public sealed class DependencyContainer(
 
                 return lifeTime switch
                 {
-                    LifeTime.Transient => factory.Invoke(dependencyResolver, key.Item1),
-                    LifeTime.Scoped => scopedInstances.GetOrAdd(key, dependencyResolver, factory),
-                    LifeTime.Singleton => _instances.GetOrAdd(key, dependencyResolver: this, factory),
+                    LifeTime.Transient => factory.Invoke(dependencyResolver, type),
+                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyResolver, factory),
+                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyResolver: this, factory),
                     _ => throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}"),
                 };
             }
@@ -86,7 +89,7 @@ public sealed class DependencyContainer(
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return parent.ResolveRecursively(key, scopedInstances, dependencyResolver);
+            return parent.ResolveRecursively(type, tag, scopedInstances, dependencyResolver);
         }
         finally
         {
@@ -108,17 +111,20 @@ file static class FileScopeExtensions
 {
     public static object GetOrAdd(
         this Dictionary<(Type, string), object> instances,
-        (Type, string) key,
+        Type type,
+        string tag,
         IDependencyResolver dependencyResolver,
         Func<IDependencyResolver, object> factory
     )
     {
+        var key = (type, tag);
+
         if (instances.TryGetValue(key, out var instance))
         {
             return instance;
         }
 
-        var newInstance = factory.Invoke(dependencyResolver, key.Item1);
+        var newInstance = factory.Invoke(dependencyResolver, type);
         instances.Add(key, newInstance);
 
         return newInstance;
