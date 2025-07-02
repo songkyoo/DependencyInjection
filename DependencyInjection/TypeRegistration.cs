@@ -2,5 +2,5 @@
 
 public sealed record TypeRegistration(
     LifeTime LifeTime,
-    Func<IDependencyResolver, object> Factory
+    Func<IDependencyContainer, object> Factory
 );

@@ -10,7 +10,7 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     #endregion
 
     #region IDependencyRegistrar Inteface
-    void IDependencyRegistrar.Register(Type type, string tag, Func<IDependencyResolver, object> factory, LifeTime lifeTime)
+    void IDependencyRegistrar.Register(Type type, string tag, Func<IDependencyContainer, object> factory, LifeTime lifeTime)
     {
         var key = (type, tag);
         _typeRegistrations.Add(key, lifeTime switch

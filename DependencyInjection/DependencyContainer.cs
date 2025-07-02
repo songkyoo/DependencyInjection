@@ -6,7 +6,7 @@ namespace Macaron.DependencyInjection;
 public sealed class DependencyContainer(
     DependencyContainer? parent,
     ImmutableDictionary<(Type, string), TypeRegistration> registry
-) : IDependencyResolver, IDisposable
+) : IDependencyContainer, IDisposable
 {
     #region Fields
     private readonly Dictionary<(Type, string), object> _instances = new();
@@ -14,10 +14,10 @@ public sealed class DependencyContainer(
     private bool _isDisposed;
     #endregion
 
-    #region IDependencyResolver Interface
+    #region IDependencyContainer Interface
     object IDependencyResolver.Resolve(Type type, string tag)
     {
-        return ResolveRecursively(type, tag, scopedInstances: _instances, dependencyResolver: this);
+        return ResolveRecursively(type, tag, scopedInstances: _instances, dependencyContainer: this);
     }
 
     bool IDependencyResolver.Contains(Type type, string tag)
@@ -25,6 +25,14 @@ public sealed class DependencyContainer(
         ThrowIfDisposed();
 
         return registry.ContainsKey((type, tag)) || (parent as IDependencyResolver)?.Contains(type, tag) is true;
+    }
+
+    public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
+    {
+        var builder = new DependencyContainerBuilder();
+        configure?.Invoke(builder);
+
+        return builder.Build(parent: this);
     }
     #endregion
 
@@ -55,7 +63,7 @@ public sealed class DependencyContainer(
         Type type,
         string tag,
         Dictionary<(Type, string), object> scopedInstances,
-        IDependencyResolver dependencyResolver
+        IDependencyContainer dependencyContainer
     )
     {
         ThrowIfDisposed();
@@ -77,9 +85,9 @@ public sealed class DependencyContainer(
 
                 return lifeTime switch
                 {
-                    LifeTime.Transient => factory.Invoke(dependencyResolver, type),
-                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyResolver, factory),
-                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyResolver: this, factory),
+                    LifeTime.Transient => factory.Invoke(dependencyContainer, type),
+                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory),
+                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyContainer: this, factory),
                     _ => throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}"),
                 };
             }
@@ -89,7 +97,7 @@ public sealed class DependencyContainer(
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return parent.ResolveRecursively(type, tag, scopedInstances, dependencyResolver);
+            return parent.ResolveRecursively(type, tag, scopedInstances, dependencyContainer);
         }
         finally
         {
@@ -113,8 +121,8 @@ file static class FileScopeExtensions
         this Dictionary<(Type, string), object> instances,
         Type type,
         string tag,
-        IDependencyResolver dependencyResolver,
-        Func<IDependencyResolver, object> factory
+        IDependencyContainer dependencyContainer,
+        Func<IDependencyContainer, object> factory
     )
     {
         var key = (type, tag);
@@ -124,7 +132,7 @@ file static class FileScopeExtensions
             return instance;
         }
 
-        var newInstance = factory.Invoke(dependencyResolver, type);
+        var newInstance = factory.Invoke(dependencyContainer, type);
         instances.Add(key, newInstance);
 
         return newInstance;

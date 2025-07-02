@@ -18,7 +18,7 @@ public static partial class IDependencyRegistrarExtensions
         dependencyRegistrar.Register(
             type,
             tag,
-            factory: dependencyResolver => factory.Invoke(dependencyResolver, type),
+            factory: dependencyContainer => factory.Invoke(dependencyContainer, type),
             lifeTime
         );
     }
