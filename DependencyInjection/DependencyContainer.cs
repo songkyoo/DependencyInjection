@@ -6,7 +6,7 @@ namespace Macaron.DependencyInjection;
 public sealed class DependencyContainer(
     DependencyContainer? parent,
     ImmutableDictionary<(Type, string), TypeRegistration> registry
-) : IDependencyContainer, IDisposable
+) : IDependencyContainer
 {
     #region Fields
     private readonly Dictionary<(Type, string), object> _instances = new();
@@ -34,9 +34,7 @@ public sealed class DependencyContainer(
 
         return builder.Build(parent: this);
     }
-    #endregion
 
-    #region IDisposable Interface
     public void Dispose()
     {
         if (_isDisposed)
