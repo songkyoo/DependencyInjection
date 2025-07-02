@@ -8,7 +8,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory,
+        Func<IDependencyContainer, T> factory,
         LifeTime lifeTime
     ) where T : notnull
     {
@@ -33,7 +33,7 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory,
+        Func<IDependencyContainer, T> factory,
         LifeTime lifeTime
     ) where T : notnull
     {
@@ -91,7 +91,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key, factory, lifeTime: LifeTime.Transient);
@@ -108,7 +108,7 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Transient);
@@ -161,7 +161,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key, factory, lifeTime: LifeTime.Scoped);
@@ -178,7 +178,7 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Scoped);
@@ -231,7 +231,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key, factory, lifeTime: LifeTime.Singleton);
@@ -248,7 +248,7 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Singleton);

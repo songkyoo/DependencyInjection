@@ -10,7 +10,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory,
+        Func<IDependencyContainer, T> factory,
         LifeTime lifeTime
     ) where T : notnull
     {
@@ -35,7 +35,7 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory,
+        Func<IDependencyContainer, T> factory,
         LifeTime lifeTime
     ) where T : notnull
     {
@@ -97,7 +97,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key, factory, lifeTime: LifeTime.<#= scope #>);
@@ -114,7 +114,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
 
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyResolver, T> factory
+        Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.<#= scope #>);
