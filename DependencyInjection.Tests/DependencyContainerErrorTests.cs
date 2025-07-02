@@ -23,8 +23,8 @@ public class DependencyContainerErrorTests
         var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(Key.Of<A>()));
 
         Assert.That(ex!.Message, Does.Contain("Cyclic dependency detected"));
-        Assert.That(ex.Message, Does.Contain("Key { Type = Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+A"));
-        Assert.That(ex.Message, Does.Contain("Key { Type = Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+B"));
-        Assert.That(ex.Message, Does.Contain("Key { Type = Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+C"));
+        Assert.That(ex.Message, Does.Contain("(Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+A"));
+        Assert.That(ex.Message, Does.Contain("(Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+B"));
+        Assert.That(ex.Message, Does.Contain("(Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+C"));
     }
 }
