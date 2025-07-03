@@ -85,29 +85,13 @@ public sealed class DependencyContainer(
             {
                 var (lifeTime, factory) = typeRegistration;
 
-                switch (lifeTime)
+                return lifeTime switch
                 {
-                    case LifeTime.Transient:
-                    {
-                        var instance = factory.Invoke(dependencyContainer, type);
-                        if (instance is IDisposable disposable)
-                        {
-                            dependencyContainer.AddDisposable(disposable);
-                        }
-
-                        return instance;
-                    }
-                    case LifeTime.Scoped:
-                    {
-                        return scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory);
-                    }
-                    case LifeTime.Singleton:
-                    {
-                        return _instances.GetOrAdd(type, tag, dependencyContainer: this, factory);
-                    }
-                    default:
-                        throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}");
-                }
+                    LifeTime.Transient => factory.Invoke(dependencyContainer, type),
+                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory),
+                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyContainer: this, factory),
+                    _ => throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}")
+                };
             }
 
             if (parent == null)
