@@ -21,7 +21,7 @@ public sealed record Key<T>(
 
     public bool Equals(IKey? other)
     {
-        return other is Key<T> key && key.Tag == Tag;
+        return other is not null && other.Type == typeof(T) && other.Tag == Tag;
     }
     #endregion
 
