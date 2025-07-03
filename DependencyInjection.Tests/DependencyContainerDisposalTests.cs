@@ -4,7 +4,13 @@ public class DependencyContainerDisposalTests
 {
     private sealed class Foo(Action onDispose) : IDisposable
     {
-        public void Dispose() => onDispose();
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            IsDisposed = true;
+            onDispose();
+        }
     }
 
     [Test]
@@ -57,24 +63,6 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void TransientDisposable_ShouldNotBeTrackedOrDisposed()
-    {
-        var disposed = false;
-        var builder = new DependencyContainerBuilder();
-        builder.Register(
-            Key.Of<Foo>(),
-            factory: _ => new Foo(onDispose: () => disposed = true),
-            LifeTime.Transient
-        );
-
-        var container = builder.Build();
-        container.Resolve(Key.Of<Foo>());
-        container.Dispose();
-
-        Assert.That(disposed, Is.False);
-    }
-
-    [Test]
     public void SingletonDisposable_ShouldBeDisposed_WhenRootContainerDisposed()
     {
         var disposed = false;
@@ -102,5 +90,29 @@ public class DependencyContainerDisposalTests
         container.Dispose();
 
         Assert.That(() => container.Resolve(Key.Of<string>()), Throws.TypeOf<ObjectDisposedException>());
+    }
+
+    [Test]
+    public void TransientDisposable_ShouldBeDisposed_WhenScopedContainerDisposed()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(
+            Key.Of<Foo>(),
+            factory: _ => new Foo(onDispose: () => { }),
+            LifeTime.Transient
+        );
+
+        var container = builder.Build();
+        var foo = container.Resolve(Key.Of<Foo>());
+
+        var child = container.CreateScope();
+        var childFoo = child.Resolve(Key.Of<Foo>());
+
+        container.Dispose();
+        Assert.That(foo.IsDisposed, Is.True);
+        Assert.That(childFoo.IsDisposed, Is.False);
+
+        child.Dispose();
+        Assert.That(childFoo.IsDisposed, Is.True);
     }
 }

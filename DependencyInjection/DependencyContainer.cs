@@ -10,6 +10,7 @@ public sealed class DependencyContainer(
 {
     #region Fields
     private readonly Dictionary<(Type, string), object> _instances = new();
+    private readonly List<IDisposable> _disposables = [];
     private readonly Stack<(Type, string)> _resolutionStack = new();
     private bool _isDisposed;
     #endregion
@@ -35,6 +36,11 @@ public sealed class DependencyContainer(
         return builder.Build(parent: this);
     }
 
+    public void AddDisposable(IDisposable disposable)
+    {
+        _disposables.Add(disposable);
+    }
+
     public void Dispose()
     {
         if (_isDisposed)
@@ -44,14 +50,12 @@ public sealed class DependencyContainer(
 
         _isDisposed = true;
 
-        foreach (var instance in _instances.Values)
+        foreach (var disposable in _disposables)
         {
-            if (instance is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
+            disposable.Dispose();
         }
 
+        _disposables.Clear();
         _instances.Clear();
     }
     #endregion
@@ -81,13 +85,29 @@ public sealed class DependencyContainer(
             {
                 var (lifeTime, factory) = typeRegistration;
 
-                return lifeTime switch
+                switch (lifeTime)
                 {
-                    LifeTime.Transient => factory.Invoke(dependencyContainer, type),
-                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory),
-                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyContainer: this, factory),
-                    _ => throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}"),
-                };
+                    case LifeTime.Transient:
+                    {
+                        var instance = factory.Invoke(dependencyContainer, type);
+                        if (instance is IDisposable disposable)
+                        {
+                            dependencyContainer.AddDisposable(disposable);
+                        }
+
+                        return instance;
+                    }
+                    case LifeTime.Scoped:
+                    {
+                        return scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory);
+                    }
+                    case LifeTime.Singleton:
+                    {
+                        return _instances.GetOrAdd(type, tag, dependencyContainer: this, factory);
+                    }
+                    default:
+                        throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}");
+                }
             }
 
             if (parent == null)
@@ -132,6 +152,11 @@ file static class FileScopeExtensions
 
         var newInstance = factory.Invoke(dependencyContainer, type);
         instances.Add(key, newInstance);
+
+        if (newInstance is IDisposable disposable)
+        {
+            dependencyContainer.AddDisposable(disposable);
+        }
 
         return newInstance;
     }
