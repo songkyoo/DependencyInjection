@@ -15,12 +15,33 @@ public static partial class IDependencyRegistrarExtensions
     ) where T : notnull
     {
         var (type, tag) = key;
-        dependencyRegistrar.Register(
-            type,
-            tag,
-            factory: dependencyContainer => factory.Invoke(dependencyContainer, type),
-            lifeTime
-        );
+        switch (lifeTime)
+        {
+            case LifeTime.Transient:
+                dependencyRegistrar.RegisterTransient(
+                    type,
+                    tag,
+                    factory: dependencyContainer => factory.Invoke(dependencyContainer)
+                );
+                break;
+            case LifeTime.Scoped:
+                dependencyRegistrar.RegisterScoped(
+                    type,
+                    tag,
+                    factory: dependencyContainer => factory.Invoke(dependencyContainer)
+                );
+                break;
+            case LifeTime.Singleton:
+                dependencyRegistrar.RegisterSingleton(
+                    type,
+                    tag,
+                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    externallyOwned: false
+                );
+                break;
+            default:
+                throw new InvalidOperationException($"Not supported life time: {lifeTime}");
+        }
     }
 
     public static void Register<T>(
@@ -170,18 +191,20 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        T instance
+        T instance,
+        bool externallyOwned = false
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key, factory: _ => instance, LifeTime.Singleton);
+        dependencyRegistrar.RegisterSingleton(key.Type, key.Tag, factory: _ => instance, externallyOwned);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        T instance
+        T instance,
+        bool externallyOwned = false
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => instance, LifeTime.Singleton);
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), instance, externallyOwned);
     }
     #endregion
 }

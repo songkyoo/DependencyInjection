@@ -2,5 +2,9 @@
 
 public interface IDependencyRegistrar
 {
-    void Register(Type type, string tag, Func<IDependencyContainer, object> factory, LifeTime lifeTime);
+    void RegisterTransient(Type type, string tag, Func<IDependencyContainer, object> factory);
+
+    void RegisterScoped(Type type, string tag, Func<IDependencyContainer, object> factory);
+
+    void RegisterSingleton(Type type, string tag, Func<IDependencyContainer, object> factory, bool externallyOwned);
 }

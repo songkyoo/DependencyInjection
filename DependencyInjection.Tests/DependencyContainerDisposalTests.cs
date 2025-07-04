@@ -103,4 +103,20 @@ public class DependencyContainerDisposalTests
 
         Assert.That(() => container.Resolve(Key.Of<string>()), Throws.TypeOf<ObjectDisposedException>());
     }
+
+    [Test]
+    public void RegisterSingletonWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    {
+        var isDispoed = false;
+        var foo = new Foo(onDispose: () => isDispoed = true);
+
+        var builder = new DependencyContainerBuilder();
+        builder.RegisterSingleton(foo, externallyOwned: true);
+
+        var container = builder.Build();
+        container.Resolve(Key.Of<Foo>());
+        container.Dispose();
+
+        Assert.That(isDispoed, Is.False);
+    }
 }

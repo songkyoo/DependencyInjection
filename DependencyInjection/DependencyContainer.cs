@@ -83,14 +83,15 @@ public sealed class DependencyContainer(
         {
             if (registry.TryGetValue(key, out var typeRegistration))
             {
-                var (lifeTime, factory) = typeRegistration;
-
-                return lifeTime switch
+                return typeRegistration switch
                 {
-                    LifeTime.Transient => factory.Invoke(dependencyContainer, type),
-                    LifeTime.Scoped => scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory),
-                    LifeTime.Singleton => _instances.GetOrAdd(type, tag, dependencyContainer: this, factory),
-                    _ => throw new InvalidOperationException($"Not supported life time: {typeRegistration.LifeTime}")
+                    TypeRegistration.Transient { Factory: var factory } =>
+                        factory.Invoke(dependencyContainer, type),
+                    TypeRegistration.Scoped { Factory: var factory } =>
+                        scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory, externallyOwned: false),
+                    TypeRegistration.Singleton { Factory: var factory, ExternallyOwned: var externallyOwned } =>
+                        _instances.GetOrAdd(type, tag, dependencyContainer: this, factory, externallyOwned),
+                    _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
                 };
             }
 
@@ -124,7 +125,8 @@ file static class FileScopeExtensions
         Type type,
         string tag,
         IDependencyContainer dependencyContainer,
-        Func<IDependencyContainer, object> factory
+        Func<IDependencyContainer, object> factory,
+        bool externallyOwned
     )
     {
         var key = (type, tag);
@@ -137,7 +139,7 @@ file static class FileScopeExtensions
         var newInstance = factory.Invoke(dependencyContainer, type);
         instances.Add(key, newInstance);
 
-        if (newInstance is IDisposable disposable)
+        if (!externallyOwned && newInstance is IDisposable disposable)
         {
             dependencyContainer.AddDisposable(disposable);
         }
