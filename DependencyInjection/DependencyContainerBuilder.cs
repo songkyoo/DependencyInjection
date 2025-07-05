@@ -26,11 +26,16 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
         Type type,
         string tag,
         Func<IDependencyContainer, object> factory,
-        bool externallyOwned
+        Ownership ownership
     )
     {
         var key = (type, tag);
-        _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, externallyOwned));
+        _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, ExternallyOwned: ownership switch
+        {
+            Ownership.Container => false,
+            Ownership.External => true,
+            _ => throw new ArgumentOutOfRangeException(paramName: nameof(ownership)),
+        }));
     }
     #endregion
 

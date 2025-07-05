@@ -34,7 +34,7 @@ public static partial class IDependencyRegistrarExtensions
                     type,
                     tag,
                     factory: dependencyContainer => factory.Invoke(dependencyContainer),
-                    externallyOwned: false
+                    ownership: Ownership.Container
                 );
                 break;
             default:
@@ -471,29 +471,29 @@ public static partial class IDependencyRegistrarExtensions
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
         T instance,
-        bool externallyOwned = false
+        Ownership ownership = Ownership.Container
     ) where T : notnull
     {
-        dependencyRegistrar.RegisterSingleton(key.Type, key.Tag, factory: _ => instance, externallyOwned);
+        dependencyRegistrar.RegisterSingleton(key.Type, key.Tag, factory: _ => instance, ownership);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         T instance,
-        bool externallyOwned = false
+        Ownership ownership = Ownership.Container
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), instance, externallyOwned);
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), instance, ownership);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         string tag,
         T instance,
-        bool externallyOwned = false
+        Ownership ownership = Ownership.Container
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), instance, externallyOwned);
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), instance, ownership);
     }
     #endregion
 }

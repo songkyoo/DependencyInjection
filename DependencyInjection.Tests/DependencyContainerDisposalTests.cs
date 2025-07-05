@@ -111,7 +111,7 @@ public class DependencyContainerDisposalTests
         var foo = new Foo(onDispose: () => isDispoed = true);
 
         var builder = new DependencyContainerBuilder();
-        builder.RegisterSingleton(foo, externallyOwned: true);
+        builder.RegisterSingleton(foo, ownership: Ownership.External);
 
         var container = builder.Build();
         container.Resolve(Key.Of<Foo>());

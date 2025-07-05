@@ -6,5 +6,5 @@ public interface IDependencyRegistrar
 
     void RegisterScoped(Type type, string tag, Func<IDependencyContainer, object> factory);
 
-    void RegisterSingleton(Type type, string tag, Func<IDependencyContainer, object> factory, bool externallyOwned);
+    void RegisterSingleton(Type type, string tag, Func<IDependencyContainer, object> factory, Ownership ownership);
 }
