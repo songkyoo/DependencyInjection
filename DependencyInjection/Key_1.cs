@@ -4,7 +4,7 @@ public sealed record Key<T>(
     string Tag = ""
 ) : IKey
 {
-    #region Inheritance
+    #region Overrides
     public override int GetHashCode()
     {
         return HashCode.Combine(Type, Tag);
@@ -12,7 +12,9 @@ public sealed record Key<T>(
 
     public override string ToString()
     {
-        return $"Key {{ Type = {typeof(T)}, Tag = {Tag}) }}";
+        return string.IsNullOrEmpty(Tag)
+            ? $"Key {{ Type = {typeof(T)} }}"
+            : $"Key {{ Type = {typeof(T)}, Tag = {Tag}) }}";
     }
     #endregion
 

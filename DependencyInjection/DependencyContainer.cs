@@ -8,10 +8,22 @@ public sealed class DependencyContainer(
     ImmutableDictionary<(Type, string), TypeRegistration> registry
 ) : IDependencyContainer
 {
+    #region Types
+    internal readonly record struct Key(Type Type, string Tag)
+    {
+        public override string ToString()
+        {
+            return string.IsNullOrEmpty(Tag)
+                ? $"Key {{ Type = {Type} }}"
+                : $"Key {{ Type = {Type}, Tag = {Tag}) }}";
+        }
+    }
+    #endregion
+
     #region Fields
-    private readonly Dictionary<(Type, string), object> _instances = new();
+    private readonly Dictionary<Key, object> _instances = new();
     private readonly List<IDisposable> _disposables = [];
-    private readonly Stack<(Type, string)> _resolutionStack = new();
+    private readonly Stack<Key> _resolutionStack = new();
     private bool _isDisposed;
     #endregion
 
@@ -64,24 +76,24 @@ public sealed class DependencyContainer(
     private object ResolveRecursively(
         Type type,
         string tag,
-        Dictionary<(Type, string), object> scopedInstances,
+        Dictionary<Key, object> scopedInstances,
         IDependencyContainer dependencyContainer
     )
     {
         ThrowIfDisposed();
 
-        var key = (type, tag);
+        var key = new Key(type, tag);
 
         if (_resolutionStack.Contains(key))
         {
-            throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Append(key))}");
+            throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Reverse().Append(key))}");
         }
 
         _resolutionStack.Push(key);
 
         try
         {
-            if (registry.TryGetValue(key, out var typeRegistration))
+            if (registry.TryGetValue((type, tag), out var typeRegistration))
             {
                 return typeRegistration switch
                 {
@@ -121,7 +133,7 @@ public sealed class DependencyContainer(
 file static class FileScopeExtensions
 {
     public static object GetOrAdd(
-        this Dictionary<(Type, string), object> instances,
+        this Dictionary<DependencyContainer.Key, object> instances,
         Type type,
         string tag,
         IDependencyContainer dependencyContainer,
@@ -129,7 +141,7 @@ file static class FileScopeExtensions
         bool externallyOwned
     )
     {
-        var key = (type, tag);
+        var key = new DependencyContainer.Key(type, tag);
 
         if (instances.TryGetValue(key, out var instance))
         {
