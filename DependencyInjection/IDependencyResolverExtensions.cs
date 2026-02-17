@@ -2,7 +2,7 @@
 
 public static class IDependencyResolverExtensions
 {
-    public static object? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, Type type, string tag)
+    public static object? ResolveOrNull(this IDependencyResolver dependencyResolver, Type type, string tag)
     {
         return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : null;
     }
@@ -27,6 +27,16 @@ public static class IDependencyResolverExtensions
     )
     {
         return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : factory.Invoke();
+    }
+
+    public static object ResolveOrElse(
+        this IDependencyResolver dependencyResolver,
+        Type type,
+        string tag,
+        object defaultValue
+    )
+    {
+        return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : defaultValue;
     }
 
     public static T Resolve<T>(this IDependencyResolver dependencyResolver, Key<T> key)
@@ -64,16 +74,73 @@ public static class IDependencyResolverExtensions
             : factory.Invoke();
     }
 
+    public static T ResolveOrElse<T>(
+        this IDependencyResolver dependencyResolver,
+        Key<T> key,
+        T defaultValue
+    )
+    {
+        return dependencyResolver.Contains(key.Type, key.Tag)
+            ? (T)dependencyResolver.Resolve(key.Type, key.Tag)
+            : defaultValue;
+    }
+
+    public static T Resolve<T>(this IDependencyResolver dependencyResolver, string tag)
+    {
+        return (T)dependencyResolver.Resolve(typeof(T), tag);
+    }
+
+    public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, string tag)
+        where T : class
+    {
+        return dependencyResolver.Contains(typeof(T), tag)
+            ? (T?)dependencyResolver.Resolve(typeof(T), tag)
+            : null;
+    }
+
+    public static T ResolveOrElse<T>(
+        this IDependencyResolver dependencyResolver,
+        string tag,
+        Func<IDependencyResolver, T> factory
+    )
+    {
+        return dependencyResolver.Contains(typeof(T), tag)
+            ? (T)dependencyResolver.Resolve(typeof(T), tag)
+            : factory.Invoke(dependencyResolver);
+    }
+
+    public static T ResolveOrElse<T>(
+        this IDependencyResolver dependencyResolver,
+        string tag,
+        Func<T> factory
+    )
+    {
+        return dependencyResolver.Contains(typeof(T), tag)
+            ? (T)dependencyResolver.Resolve(typeof(T), tag)
+            : factory.Invoke();
+    }
+
+    public static T ResolveOrElse<T>(
+        this IDependencyResolver dependencyResolver,
+        string tag,
+        T defaultValue
+    )
+    {
+        return dependencyResolver.Contains(typeof(T), tag)
+            ? (T)dependencyResolver.Resolve(typeof(T), tag)
+            : defaultValue;
+    }
+
     public static T Resolve<T>(this IDependencyResolver dependencyResolver)
     {
-        return (T)dependencyResolver.Resolve(type: typeof(T), tag: "");
+        return (T)dependencyResolver.Resolve(typeof(T), tag: "");
     }
 
     public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver)
         where T : class
     {
-        return dependencyResolver.Contains(type: typeof(T), tag: "")
-            ? (T?)dependencyResolver.Resolve(type: typeof(T), tag: "")
+        return dependencyResolver.Contains(typeof(T), tag: "")
+            ? (T?)dependencyResolver.Resolve(typeof(T), tag: "")
             : null;
     }
 
@@ -82,8 +149,8 @@ public static class IDependencyResolverExtensions
         Func<IDependencyResolver, T> factory
     )
     {
-        return dependencyResolver.Contains(type: typeof(T), tag: "")
-            ? (T)dependencyResolver.Resolve(type: typeof(T), tag: "")
+        return dependencyResolver.Contains(typeof(T), tag: "")
+            ? (T)dependencyResolver.Resolve(typeof(T), tag: "")
             : factory.Invoke(dependencyResolver);
     }
 
@@ -92,18 +159,33 @@ public static class IDependencyResolverExtensions
         Func<T> factory
     )
     {
-        return dependencyResolver.Contains(type: typeof(T), tag: "")
-            ? (T)dependencyResolver.Resolve(type: typeof(T), tag: "")
+        return dependencyResolver.Contains(typeof(T), tag: "")
+            ? (T)dependencyResolver.Resolve(typeof(T), tag: "")
             : factory.Invoke();
+    }
+
+    public static T ResolveOrElse<T>(
+        this IDependencyResolver dependencyResolver,
+        T defaultValue
+    )
+    {
+        return dependencyResolver.Contains(typeof(T), tag: "")
+            ? (T)dependencyResolver.Resolve(typeof(T), tag: "")
+            : defaultValue;
     }
 
     public static bool Contains<T>(this IDependencyResolver dependencyResolver, Key<T> key)
     {
-        return dependencyResolver.Contains(type: key.Type, tag: key.Tag);
+        return dependencyResolver.Contains(key.Type, key.Tag);
+    }
+
+    public static bool Contains<T>(this IDependencyResolver dependencyResolver, string tag)
+    {
+        return dependencyResolver.Contains(typeof(T), tag);
     }
 
     public static bool Contains<T>(this IDependencyResolver dependencyResolver)
     {
-        return dependencyResolver.Contains(type: typeof(T), tag: "");
+        return dependencyResolver.Contains(typeof(T), tag: "");
     }
 }
