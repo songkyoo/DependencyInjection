@@ -3,7 +3,10 @@ using Macaron.DependencyInjection.Internal;
 
 namespace Macaron.DependencyInjection;
 
-public sealed class DependencyContainer : IDependencyContainer
+public sealed class DependencyContainer(
+    DependencyContainer? parent,
+    ImmutableDictionary<(Type, string), TypeRegistration> registry
+) : IDependencyContainer
 {
     #region Types
     internal readonly record struct Key(Type Type, string Tag)
@@ -23,20 +26,8 @@ public sealed class DependencyContainer : IDependencyContainer
     private readonly Stack<Key> _resolutionStack = new();
     private bool _isDisposed;
 
-
-    private DependencyContainer? _parent;
-    private ImmutableDictionary<(Type, string), TypeRegistration> _registry;
-    #endregion
-
-    #region Constructors
-    public DependencyContainer(
-        DependencyContainer? parent,
-        ImmutableDictionary<(Type, string), TypeRegistration> registry
-    )
-    {
-        _parent = parent;
-        _registry = registry;
-    }
+    private DependencyContainer? _parent = parent;
+    private ImmutableDictionary<(Type, string), TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
