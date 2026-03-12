@@ -3,10 +3,7 @@ using Macaron.DependencyInjection.Internal;
 
 namespace Macaron.DependencyInjection;
 
-public sealed class DependencyContainer(
-    DependencyContainer? parent,
-    ImmutableDictionary<(Type, string), TypeRegistration> registry
-) : IDependencyContainer
+public sealed class DependencyContainer : IDependencyContainer
 {
     #region Types
     internal readonly record struct Key(Type Type, string Tag)
@@ -25,6 +22,21 @@ public sealed class DependencyContainer(
     private readonly List<IDisposable> _disposables = [];
     private readonly Stack<Key> _resolutionStack = new();
     private bool _isDisposed;
+
+
+    private DependencyContainer? _parent;
+    private ImmutableDictionary<(Type, string), TypeRegistration> _registry;
+    #endregion
+
+    #region Constructors
+    public DependencyContainer(
+        DependencyContainer? parent,
+        ImmutableDictionary<(Type, string), TypeRegistration> registry
+    )
+    {
+        _parent = parent;
+        _registry = registry;
+    }
     #endregion
 
     #region IDependencyContainer Interface
@@ -37,7 +49,7 @@ public sealed class DependencyContainer(
     {
         ThrowIfDisposed();
 
-        return registry.ContainsKey((type, tag)) || (parent as IDependencyResolver)?.Contains(type, tag) is true;
+        return _registry.ContainsKey((type, tag)) || (_parent as IDependencyResolver)?.Contains(type, tag) is true;
     }
 
     public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
@@ -61,6 +73,8 @@ public sealed class DependencyContainer(
         }
 
         _isDisposed = true;
+        _parent = null;
+        _registry = ImmutableDictionary<(Type, string), TypeRegistration>.Empty;
 
         foreach (var disposable in _disposables)
         {
@@ -93,7 +107,7 @@ public sealed class DependencyContainer(
 
         try
         {
-            if (registry.TryGetValue((type, tag), out var typeRegistration))
+            if (_registry.TryGetValue((type, tag), out var typeRegistration))
             {
                 return typeRegistration switch
                 {
@@ -107,12 +121,12 @@ public sealed class DependencyContainer(
                 };
             }
 
-            if (parent == null)
+            if (_parent == null)
             {
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return parent.ResolveRecursively(type, tag, scopedInstances, dependencyContainer);
+            return _parent.ResolveRecursively(type, tag, scopedInstances, dependencyContainer);
         }
         finally
         {
