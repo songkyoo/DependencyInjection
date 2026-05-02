@@ -2,6 +2,7 @@ namespace Macaron.DependencyInjection;
 
 public static class IDependencyResolverValueTypeExtensions
 {
+    #region ResolveOrNull
     public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, Key<T> key)
         where T : struct
     {
@@ -17,4 +18,5 @@ public static class IDependencyResolverValueTypeExtensions
             ? (T?)dependencyResolver.Resolve(type: typeof(T), tag: null)
             : null;
     }
+    #endregion
 }

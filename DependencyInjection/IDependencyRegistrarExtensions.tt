@@ -68,21 +68,21 @@ public static partial class IDependencyRegistrarExtensions
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
+        Func<T> factory,
+        LifeTime lifeTime
+    ) where T : notnull
+    {
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
+    }
+
+    public static void Register<T>(
+        this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<IDependencyContainer, T> factory,
         LifeTime lifeTime
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime);
-    }
-
-    public static void Register<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Func<T> factory,
-        LifeTime lifeTime
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
     }
 
     public static void Register<T>(
@@ -104,17 +104,6 @@ public static partial class IDependencyRegistrarExtensions
         Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime);
     }
 
-    public static void Register<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<TInterface> key,
-        LifeTime lifeTime
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime);
-    }
-
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         LifeTime lifeTime
@@ -130,6 +119,17 @@ public static partial class IDependencyRegistrarExtensions
     ) where T : notnull, new()
     {
         Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime);
+    }
+
+    public static void Register<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<TInterface> key,
+        LifeTime lifeTime
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime);
     }
 
     public static void Register<TInterface, TImplementation>(
@@ -186,19 +186,19 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
 
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
+        Func<T> factory
+    ) where T : notnull
+    {
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.<#= scope #>);
+    }
+
+    public static void Register<#= scope #><T>(
+        this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<IDependencyContainer, T> factory
     ) where T : notnull
     {
         Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.<#= scope #>);
-    }
-
-    public static void Register<#= scope #><T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Func<T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.<#= scope #>);
     }
 
     public static void Register<#= scope #><T>(
@@ -218,16 +218,6 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.<#= scope #>);
     }
 
-    public static void Register<#= scope #><TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<TInterface> key
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.<#= scope #>);
-    }
-
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar
     ) where T : notnull, new()
@@ -241,6 +231,16 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
     ) where T : notnull, new()
     {
         Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.<#= scope #>);
+    }
+
+    public static void Register<#= scope #><TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<TInterface> key
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.<#= scope #>);
     }
 
     public static void Register<#= scope #><TInterface, TImplementation>(
