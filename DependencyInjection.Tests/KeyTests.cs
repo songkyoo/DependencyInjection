@@ -2,6 +2,14 @@
 
 public class KeyTests
 {
+    private enum TestTag
+    {
+        Primary,
+        Secondary,
+    }
+
+    private sealed record NamedTag(string Value);
+
     [Test]
     public void Keys_WithSameTypeAndTag_ShouldBeEqual()
     {
@@ -41,6 +49,27 @@ public class KeyTests
 
         Assert.That(key1, Is.SameAs(key2));
         Assert.That(key1, Is.EqualTo(key2));
+    }
+
+    [Test]
+    public void Keys_WithSameObjectTagValue_ShouldBeEqual()
+    {
+        var key1 = Key.Of<string>(new NamedTag("tag"));
+        var key2 = Key.Of<string>(new NamedTag("tag"));
+
+        Assert.That(key1, Is.EqualTo(key2));
+        Assert.That(((IKey)key1).Equals(key2), Is.True);
+        Assert.That(key1.GetHashCode(), Is.EqualTo(key2.GetHashCode()));
+    }
+
+    [Test]
+    public void Keys_WithDifferentObjectTags_ShouldNotBeEqual()
+    {
+        var key1 = Key.Of<string>(TestTag.Primary);
+        var key2 = Key.Of<string>(TestTag.Secondary);
+
+        Assert.That(key1, Is.Not.EqualTo(key2));
+        Assert.That(((IKey)key1).Equals(key2), Is.False);
     }
 
     [Test]

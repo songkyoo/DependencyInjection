@@ -2,9 +2,9 @@
 
 public interface IDependencyRegistrar
 {
-    void RegisterTransient(Type type, string tag, Func<IDependencyContainer, object> factory);
+    void RegisterTransient(Type type, object? tag, Func<IDependencyContainer, object> factory);
 
-    void RegisterScoped(Type type, string tag, Func<IDependencyContainer, object> factory);
+    void RegisterScoped(Type type, object? tag, Func<IDependencyContainer, object> factory);
 
-    void RegisterSingleton(Type type, string tag, Func<IDependencyContainer, object> factory, Ownership ownership);
+    void RegisterSingleton(Type type, object? tag, Func<IDependencyContainer, object> factory, Ownership ownership);
 }

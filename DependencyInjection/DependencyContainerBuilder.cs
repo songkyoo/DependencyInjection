@@ -5,31 +5,34 @@ namespace Macaron.DependencyInjection;
 public sealed class DependencyContainerBuilder : IDependencyRegistrar
 {
     #region Fields
-    private readonly ImmutableDictionary<(Type, string), TypeRegistration>.Builder _typeRegistrations =
-        ImmutableDictionary.CreateBuilder<(Type, string), TypeRegistration>();
+    private readonly ImmutableDictionary<(Type, object?), TypeRegistration>.Builder _typeRegistrations =
+        ImmutableDictionary.CreateBuilder<(Type, object?), TypeRegistration>();
     #endregion
 
     #region IDependencyRegistrar Inteface
-    void IDependencyRegistrar.RegisterTransient(Type type, string tag, Func<IDependencyContainer, object> factory)
+    void IDependencyRegistrar.RegisterTransient(Type type, object? tag, Func<IDependencyContainer, object> factory)
     {
         var key = (type, tag);
+
         _typeRegistrations.Add(key, new TypeRegistration.Transient(factory));
     }
 
-    void IDependencyRegistrar.RegisterScoped(Type type, string tag, Func<IDependencyContainer, object> factory)
+    void IDependencyRegistrar.RegisterScoped(Type type, object? tag, Func<IDependencyContainer, object> factory)
     {
         var key = (type, tag);
+
         _typeRegistrations.Add(key, new TypeRegistration.Scoped(factory));
     }
 
     void IDependencyRegistrar.RegisterSingleton(
         Type type,
-        string tag,
+        object? tag,
         Func<IDependencyContainer, object> factory,
         Ownership ownership
     )
     {
         var key = (type, tag);
+
         _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, ExternallyOwned: ownership switch
         {
             Ownership.Container => false,

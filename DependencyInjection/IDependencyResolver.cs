@@ -2,7 +2,7 @@
 
 public interface IDependencyResolver
 {
-    object Resolve(Type type, string tag);
+    object Resolve(Type type, object? tag);
 
-    bool Contains(Type type, string tag);
+    bool Contains(Type type, object? tag);
 }

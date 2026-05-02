@@ -6,11 +6,13 @@ public class DependencyContainerResolveTests
 
     private sealed class Foo : IFoo;
 
+    private sealed record NamedTag(string Value);
+
     [Test]
     public void Transient_ShouldCreateNewInstanceEachTime()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<IFoo>(), factory: _ => new Foo(), LifeTime.Transient);
+        builder.Register(key: Key.Of<IFoo>(), factory: _ => new Foo(), LifeTime.Transient);
 
         var container = builder.Build();
         var foo1 = container.Resolve(Key.Of<IFoo>());
@@ -45,6 +47,29 @@ public class DependencyContainerResolveTests
         var childFoo = child.Resolve(Key.Of<Foo>());
 
         Assert.That(rootFoo, Is.SameAs(childFoo));
+    }
+
+    [Test]
+    public void Resolve_WithObjectTag_ShouldUseTagValueEquality()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: _ => new Foo(), LifeTime.Singleton);
+
+        var container = builder.Build();
+
+        Assert.That(container.Resolve(Key.Of<Foo>(new NamedTag("primary"))), Is.InstanceOf<Foo>());
+        Assert.That(container.Contains(Key.Of<Foo>(new NamedTag("primary"))), Is.True);
+    }
+
+    [Test]
+    public void Resolve_WithDifferentObjectTag_ShouldNotMatch()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: _ => new Foo(), LifeTime.Singleton);
+
+        var container = builder.Build();
+
+        Assert.That(container.Contains(Key.Of<Foo>(new NamedTag("secondary"))), Is.False);
     }
 
     [Test]

@@ -5,17 +5,17 @@ namespace Macaron.DependencyInjection;
 
 public sealed class DependencyContainer(
     DependencyContainer? parent,
-    ImmutableDictionary<(Type, string), TypeRegistration> registry
+    ImmutableDictionary<(Type, object?), TypeRegistration> registry
 ) : IDependencyContainer
 {
     #region Types
-    internal readonly record struct Key(Type Type, string Tag)
+    internal readonly record struct Key(Type Type, object? Tag)
     {
         public override string ToString()
         {
-            return string.IsNullOrEmpty(Tag)
+            return Tag is null
                 ? $"Key {{ Type = {Type} }}"
-                : $"Key {{ Type = {Type}, Tag = {Tag}) }}";
+                : $"Key {{ Type = {Type}, Tag = {Tag} }}";
         }
     }
     #endregion
@@ -27,16 +27,16 @@ public sealed class DependencyContainer(
     private bool _isDisposed;
 
     private DependencyContainer? _parent = parent;
-    private ImmutableDictionary<(Type, string), TypeRegistration> _registry = registry;
+    private ImmutableDictionary<(Type, object?), TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
-    object IDependencyResolver.Resolve(Type type, string tag)
+    object IDependencyResolver.Resolve(Type type, object? tag)
     {
         return ResolveRecursively(type, tag, scopedInstances: _instances, dependencyContainer: this);
     }
 
-    bool IDependencyResolver.Contains(Type type, string tag)
+    bool IDependencyResolver.Contains(Type type, object? tag)
     {
         ThrowIfDisposed();
 
@@ -46,6 +46,7 @@ public sealed class DependencyContainer(
     public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
     {
         var builder = new DependencyContainerBuilder();
+
         configure?.Invoke(builder);
 
         return builder.Build(parent: this);
@@ -65,7 +66,7 @@ public sealed class DependencyContainer(
 
         _isDisposed = true;
         _parent = null;
-        _registry = ImmutableDictionary<(Type, string), TypeRegistration>.Empty;
+        _registry = ImmutableDictionary<(Type, object?), TypeRegistration>.Empty;
 
         foreach (var disposable in _disposables)
         {
@@ -80,7 +81,7 @@ public sealed class DependencyContainer(
     #region Methods
     private object ResolveRecursively(
         Type type,
-        string tag,
+        object? tag,
         Dictionary<Key, object> scopedInstances,
         IDependencyContainer dependencyContainer
     )
@@ -140,7 +141,7 @@ file static class FileScopeExtensions
     public static object GetOrAdd(
         this Dictionary<DependencyContainer.Key, object> instances,
         Type type,
-        string tag,
+        object? tag,
         IDependencyContainer dependencyContainer,
         Func<IDependencyContainer, object> factory,
         bool externallyOwned
@@ -154,6 +155,7 @@ file static class FileScopeExtensions
         }
 
         var newInstance = factory.Invoke(dependencyContainer, type);
+
         instances.Add(key, newInstance);
 
         if (!externallyOwned && newInstance is IDisposable disposable)
