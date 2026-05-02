@@ -11,6 +11,14 @@ public static class IDependencyResolverValueTypeExtensions
             : null;
     }
 
+    public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, object tag)
+        where T : struct
+    {
+        return dependencyResolver.Contains(typeof(T), tag)
+            ? (T?)dependencyResolver.Resolve(typeof(T), tag)
+            : null;
+    }
+
     public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver)
         where T : struct
     {

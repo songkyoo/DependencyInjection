@@ -73,6 +73,34 @@ public class DependencyContainerResolveTests
     }
 
     [Test]
+    public void Resolve_TypeBasedUntaggedExtensions_ShouldUseNullTag()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
+
+        var container = builder.Build();
+
+        Assert.That(container.Contains(typeof(Foo)), Is.True);
+        Assert.That(container.Resolve(typeof(Foo)), Is.InstanceOf<Foo>());
+        Assert.That(container.ResolveOrNull(typeof(Foo)), Is.InstanceOf<Foo>());
+        Assert.That(container.ResolveOrElse(typeof(Foo), _ => throw new InvalidOperationException()), Is.InstanceOf<Foo>());
+        Assert.That(container.ResolveOrElse(typeof(Foo), () => throw new InvalidOperationException()), Is.InstanceOf<Foo>());
+        Assert.That(container.ResolveOrElse(type: typeof(Foo), defaultValue: new Foo()), Is.InstanceOf<Foo>());
+    }
+
+    [Test]
+    public void ResolveOrNull_ValueTypeWithTag_ShouldReturnRegisteredValue()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(Key.Of<int>("answer"), factory: _ => 42, LifeTime.Singleton);
+
+        var container = builder.Build();
+
+        Assert.That(container.ResolveOrNull<int>("answer"), Is.EqualTo(42));
+        Assert.That(container.ResolveOrNull<int>("missing"), Is.Null);
+    }
+
+    [Test]
     public void UnregisteredKey_ShouldThrow()
     {
         var builder = new DependencyContainerBuilder();

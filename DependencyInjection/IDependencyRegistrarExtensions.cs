@@ -469,6 +469,129 @@ public static partial class IDependencyRegistrarExtensions
     }
     #endregion
 
+    #region Singleton Ownership
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<T> key,
+        Func<IDependencyContainer, T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        dependencyRegistrar.RegisterSingleton(
+            type: key.Type,
+            tag: key.Tag,
+            factory: dependencyContainer => factory.Invoke(dependencyContainer, key.Type),
+            ownership
+        );
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<T> key,
+        Func<T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Func<IDependencyContainer, T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory, ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Func<T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Func<IDependencyContainer, T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory, ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Func<T> factory,
+        Ownership ownership
+    ) where T : notnull
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<T> key,
+        Ownership ownership
+    ) where T : notnull, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => new T(), ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Ownership ownership
+    ) where T : notnull, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), ownership);
+    }
+
+    public static void RegisterSingleton<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Ownership ownership
+    ) where T : notnull, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), ownership);
+    }
+
+    public static void RegisterSingleton<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Key<TInterface> key,
+        Ownership ownership
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => new TImplementation(), ownership);
+    }
+
+    public static void RegisterSingleton<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        Ownership ownership
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), ownership);
+    }
+
+    public static void RegisterSingleton<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Ownership ownership
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), ownership);
+    }
+    #endregion
+
     #region Instance
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,

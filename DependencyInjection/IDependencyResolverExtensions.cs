@@ -3,6 +3,11 @@ namespace Macaron.DependencyInjection;
 public static class IDependencyResolverExtensions
 {
     #region Resolve
+    public static object Resolve(this IDependencyResolver dependencyResolver, Type type)
+    {
+        return dependencyResolver.Resolve(type, tag: null);
+    }
+
     public static T Resolve<T>(this IDependencyResolver dependencyResolver, Key<T> key)
     {
         return (T)dependencyResolver.Resolve(key.Type, key.Tag);
@@ -23,6 +28,11 @@ public static class IDependencyResolverExtensions
     public static object? ResolveOrNull(this IDependencyResolver dependencyResolver, Type type, object tag)
     {
         return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : null;
+    }
+
+    public static object? ResolveOrNull(this IDependencyResolver dependencyResolver, Type type)
+    {
+        return dependencyResolver.Contains(type, tag: null) ? dependencyResolver.Resolve(type, tag: null) : null;
     }
 
     public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, Key<T> key)
@@ -71,6 +81,28 @@ public static class IDependencyResolverExtensions
     )
     {
         return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : factory.Invoke();
+    }
+
+    public static object ResolveOrElse(
+        this IDependencyResolver dependencyResolver,
+        Type type,
+        Func<IDependencyResolver, object> factory
+    )
+    {
+        return dependencyResolver.Contains(type, tag: null)
+            ? dependencyResolver.Resolve(type, tag: null)
+            : factory.Invoke(dependencyResolver);
+    }
+
+    public static object ResolveOrElse(
+        this IDependencyResolver dependencyResolver,
+        Type type,
+        Func<object> factory
+    )
+    {
+        return dependencyResolver.Contains(type, tag: null)
+            ? dependencyResolver.Resolve(type, tag: null)
+            : factory.Invoke();
     }
 
     public static T ResolveOrElse<T>(
@@ -149,6 +181,15 @@ public static class IDependencyResolverExtensions
         return dependencyResolver.Contains(type, tag) ? dependencyResolver.Resolve(type, tag) : defaultValue;
     }
 
+    public static object ResolveOrElse(
+        this IDependencyResolver dependencyResolver,
+        Type type,
+        object defaultValue
+    )
+    {
+        return dependencyResolver.Contains(type, tag: null) ? dependencyResolver.Resolve(type, tag: null) : defaultValue;
+    }
+
     public static T ResolveOrElse<T>(
         this IDependencyResolver dependencyResolver,
         Key<T> key,
@@ -183,6 +224,11 @@ public static class IDependencyResolverExtensions
     #endregion
 
     #region Contains
+    public static bool Contains(this IDependencyResolver dependencyResolver, Type type)
+    {
+        return dependencyResolver.Contains(type, tag: null);
+    }
+
     public static bool Contains<T>(this IDependencyResolver dependencyResolver, Key<T> key)
     {
         return dependencyResolver.Contains(key.Type, key.Tag);

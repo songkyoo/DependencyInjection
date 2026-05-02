@@ -2,9 +2,26 @@
 
 public class DependencyContainerDisposalTests
 {
-    private sealed class Foo(Action onDispose) : IDisposable
+    private sealed class Foo : IDisposable
     {
-        public void Dispose() => onDispose();
+        private readonly Action? _onDispose;
+
+        public Foo()
+        {
+        }
+
+        public Foo(Action? onDispose)
+        {
+            _onDispose = onDispose;
+        }
+
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            IsDisposed = true;
+            _onDispose?.Invoke();
+        }
     }
 
     [Test]
@@ -118,5 +135,36 @@ public class DependencyContainerDisposalTests
         container.Dispose();
 
         Assert.That(isDispoed, Is.False);
+    }
+
+    [Test]
+    public void RegisterSingletonFactoryWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    {
+        var isDispoed = false;
+
+        var builder = new DependencyContainerBuilder();
+        builder.RegisterSingleton(
+            factory: _ => new Foo(onDispose: () => isDispoed = true),
+            ownership: Ownership.External
+        );
+
+        var container = builder.Build();
+        container.Resolve(Key.Of<Foo>());
+        container.Dispose();
+
+        Assert.That(isDispoed, Is.False);
+    }
+
+    [Test]
+    public void RegisterSingletonImplementationWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.RegisterSingleton<IDisposable, Foo>(ownership: Ownership.External);
+
+        var container = builder.Build();
+        var foo = (Foo)container.Resolve(Key.Of<IDisposable>());
+        container.Dispose();
+
+        Assert.That(foo.IsDisposed, Is.False);
     }
 }
