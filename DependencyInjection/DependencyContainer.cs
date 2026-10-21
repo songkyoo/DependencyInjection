@@ -104,7 +104,7 @@ public sealed class DependencyContainer(
                 return typeRegistration switch
                 {
                     TypeRegistration.Transient { Factory: var factory } =>
-                        factory.Invoke(dependencyContainer, type),
+                        factory.Invoke(dependencyContainer, key),
                     TypeRegistration.Scoped { Factory: var factory } =>
                         scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory, externallyOwned: false),
                     TypeRegistration.Singleton { Factory: var factory, ExternallyOwned: var externallyOwned } =>
@@ -154,7 +154,7 @@ file static class FileScopeExtensions
             return instance;
         }
 
-        var newInstance = factory.Invoke(dependencyContainer, type);
+        var newInstance = factory.Invoke(dependencyContainer, key);
 
         instances.Add(key, newInstance);
 

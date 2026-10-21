@@ -11,6 +11,49 @@ public class DependencyContainerErrorTests
     #pragma warning restore CS9113
 
     [Test]
+    public void NullFactoryResult_ShouldThrow_WithRegistrationKey_AndAllowRetry(
+        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(null, "service-tag")] string? tag,
+        [Values(false, true)] bool resolveFromChild
+    )
+    {
+        var key = Key.Of<string>(tag);
+        var returnNull = true;
+        var builder = new DependencyContainerBuilder();
+
+        // ReSharper disable once AccessToModifiedClosure
+        builder.Register(key, factory: _ => returnNull ? null! : "Hello", lifeTime);
+
+        using var root = builder.Build();
+        using var child = root.CreateScope();
+        var container = resolveFromChild ? child : root;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
+
+        Assert.That(ex!.Message, Does.Contain("Factory returned null"));
+        Assert.That(ex.Message, Does.Contain(key.ToString()));
+
+        returnNull = false;
+
+        Assert.That(container.Resolve(key), Is.EqualTo("Hello"));
+    }
+
+    [Test]
+    public void ExternallyOwnedSingletonNullFactoryResult_ShouldThrow_WithRegistrationKey()
+    {
+        var key = Key.Of<string>("external-service");
+        var builder = new DependencyContainerBuilder();
+
+        builder.RegisterSingleton(key, factory: _ => (string)null!, ownership: Ownership.External);
+
+        using var container = builder.Build();
+        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
+
+        Assert.That(ex!.Message, Does.Contain("Factory returned null"));
+        Assert.That(ex.Message, Does.Contain(key.ToString()));
+    }
+
+    [Test]
     public void CyclicDependency_ShouldThrow_WithResolutionPath()
     {
         var builder = new DependencyContainerBuilder();

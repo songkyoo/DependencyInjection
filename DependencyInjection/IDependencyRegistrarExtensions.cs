@@ -480,7 +480,7 @@ public static partial class IDependencyRegistrarExtensions
         dependencyRegistrar.RegisterSingleton(
             type: key.Type,
             tag: key.Tag,
-            factory: dependencyContainer => factory.Invoke(dependencyContainer, key.Type),
+            factory: dependencyContainer => factory.Invoke(dependencyContainer),
             ownership
         );
     }

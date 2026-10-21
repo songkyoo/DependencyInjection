@@ -122,10 +122,44 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
+    public void CreateScope_AfterDisposal_ShouldThrow_BeforeConfiguration()
+    {
+        var container = new DependencyContainerBuilder().Build();
+
+        container.Dispose();
+
+        var configurationCalled = false;
+
+        Assert.That(
+            () => container.CreateScope(_ => configurationCalled = true),
+            Throws.TypeOf<ObjectDisposedException>()
+        );
+        Assert.That(configurationCalled, Is.False);
+        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+    }
+
+    [Test]
+    public void AddDisposable_AfterDisposal_ShouldThrow_WithoutDisposingObject()
+    {
+        var container = new DependencyContainerBuilder().Build();
+
+        container.Dispose();
+
+        var foo = new Foo();
+
+        // ReSharper disable once AccessToDisposedClosure
+        Assert.That(() => container.AddDisposable(foo), Throws.TypeOf<ObjectDisposedException>());
+
+        container.Dispose();
+
+        Assert.That(foo.IsDisposed, Is.False);
+    }
+
+    [Test]
     public void RegisterSingletonWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
-        var isDispoed = false;
-        var foo = new Foo(onDispose: () => isDispoed = true);
+        var isDisposed = false;
+        var foo = new Foo(onDispose: () => isDisposed = true);
 
         var builder = new DependencyContainerBuilder();
         builder.RegisterSingleton(foo, ownership: Ownership.External);
@@ -134,7 +168,7 @@ public class DependencyContainerDisposalTests
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
-        Assert.That(isDispoed, Is.False);
+        Assert.That(isDisposed, Is.False);
     }
 
     [Test]

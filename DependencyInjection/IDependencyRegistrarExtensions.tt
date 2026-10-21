@@ -277,7 +277,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         dependencyRegistrar.RegisterSingleton(
             type: key.Type,
             tag: key.Tag,
-            factory: dependencyContainer => factory.Invoke(dependencyContainer, key.Type),
+            factory: dependencyContainer => factory.Invoke(dependencyContainer),
             ownership
         );
     }
