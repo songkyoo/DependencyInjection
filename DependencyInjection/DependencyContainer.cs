@@ -45,6 +45,8 @@ public sealed class DependencyContainer(
 
     public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
     {
+        ThrowIfDisposed();
+
         var builder = new DependencyContainerBuilder();
 
         configure?.Invoke(builder);
@@ -54,6 +56,8 @@ public sealed class DependencyContainer(
 
     public void AddDisposable(IDisposable disposable)
     {
+        ThrowIfDisposed();
+
         _disposables.Add(disposable);
     }
 
