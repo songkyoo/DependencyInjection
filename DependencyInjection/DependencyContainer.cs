@@ -18,8 +18,6 @@ public sealed class DependencyContainer(
                 : $"Key {{ Type = {Type}, Tag = {Tag} }}";
         }
     }
-
-    private readonly record struct CleanupEntry(object Instance, Action<object>? Cleanup);
     #endregion
 
     #region Fields
@@ -56,13 +54,6 @@ public sealed class DependencyContainer(
         return builder.Build(parent: this);
     }
 
-    public void AddDisposable(IDisposable disposable)
-    {
-        ThrowIfDisposed();
-
-        _cleanups.Add(new CleanupEntry(disposable, Cleanup: null));
-    }
-
     public void Dispose()
     {
         if (_isDisposed)
@@ -78,11 +69,9 @@ public sealed class DependencyContainer(
 
         for (var index = _cleanups.Count - 1; index >= 0; index--)
         {
-            var (instance, cleanup) = _cleanups[index];
-
             try
             {
-                (cleanup ?? (static instance => (instance as IDisposable)?.Dispose()))(instance);
+                _cleanups[index].Invoke();
             }
             catch (Exception exception)
             {
@@ -160,7 +149,7 @@ public sealed class DependencyContainer(
     private object GetOrAdd(
         Dictionary<Key, object> instances,
         Key key,
-        Func<IDependencyContainer, object> factory,
+        DependencyFactory<object> factory,
         Action<object>? cleanup
     )
     {
@@ -178,15 +167,59 @@ public sealed class DependencyContainer(
 
     private object CreateInstance(
         Key key,
-        Func<IDependencyContainer, object> factory,
+        DependencyFactory<object> factory,
         Action<object>? cleanup
     )
     {
-        var instance = factory.Invoke(this, key);
+        var cleanupCollector = new CleanupCollector();
+        object instance;
+
+        try
+        {
+            instance = factory.Invoke(this, key, ref cleanupCollector);
+
+            ThrowIfDisposed();
+        }
+        catch (Exception exception)
+        {
+            CleanupFailedFactory(in cleanupCollector, exception);
+
+            throw;
+        }
 
         _cleanups.Add(new CleanupEntry(instance, cleanup));
 
+        foreach (var entry in cleanupCollector.Entries)
+        {
+            _cleanups.Add(entry);
+        }
+
         return instance;
+
+        #region Local Functions
+        static void CleanupFailedFactory(in CleanupCollector cleanupCollector, Exception factoryException)
+        {
+            var exceptions = new List<Exception> { factoryException };
+            var entries = cleanupCollector.Entries;
+
+            for (var index = entries.Length - 1; index >= 0; index--)
+            {
+                try
+                {
+                    entries[index].Invoke();
+                }
+                catch (Exception exception)
+                {
+                    exceptions.Add(exception);
+                }
+            }
+
+            if (exceptions.Count > 1)
+            {
+                throw new AggregateException(exceptions);
+            }
+        }
+        #endregion
     }
     #endregion
 }

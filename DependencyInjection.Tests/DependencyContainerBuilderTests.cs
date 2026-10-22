@@ -15,9 +15,9 @@ public class DependencyContainerBuilderTests
         var builder = new DependencyContainerBuilder();
         var key = Key.Of<Foo>();
 
-        builder.Register(key, factory: _ => new Foo(), LifeTime.Transient);
+        builder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Transient);
 
-        Assert.That(() => builder.Register(key, factory: _ => new Foo(), LifeTime.Singleton), Throws.ArgumentException);
+        Assert.That(() => builder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Singleton), Throws.ArgumentException);
     }
 
     [Test]
@@ -25,7 +25,8 @@ public class DependencyContainerBuilderTests
     {
         var key = Key.Of<Foo>();
         var builder = new DependencyContainerBuilder();
-        builder.Register(key, factory: _ => new Foo(), LifeTime.Scoped);
+
+        builder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Scoped);
 
         var container = builder.Build();
 
@@ -37,6 +38,7 @@ public class DependencyContainerBuilderTests
     {
         var key = Key.Of<FooWithDefaultCtor>();
         var builder = new DependencyContainerBuilder();
+
         builder.Register(key, LifeTime.Singleton);
 
         var container = builder.Build();

@@ -13,7 +13,7 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     void IDependencyRegistrar.RegisterTransient(
         Type type,
         object? tag,
-        Func<IDependencyContainer, object> factory,
+        DependencyFactory<object> factory,
         Action<object>? cleanup
     )
     {
@@ -25,7 +25,7 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     void IDependencyRegistrar.RegisterScoped(
         Type type,
         object? tag,
-        Func<IDependencyContainer, object> factory,
+        DependencyFactory<object> factory,
         Action<object>? cleanup
     )
     {
@@ -37,7 +37,7 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     void IDependencyRegistrar.RegisterSingleton(
         Type type,
         object? tag,
-        Func<IDependencyContainer, object> factory,
+        DependencyFactory<object> factory,
         Action<object>? cleanup
     )
     {

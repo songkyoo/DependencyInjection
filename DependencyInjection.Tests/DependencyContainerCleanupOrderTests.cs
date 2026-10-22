@@ -1,4 +1,3 @@
-// ReSharper disable AccessToDisposedClosure
 using System.Runtime.CompilerServices;
 
 namespace Macaron.DependencyInjection.Tests;
@@ -22,46 +21,40 @@ public class DependencyContainerCleanupOrderTests
     }
 
     [Test]
-    public void MixedCleanupEntries_ShouldRunInReverseRecordingOrder_OnlyOnce()
-    {
-        var calls = new List<string>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(factory: () => new Resource(() => calls.Add("singleton")));
-        builder.RegisterScoped<object>(tag: "scoped", cleanup: _ => calls.Add("scoped"));
-        builder.RegisterTransient<object>(tag: "transient", cleanup: _ => calls.Add("transient"));
-
-        var container = builder.Build();
-
-        container.AddDisposable(new Resource(() => calls.Add("external-first")));
-        container.Resolve<Resource>();
-        container.AddDisposable(new Resource(() => calls.Add("external-middle")));
-        container.Resolve<object>("scoped");
-        container.Resolve<object>("transient");
-        container.AddDisposable(new Resource(() => calls.Add("external-last")));
-        container.Resolve<object>("scoped");
-        container.Resolve<Resource>();
-
-        container.Dispose();
-        container.Dispose();
-
-        Assert.That(calls, Is.EqualTo(new[]
-        {
-            "external-last", "transient", "scoped", "external-middle", "singleton", "external-first"
-        }));
-    }
-
-    [Test]
-    public void ServiceCleanup_ShouldRunBeforeItsTransientDependency(
+    public void CollectedCleanup_ShouldRunBeforeService_AndAfterDependentService(
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
         var calls = new List<string>();
         var builder = new DependencyContainerBuilder();
 
-        builder.RegisterTransient(factory: () => new Resource(() => calls.Add("dependency")));
-        builder.Register(
-            factory: resolver => new Service(resolver.Resolve<Resource>()), lifeTime,
+        builder.Register<Resource>(
+            factory: (_, ref collector) =>
+            {
+                var resource = new Resource(() => calls.Add("dependency"));
+
+                collector.Add(new object(), _ =>
+                {
+                    Assert.That(resource.IsDisposed, Is.False);
+                    calls.Add("dependency-subscription");
+                });
+
+                return resource;
+            },
+            lifeTime
+        );
+        builder.Register<Service>(
+            factory: (resolver, ref collector) =>
+            {
+                collector.Add(new Resource(() => calls.Add("first")));
+
+                var service = new Service(resolver.Resolve<Resource>());
+
+                collector.Add(new object(), _ => calls.Add("second"));
+
+                return service;
+            },
+            lifeTime,
             cleanup: service =>
             {
                 Assert.That(service.Resource.IsDisposed, Is.False);
@@ -73,8 +66,12 @@ public class DependencyContainerCleanupOrderTests
 
         container.Resolve<Service>();
         container.Dispose();
+        container.Dispose();
 
-        Assert.That(calls, Is.EqualTo(new[] { "service", "dependency" }));
+        Assert.That(calls, Is.EqualTo(new[]
+        {
+            "second", "first", "service", "dependency-subscription", "dependency"
+        }));
     }
 
     [Test]
@@ -85,31 +82,37 @@ public class DependencyContainerCleanupOrderTests
         var lastFailure = new AggregateException(new ArgumentException("Custom cleanup failed."));
         var builder = new DependencyContainerBuilder();
 
-        builder.RegisterSingleton<object>(cleanup: _ =>
-        {
-            calls.Add("custom");
-
-            if (multipleFailures)
+        builder.RegisterSingleton<object>(
+            factory: (_, ref collector) =>
             {
-                throw lastFailure;
+                collector.Add(new Resource(() => calls.Add("middle")));
+                collector.Add(new Resource(() =>
+                {
+                    calls.Add("default");
+                    throw firstFailure;
+                }));
+                collector.Add(new Resource(() => calls.Add("newest")));
+
+                return new object();
+            },
+            cleanup: _ =>
+            {
+                calls.Add("service");
+
+                if (multipleFailures)
+                {
+                    throw lastFailure;
+                }
             }
-        });
+        );
 
         var container = builder.Build();
 
-        container.AddDisposable(new Resource(() => calls.Add("oldest")));
         container.Resolve<object>();
-        container.AddDisposable(new Resource(() => calls.Add("middle")));
-        container.AddDisposable(new Resource(() =>
-        {
-            calls.Add("default");
-            throw firstFailure;
-        }));
-        container.AddDisposable(new Resource(() => calls.Add("newest")));
 
         var exception = Assert.Throws<AggregateException>(container.Dispose);
 
-        Assert.That(calls, Is.EqualTo(new[] { "newest", "default", "middle", "custom", "oldest" }));
+        Assert.That(calls, Is.EqualTo(new[] { "newest", "default", "middle", "service" }));
 
         var expectedFailures = multipleFailures
             ? new Exception[] { firstFailure, lastFailure }
@@ -117,7 +120,7 @@ public class DependencyContainerCleanupOrderTests
 
         Assert.That(exception!.InnerExceptions, Is.EqualTo(expectedFailures));
         Assert.That(container.Dispose, Throws.Nothing);
-        Assert.That(calls, Has.Count.EqualTo(5));
+        Assert.That(calls, Has.Count.EqualTo(4));
         Assert.That(container.Resolve<object>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(container.Contains<object>, Throws.TypeOf<ObjectDisposedException>());
     }
@@ -125,26 +128,37 @@ public class DependencyContainerCleanupOrderTests
     [Test]
     public void DisposeDuringCleanup_ShouldNotRepeatCallbacks()
     {
-        var container = new DependencyContainerBuilder().Build();
         var calls = new List<string>();
+        var builder = new DependencyContainerBuilder();
 
-        container.AddDisposable(new Resource(() => calls.Add("oldest")));
-        container.AddDisposable(new Resource(() =>
-        {
-            calls.Add("reentrant");
-            container.Dispose();
-        }));
+        builder.RegisterSingleton<object>(
+            factory: (container, ref collector) =>
+            {
+                collector.Add(new Resource(() =>
+                {
+                    calls.Add("reentrant");
+                    container.Dispose();
+                }));
+
+                return new object();
+            },
+            cleanup: _ => calls.Add("service")
+        );
+
+        var container = builder.Build();
+
+        container.Resolve<object>();
         container.Dispose();
 
-        Assert.That(calls, Is.EqualTo(new[] { "reentrant", "oldest" }));
+        Assert.That(calls, Is.EqualTo(new[] { "reentrant", "service" }));
     }
 
     [Test]
-    public void FailedDisposal_ShouldReleaseCachedAndTransientInstances(
+    public void FailedDisposal_ShouldReleaseServiceAndCollectedInstances(
         [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var (container, service, resource) = CreateDisposedContainerWithWeakReferences(lifeTime);
+        var (container, service, resource) = CreateDisposedContainer(lifeTime);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -157,20 +171,27 @@ public class DependencyContainerCleanupOrderTests
 
         #region Local Functions
         [MethodImpl(MethodImplOptions.NoInlining)]
-        static (DependencyContainer Container, WeakReference Service, WeakReference Resource)
-            CreateDisposedContainerWithWeakReferences(LifeTime lifeTime)
+        static (DependencyContainer, WeakReference, WeakReference) CreateDisposedContainer(LifeTime lifeTime)
         {
             var builder = new DependencyContainerBuilder();
 
-            builder.RegisterTransient(factory: () => new Resource(static () => { }));
-            builder.Register(factory: resolver => new Service(resolver.Resolve<Resource>()), lifeTime);
+            builder.Register<Service>(
+                factory: (_, ref collector) =>
+                {
+                    var resource = new Resource(static () => { });
+
+                    collector.Add(resource);
+                    collector.Add(new Resource(static () => throw new InvalidOperationException("Cleanup failed.")));
+
+                    return new Service(resource);
+                },
+                lifeTime
+            );
 
             var container = builder.Build();
             var service = container.Resolve<Service>();
             var serviceReference = new WeakReference(service);
             var resourceReference = new WeakReference(service.Resource);
-
-            container.AddDisposable(new Resource(static () => throw new InvalidOperationException("Cleanup failed.")));
 
             Assert.Throws<AggregateException>(container.Dispose);
 

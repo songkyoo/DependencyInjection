@@ -32,9 +32,9 @@ public class DependencyContainerDisposalTests
         var builder = new DependencyContainerBuilder();
 
         builder.Register(
-            Key.Of<Foo>(),
-            factory: _ => new Foo(onDispose: () => disposed = true),
-            LifeTime.Scoped
+            key: Key.Of<Foo>(),
+            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+            lifeTime: LifeTime.Scoped
         );
 
         var container = builder.Build();
@@ -54,11 +54,11 @@ public class DependencyContainerDisposalTests
         var key = Key.Of<Foo>();
         var rootBuilder = new DependencyContainerBuilder();
 
-        rootBuilder.Register(key, _ => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
+        rootBuilder.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
 
         var childBuilder = new DependencyContainerBuilder();
 
-        childBuilder.Register(key, _ => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
+        childBuilder.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
 
         var root = rootBuilder.Build();
         var child = childBuilder.Build(root);
@@ -83,9 +83,9 @@ public class DependencyContainerDisposalTests
         var builder = new DependencyContainerBuilder();
 
         builder.Register(
-            Key.Of<Foo>(),
-            factory: _ => new Foo(onDispose: () => disposed = true),
-            LifeTime.Transient
+            key: Key.Of<Foo>(),
+            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+            lifeTime: LifeTime.Transient
         );
 
         var container = builder.Build();
@@ -103,9 +103,9 @@ public class DependencyContainerDisposalTests
         var builder = new DependencyContainerBuilder();
 
         builder.Register(
-            Key.Of<Foo>(),
-            factory: _ => new Foo(onDispose: () => disposed = true),
-            LifeTime.Singleton
+            key: Key.Of<Foo>(),
+            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+            lifeTime: LifeTime.Singleton
         );
 
         var container = builder.Build();
@@ -121,7 +121,7 @@ public class DependencyContainerDisposalTests
     {
         var builder = new DependencyContainerBuilder();
 
-        builder.Register(Key.Of<string>(), factory: _ => "Hello", LifeTime.Singleton);
+        builder.Register(Key.Of<string>(), factory: (_, ref _) => "Hello", LifeTime.Singleton);
 
         var container = builder.Build();
 
@@ -148,19 +148,13 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void AddDisposable_AfterDisposal_ShouldThrow_WithoutDisposingObject()
+    public void Contains_AfterDisposal_ShouldThrow()
     {
         var container = new DependencyContainerBuilder().Build();
 
         container.Dispose();
 
-        var foo = new Foo();
-
-        Assert.That(() => container.AddDisposable(foo), Throws.TypeOf<ObjectDisposedException>());
-
-        container.Dispose();
-
-        Assert.That(foo.IsDisposed, Is.False);
+        Assert.That(container.Contains<Foo>, Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
@@ -189,7 +183,7 @@ public class DependencyContainerDisposalTests
         var builder = new DependencyContainerBuilder();
 
         builder.RegisterSingleton(
-            factory: _ => new Foo(onDispose: () => isDisposed = true),
+            factory: (_, ref _) => new Foo(onDispose: () => isDisposed = true),
             cleanup: _ => { }
         );
 

@@ -12,7 +12,7 @@ public static partial class IDependencyRegistrarExtensions
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         LifeTime lifeTime,
         Action<T>? cleanup = null
     ) where T : notnull
@@ -26,7 +26,7 @@ public static partial class IDependencyRegistrarExtensions
                 dependencyRegistrar.RegisterTransient(
                     type,
                     tag,
-                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    factory: (IDependencyContainer dependencyContainer, ref CleanupCollector cleanupCollector) => factory.Invoke(dependencyContainer, ref cleanupCollector),
                     cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
 
@@ -37,7 +37,7 @@ public static partial class IDependencyRegistrarExtensions
                 dependencyRegistrar.RegisterScoped(
                     type,
                     tag,
-                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    factory: (IDependencyContainer dependencyContainer, ref CleanupCollector cleanupCollector) => factory.Invoke(dependencyContainer, ref cleanupCollector),
                     cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
 
@@ -48,7 +48,7 @@ public static partial class IDependencyRegistrarExtensions
                 dependencyRegistrar.RegisterSingleton(
                     type,
                     tag,
-                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    factory: (IDependencyContainer dependencyContainer, ref CleanupCollector cleanupCollector) => factory.Invoke(dependencyContainer, ref cleanupCollector),
                     cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
 
@@ -67,12 +67,12 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         LifeTime lifeTime,
         Action<T>? cleanup = null
     ) where T : notnull
@@ -87,13 +87,13 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         LifeTime lifeTime,
         Action<T>? cleanup = null
     ) where T : notnull
@@ -109,7 +109,7 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
@@ -119,7 +119,7 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
@@ -128,7 +128,7 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
@@ -138,7 +138,7 @@ public static partial class IDependencyRegistrarExtensions
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
@@ -150,7 +150,7 @@ public static partial class IDependencyRegistrarExtensions
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
@@ -161,7 +161,7 @@ public static partial class IDependencyRegistrarExtensions
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
@@ -173,7 +173,7 @@ public static partial class IDependencyRegistrarExtensions
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime, cleanup);
     }
 
 <#
@@ -184,7 +184,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         Action<T>? cleanup = null
     ) where T : notnull
     {
@@ -198,12 +198,12 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         Action<T>? cleanup = null
     ) where T : notnull
     {
@@ -216,13 +216,13 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<IDependencyContainer, T> factory,
+        DependencyFactory<T> factory,
         Action<T>? cleanup = null
     ) where T : notnull
     {
@@ -236,7 +236,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => factory.Invoke(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><T>(
@@ -245,7 +245,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><T>(
@@ -253,7 +253,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><T>(
@@ -262,7 +262,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => new T(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><TInterface, TImplementation>(
@@ -273,7 +273,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: key, factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><TInterface, TImplementation>(
@@ -283,7 +283,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
 
     public static void Register<#= scope #><TInterface, TImplementation>(
@@ -294,7 +294,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: (IDependencyContainer _, ref CleanupCollector _) => new TImplementation(), lifeTime: LifeTime.<#= scope #>, cleanup);
     }
     #endregion
 
@@ -309,7 +309,7 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
         Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key, factory: _ => instance, lifeTime: LifeTime.Singleton, cleanup);
+        Register(dependencyRegistrar, key, factory: (IDependencyContainer _, ref CleanupCollector _) => instance, lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(

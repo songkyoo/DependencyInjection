@@ -3,12 +3,13 @@
 internal static class Extensions
 {
     public static object Invoke<T>(
-        this Func<IDependencyContainer, T> factory,
+        this DependencyFactory<T> factory,
         IDependencyContainer dependencyContainer,
-        DependencyContainer.Key key
+        DependencyContainer.Key key,
+        ref CleanupCollector cleanupCollector
     ) where T : notnull
     {
-        var instance = factory.Invoke(dependencyContainer);
+        var instance = factory.Invoke(dependencyContainer, ref cleanupCollector);
 
         if (instance is null)
         {

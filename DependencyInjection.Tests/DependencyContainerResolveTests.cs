@@ -12,7 +12,8 @@ public class DependencyContainerResolveTests
     public void Transient_ShouldCreateNewInstanceEachTime()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(key: Key.Of<IFoo>(), factory: _ => new Foo(), LifeTime.Transient);
+
+        builder.Register(key: Key.Of<IFoo>(), factory: (_, ref _) => new Foo(), LifeTime.Transient);
 
         var container = builder.Build();
         var foo1 = container.Resolve(Key.Of<IFoo>());
@@ -25,7 +26,8 @@ public class DependencyContainerResolveTests
     public void Scoped_ShouldReuseInstanceInSameContainer()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Scoped);
+
+        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
 
         var container = builder.Build();
         var foo1 = container.Resolve(Key.Of<Foo>());
@@ -38,11 +40,11 @@ public class DependencyContainerResolveTests
     public void Singleton_ShouldReuseInstanceAcrossContainers()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
+
+        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var root = builder.Build();
         var child = root.CreateScope();
-
         var rootFoo = root.Resolve(Key.Of<Foo>());
         var childFoo = child.Resolve(Key.Of<Foo>());
 
@@ -53,7 +55,8 @@ public class DependencyContainerResolveTests
     public void Resolve_WithObjectTag_ShouldUseTagValueEquality()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: _ => new Foo(), LifeTime.Singleton);
+
+        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var container = builder.Build();
 
@@ -65,7 +68,8 @@ public class DependencyContainerResolveTests
     public void Resolve_WithDifferentObjectTag_ShouldNotMatch()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: _ => new Foo(), LifeTime.Singleton);
+
+        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var container = builder.Build();
 
@@ -76,7 +80,8 @@ public class DependencyContainerResolveTests
     public void Resolve_TypeBasedUntaggedExtensions_ShouldUseNullTag()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
+
+        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var container = builder.Build();
 
@@ -92,7 +97,8 @@ public class DependencyContainerResolveTests
     public void ResolveOrNull_ValueTypeWithTag_ShouldReturnRegisteredValue()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<int>("answer"), factory: _ => 42, LifeTime.Singleton);
+
+        builder.Register(Key.Of<int>("answer"), factory: (_, ref _) => 42, LifeTime.Singleton);
 
         var container = builder.Build();
 

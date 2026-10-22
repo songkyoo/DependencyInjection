@@ -1,4 +1,5 @@
 // ReSharper disable DisposeOnUsingVariable
+// ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerTransientTests
@@ -75,11 +76,11 @@ public class DependencyContainerTransientTests
 
         builder.RegisterTransient<Resource>();
         builder.RegisterTransient(
-            factory: resolver => new Dependency(resolver.Resolve<Resource>()),
+            factory: (resolver, ref _) => new Dependency(resolver.Resolve<Resource>()),
             cleanup: dependency => dependency.CleanupCount++
         );
         builder.Register(
-            factory: resolver => new Service(resolver.Resolve<Dependency>()), lifeTime,
+            factory: (resolver, ref _) => new Service(resolver.Resolve<Dependency>()), lifeTime,
             cleanup: service => service.CleanupCount++
         );
 
@@ -120,11 +121,17 @@ public class DependencyContainerTransientTests
     }
 
     [Test]
-    public void AllLifetimesAndExternalDisposable_ShouldBeDisposedByContainer()
+    public void AllLifetimesAndCollectedDisposable_ShouldBeDisposedByContainer()
     {
+        var collected = new Resource();
         var builder = new DependencyContainerBuilder();
 
-        builder.RegisterTransient<Resource>(tag: "transient");
+        builder.RegisterTransient(tag: "transient",
+            factory: (_, ref collector) =>
+            {
+                collector.Add(collected);
+                return new Resource();
+            });
         builder.RegisterScoped<Resource>(tag: "scoped");
         builder.RegisterSingleton<Resource>(tag: "singleton");
 
@@ -132,16 +139,13 @@ public class DependencyContainerTransientTests
         var transient = container.Resolve<Resource>("transient");
         var scoped = container.Resolve<Resource>("scoped");
         var singleton = container.Resolve<Resource>("singleton");
-        var external = new Resource();
-
-        container.AddDisposable(external);
         container.Dispose();
         container.Dispose();
 
         Assert.That(transient.DisposeCount, Is.EqualTo(1));
         Assert.That(scoped.DisposeCount, Is.EqualTo(1));
         Assert.That(singleton.DisposeCount, Is.EqualTo(1));
-        Assert.That(external.DisposeCount, Is.EqualTo(1));
+        Assert.That(collected.DisposeCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -155,13 +159,13 @@ public class DependencyContainerTransientTests
         registrar.RegisterTransient(
             type: typeof(Service),
             tag: null,
-            factory: _ => returnsWrongType ? resource : null!,
+            factory: (_, ref _) => returnsWrongType ? resource : null!,
             cleanup: _ => cleanupCount++
         );
 
         using var container = builder.Build();
 
-        Assert.That(() => container.Resolve<Service>(), Throws.InvalidOperationException);
+        Assert.That(container.Resolve<Service>, Throws.InvalidOperationException);
 
         container.Dispose();
 

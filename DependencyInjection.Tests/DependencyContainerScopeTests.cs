@@ -8,11 +8,11 @@ public class DependencyContainerScopeTests
     public void Scoped_ShouldCreateDifferentInstancesInChildContainer()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Scoped);
+
+        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
 
         var root = builder.Build();
         var child = root.CreateScope();
-
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
 
@@ -23,11 +23,11 @@ public class DependencyContainerScopeTests
     public void Singleton_ShouldBeSharedBetweenParentAndChild()
     {
         var builder = new DependencyContainerBuilder();
-        builder.Register(Key.Of<Foo>(), factory: _ => new Foo(), LifeTime.Singleton);
+
+        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var root = builder.Build();
         var child = root.CreateScope();
-
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
 
@@ -39,16 +39,16 @@ public class DependencyContainerScopeTests
     {
         var key = Key.Of<Foo>();
         var rootBuilder = new DependencyContainerBuilder();
-        rootBuilder.Register(key, factory: _ => new Foo(), LifeTime.Singleton);
+
+        rootBuilder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Singleton);
 
         var root = rootBuilder.Build();
-
         var overridden = new Foo();
         var childBuilder = new DependencyContainerBuilder();
-        childBuilder.Register(key, factory: _ => overridden, LifeTime.Scoped);
+
+        childBuilder.Register(key, factory: (_, ref _) => overridden, LifeTime.Scoped);
 
         var child = childBuilder.Build(root);
-
         var resolved = child.Resolve(key);
 
         Assert.That(resolved, Is.SameAs(overridden));
@@ -59,7 +59,8 @@ public class DependencyContainerScopeTests
     {
         var key = Key.Of<Foo>();
         var builder = new DependencyContainerBuilder();
-        builder.Register(key, factory: _ => new Foo(), LifeTime.Transient);
+
+        builder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Transient);
 
         var root = builder.Build();
         var child = root.CreateScope();
