@@ -18,11 +18,13 @@ public sealed class DependencyContainer(
                 : $"Key {{ Type = {Type}, Tag = {Tag} }}";
         }
     }
+
+    private readonly record struct CleanupEntry(object Instance, Action<object>? Cleanup);
     #endregion
 
     #region Fields
     private readonly Dictionary<Key, object> _instances = new();
-    private readonly List<IDisposable> _disposables = [];
+    private readonly List<CleanupEntry> _cleanups = [];
     private readonly Stack<Key> _resolutionStack = new();
     private bool _isDisposed;
 
@@ -58,7 +60,7 @@ public sealed class DependencyContainer(
     {
         ThrowIfDisposed();
 
-        _disposables.Add(disposable);
+        _cleanups.Add(new CleanupEntry(disposable, Cleanup: null));
     }
 
     public void Dispose()
@@ -72,12 +74,12 @@ public sealed class DependencyContainer(
         _parent = null;
         _registry = ImmutableDictionary<(Type, object?), TypeRegistration>.Empty;
 
-        foreach (var disposable in _disposables)
+        foreach (var (instance, cleanup) in _cleanups)
         {
-            disposable.Dispose();
+            (cleanup ?? (static instance => (instance as IDisposable)?.Dispose()))(instance);
         }
 
-        _disposables.Clear();
+        _cleanups.Clear();
         _instances.Clear();
     }
     #endregion
@@ -87,7 +89,7 @@ public sealed class DependencyContainer(
         Type type,
         object? tag,
         Dictionary<Key, object> scopedInstances,
-        IDependencyContainer dependencyContainer
+        DependencyContainer dependencyContainer
     )
     {
         ThrowIfDisposed();
@@ -109,10 +111,10 @@ public sealed class DependencyContainer(
                 {
                     TypeRegistration.Transient { Factory: var factory } =>
                         factory.Invoke(dependencyContainer, key),
-                    TypeRegistration.Scoped { Factory: var factory } =>
-                        scopedInstances.GetOrAdd(type, tag, dependencyContainer, factory, externallyOwned: false),
-                    TypeRegistration.Singleton { Factory: var factory, ExternallyOwned: var externallyOwned } =>
-                        _instances.GetOrAdd(type, tag, dependencyContainer: this, factory, externallyOwned),
+                    TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
+                        dependencyContainer.GetOrAdd(scopedInstances, key, factory, cleanup),
+                    TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
+                        GetOrAdd(_instances, key, factory, cleanup),
                     _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
                 };
             }
@@ -137,37 +139,27 @@ public sealed class DependencyContainer(
             throw new ObjectDisposedException(objectName: nameof(DependencyContainer));
         }
     }
-    #endregion
-}
 
-file static class FileScopeExtensions
-{
-    public static object GetOrAdd(
-        this Dictionary<DependencyContainer.Key, object> instances,
-        Type type,
-        object? tag,
-        IDependencyContainer dependencyContainer,
+    private object GetOrAdd(
+        Dictionary<Key, object> instances,
+        Key key,
         Func<IDependencyContainer, object> factory,
-        bool externallyOwned
+        Action<object>? cleanup
     )
     {
-        var key = new DependencyContainer.Key(type, tag);
-
         if (instances.TryGetValue(key, out var instance))
         {
             return instance;
         }
 
-        var newInstance = factory.Invoke(dependencyContainer, key);
+        var newInstance = factory.Invoke(this, key);
 
         instances.Add(key, newInstance);
 
-        if (!externallyOwned && newInstance is IDisposable disposable)
-        {
-            dependencyContainer.AddDisposable(disposable);
-        }
+        _cleanups.Add(new CleanupEntry(newInstance, cleanup));
 
         return newInstance;
     }
+    #endregion
 }
 

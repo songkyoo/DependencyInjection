@@ -11,7 +11,8 @@ public static partial class IDependencyRegistrarExtensions
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
         Func<IDependencyContainer, T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
         var (type, tag) = key;
@@ -19,27 +20,38 @@ public static partial class IDependencyRegistrarExtensions
         switch (lifeTime)
         {
             case LifeTime.Transient:
+            { 
                 dependencyRegistrar.RegisterTransient(
                     type,
                     tag,
-                    factory: dependencyContainer => factory.Invoke(dependencyContainer)
+                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
+
                 break;
+            }
             case LifeTime.Scoped:
+            { 
                 dependencyRegistrar.RegisterScoped(
                     type,
                     tag,
-                    factory: dependencyContainer => factory.Invoke(dependencyContainer)
+                    factory: dependencyContainer => factory.Invoke(dependencyContainer),
+                    cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
+
                 break;
+            }
             case LifeTime.Singleton:
+            { 
                 dependencyRegistrar.RegisterSingleton(
                     type,
                     tag,
                     factory: dependencyContainer => factory.Invoke(dependencyContainer),
-                    ownership: Ownership.Container
+                    cleanup: cleanup is null ? null : instance => cleanup((T)instance)
                 );
+
                 break;
+            }
             default:
                 throw new InvalidOperationException($"Not supported life time: {lifeTime}");
         }
@@ -49,211 +61,234 @@ public static partial class IDependencyRegistrarExtensions
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
         Func<T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime);
+        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<IDependencyContainer, T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<IDependencyContainer, T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<T> factory,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime);
+        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime, cleanup);
     }
 
     public static void Register<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<TInterface> key,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime);
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime, cleanup);
     }
 
     public static void Register<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        LifeTime lifeTime
+        LifeTime lifeTime,
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime, cleanup);
     }
 
     #region Transient
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Key<T> key
+        Key<T> key,
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Transient);
-    }
-
-    public static void RegisterTransient<T>(
-        this IDependencyRegistrar dependencyRegistrar
-    ) where T : notnull, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        object tag
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Transient, cleanup);
+    }
+
+    public static void RegisterTransient<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Action<T>? cleanup = null
+    ) where T : notnull, new()
+    {
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        Key<TInterface> key
+        Key<TInterface> key,
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Transient);
-    }
-
-    public static void RegisterTransient<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Transient, cleanup);
     }
 
     public static void RegisterTransient<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        object tag
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Transient);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Transient, cleanup);
+    }
+
+    public static void RegisterTransient<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Action<TInterface>? cleanup = null
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Transient, cleanup);
     }
     #endregion
 
@@ -261,105 +296,117 @@ public static partial class IDependencyRegistrarExtensions
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<IDependencyContainer, T> factory
+        Func<IDependencyContainer, T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Func<T> factory
+        Func<T> factory,
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Key<T> key
+        Key<T> key,
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Scoped);
-    }
-
-    public static void RegisterScoped<T>(
-        this IDependencyRegistrar dependencyRegistrar
-    ) where T : notnull, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        object tag
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Scoped, cleanup);
+    }
+
+    public static void RegisterScoped<T>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Action<T>? cleanup = null
+    ) where T : notnull, new()
+    {
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        Key<TInterface> key
+        Key<TInterface> key,
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped);
-    }
-
-    public static void RegisterScoped<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped, cleanup);
     }
 
     public static void RegisterScoped<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        object tag
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped, cleanup);
+    }
+
+    public static void RegisterScoped<TInterface, TImplementation>(
+        this IDependencyRegistrar dependencyRegistrar,
+        object tag,
+        Action<TInterface>? cleanup = null
+    )
+        where TInterface : notnull
+        where TImplementation : TInterface, new()
+    {
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Scoped, cleanup);
     }
     #endregion
 
@@ -367,228 +414,117 @@ public static partial class IDependencyRegistrarExtensions
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Func<IDependencyContainer, T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<T> key,
-        Func<T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Func<IDependencyContainer, T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Func<T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object tag,
-        Func<IDependencyContainer, T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object tag,
-        Func<T> factory
-    ) where T : notnull
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<T> key
-    ) where T : notnull, new()
-    {
-        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar
-    ) where T : notnull, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object tag
-    ) where T : notnull, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<TInterface> key
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton);
-    }
-
-    public static void RegisterSingleton<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object tag
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton);
-    }
-    #endregion
-
-    #region Singleton Ownership
-    public static void RegisterSingleton<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Key<T> key,
         Func<IDependencyContainer, T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        dependencyRegistrar.RegisterSingleton(
-            type: key.Type,
-            tag: key.Tag,
-            factory: dependencyContainer => factory.Invoke(dependencyContainer),
-            ownership
-        );
+        Register(dependencyRegistrar, key: key, factory, lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
         Func<T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), ownership);
+        Register(dependencyRegistrar, key: key, factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<IDependencyContainer, T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory, ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory, lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<IDependencyContainer, T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory, ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory, lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
         Func<T> factory,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => factory.Invoke(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => new T(), ownership);
+        Register(dependencyRegistrar, key: key, factory: _ => new T(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(), factory: _ => new T(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Ownership ownership
+        Action<T>? cleanup = null
     ) where T : notnull, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<T>(tag), factory: _ => new T(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
         Key<TInterface> key,
-        Ownership ownership
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: key, factory: _ => new TImplementation(), ownership);
+        Register(dependencyRegistrar, key: key, factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
-        Ownership ownership
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(), factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<TInterface, TImplementation>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
-        Ownership ownership
+        Action<TInterface>? cleanup = null
     )
         where TInterface : notnull
         where TImplementation : TInterface, new()
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), ownership);
+        Register(dependencyRegistrar, key: Key.Of<TInterface>(tag), factory: _ => new TImplementation(), lifeTime: LifeTime.Singleton, cleanup);
     }
     #endregion
 
@@ -597,29 +533,29 @@ public static partial class IDependencyRegistrarExtensions
         this IDependencyRegistrar dependencyRegistrar,
         Key<T> key,
         T instance,
-        Ownership ownership = Ownership.Container
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        dependencyRegistrar.RegisterSingleton(type: key.Type, tag: key.Tag, factory: _ => instance, ownership);
+        Register(dependencyRegistrar, key, factory: _ => instance, lifeTime: LifeTime.Singleton, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         T instance,
-        Ownership ownership = Ownership.Container
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), instance, ownership);
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(), instance, cleanup);
     }
 
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         object tag,
         T instance,
-        Ownership ownership = Ownership.Container
+        Action<T>? cleanup = null
     ) where T : notnull
     {
-        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), instance, ownership);
+        RegisterSingleton(dependencyRegistrar, key: Key.Of<T>(tag), instance, cleanup);
     }
     #endregion
 }

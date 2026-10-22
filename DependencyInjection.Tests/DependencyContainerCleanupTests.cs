@@ -1,0 +1,238 @@
+namespace Macaron.DependencyInjection.Tests;
+
+public class DependencyContainerCleanupTests
+{
+    private sealed class Resource : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+        }
+    }
+
+    public interface IService
+    {
+        int CleanupCount { get; set; }
+    }
+
+    private sealed class Service : IService
+    {
+        public int CleanupCount { get; set; }
+    }
+
+    [Test]
+    public void OmittedCleanup_ShouldDisposeCachedInstanceOnce(
+        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+    )
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register(factory: () => new Resource(), lifeTime);
+        var container = builder.Build();
+        var resource = container.Resolve<Resource>();
+
+        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
+        Assert.That(resource.DisposeCount, Is.Zero);
+
+        container.Dispose();
+        container.Dispose();
+
+        Assert.That(resource.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CustomCleanup_ShouldReplaceDispose_AndReceiveCachedInstanceOnce(
+        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+    )
+    {
+        var cleanedInstances = new List<Resource>();
+        var builder = new DependencyContainerBuilder();
+        builder.Register(factory: _ => new Resource(), lifeTime, cleanup: cleanedInstances.Add);
+        var container = builder.Build();
+        var resource = container.Resolve<Resource>();
+
+        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
+        Assert.That(cleanedInstances, Is.Empty);
+
+        container.Dispose();
+        container.Dispose();
+
+        Assert.That(cleanedInstances, Is.EqualTo(new[] { resource }));
+        Assert.That(resource.DisposeCount, Is.Zero);
+    }
+
+    [Test]
+    public void EmptyCleanup_ShouldLeaveDisposalToCaller(
+        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+    )
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register<Resource>(lifeTime, cleanup: _ => { });
+        var container = builder.Build();
+        var resource = container.Resolve<Resource>();
+
+        container.Dispose();
+
+        Assert.That(resource.DisposeCount, Is.Zero);
+        resource.Dispose();
+        Assert.That(resource.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void NonDisposableService_ShouldSupportDefaultAndCustomCleanup(
+        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(false, true)] bool customCleanup
+    )
+    {
+        var key = Key.Of<IService>("service");
+        var builder = new DependencyContainerBuilder();
+        builder.Register<IService, Service>(key, lifeTime,
+            cleanup: customCleanup ? service => service.CleanupCount++ : null);
+        var container = builder.Build();
+        var service = container.Resolve(key);
+
+        container.Dispose();
+
+        Assert.That(service.CleanupCount, Is.EqualTo(customCleanup ? 1 : 0));
+    }
+
+    [Test]
+    public void InheritedService_ShouldRunCleanupInItsOwningContainer(
+        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+    )
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
+        var root = builder.Build();
+        var child = root.CreateScope();
+        var rootService = root.Resolve<Service>();
+        var childService = child.Resolve<Service>();
+
+        child.Dispose();
+
+        if (lifeTime == LifeTime.Scoped)
+        {
+            Assert.That(childService, Is.Not.SameAs(rootService));
+            Assert.That(childService.CleanupCount, Is.EqualTo(1));
+        }
+        else
+        {
+            Assert.That(childService, Is.SameAs(rootService));
+        }
+
+        Assert.That(rootService.CleanupCount, Is.Zero);
+
+        root.Dispose();
+
+        Assert.That(rootService.CleanupCount, Is.EqualTo(1));
+        Assert.That(childService.CleanupCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void NonGenericRegistration_ShouldApplyCleanupPolicy(
+        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(false, true)] bool customCleanup
+    )
+    {
+        IDependencyRegistrar registrar = new DependencyContainerBuilder();
+        var cleanupCount = 0;
+        Action<object>? cleanup = customCleanup ? _ => cleanupCount++ : null;
+
+        switch (lifeTime)
+        {
+            case LifeTime.Transient:
+                registrar.RegisterTransient(typeof(Resource), tag: "resource", _ => new Resource(), cleanup);
+                break;
+            case LifeTime.Scoped:
+                registrar.RegisterScoped(typeof(Resource), tag: "resource", _ => new Resource(), cleanup);
+                break;
+            case LifeTime.Singleton:
+                registrar.RegisterSingleton(typeof(Resource), tag: "resource", _ => new Resource(), cleanup);
+                break;
+        }
+
+        var container = ((DependencyContainerBuilder)registrar).Build();
+        var resource = container.Resolve<Resource>("resource");
+
+        container.Dispose();
+
+        var tracked = lifeTime != LifeTime.Transient;
+        Assert.That(cleanupCount, Is.EqualTo(tracked && customCleanup ? 1 : 0));
+        Assert.That(resource.DisposeCount, Is.EqualTo(tracked && !customCleanup ? 1 : 0));
+    }
+
+    [Test]
+    public void TransientCustomCleanup_ShouldNotRun_WhenContainerDisposed()
+    {
+        var builder = new DependencyContainerBuilder();
+        builder.RegisterTransient<Service>(cleanup: service => service.CleanupCount++);
+        var container = builder.Build();
+        var service = container.Resolve<Service>();
+
+        container.Dispose();
+
+        Assert.That(service.CleanupCount, Is.Zero);
+    }
+
+    [TestCaseSource(nameof(CustomCleanupRegistrations))]
+    public void RegistrationOverload_ShouldApplyCustomCleanup(
+        Action<IDependencyRegistrar, Action<IService>> register,
+        Key<IService> key
+    )
+    {
+        var builder = new DependencyContainerBuilder();
+        register(builder, service => service.CleanupCount++);
+        var container = builder.Build();
+        var service = container.Resolve(key);
+
+        container.Dispose();
+
+        Assert.That(service.CleanupCount, Is.EqualTo(1));
+    }
+
+    private static IEnumerable<TestCaseData> CustomCleanupRegistrations()
+    {
+        var key = Key.Of<IService>("service");
+
+        yield return Registration("GeneralFactoryWithKey", key,
+            (registrar, cleanup) => registrar.Register(key, () => new Service(), LifeTime.Scoped, cleanup));
+        yield return Registration("GeneralFactoryWithTag", key,
+            (registrar, cleanup) => registrar.Register<IService>("service", () => new Service(), LifeTime.Singleton, cleanup));
+        yield return Registration("GeneralContainerFactoryWithTag", key,
+            (registrar, cleanup) => registrar.Register<IService>("service", _ => new Service(), LifeTime.Scoped, cleanup));
+        yield return Registration("ScopedContainerFactoryWithKey", key,
+            (registrar, cleanup) => registrar.RegisterScoped(key, _ => new Service(), cleanup));
+        yield return Registration("ScopedFactoryWithTag", key,
+            (registrar, cleanup) => registrar.RegisterScoped<IService>("service", () => new Service(), cleanup));
+        yield return Registration("SingletonContainerFactory", Key.Of<IService>(),
+            (registrar, cleanup) => registrar.RegisterSingleton<IService>(_ => new Service(), cleanup));
+        yield return Registration("SingletonFactory", Key.Of<IService>(),
+            (registrar, cleanup) => registrar.RegisterSingleton<IService>(() => new Service(), cleanup));
+        yield return Registration("ScopedImplementationWithKey", key,
+            (registrar, cleanup) => registrar.RegisterScoped<IService, Service>(key, cleanup));
+        yield return Registration("SingletonImplementation", Key.Of<IService>(),
+            (registrar, cleanup) => registrar.RegisterSingleton<IService, Service>(cleanup));
+        yield return Registration("SingletonImplementationWithTag", key,
+            (registrar, cleanup) => registrar.RegisterSingleton<IService, Service>("service", cleanup));
+        yield return Registration("GeneralImplementation", Key.Of<IService>(),
+            (registrar, cleanup) => registrar.Register<IService, Service>(LifeTime.Scoped, cleanup));
+        yield return Registration("GeneralImplementationWithTag", key,
+            (registrar, cleanup) => registrar.Register<IService, Service>("service", LifeTime.Singleton, cleanup));
+        yield return Registration("InstanceWithKey", key,
+            (registrar, cleanup) => registrar.RegisterSingleton<IService>(key, new Service(), cleanup));
+        yield return Registration("Instance", Key.Of<IService>(),
+            (registrar, cleanup) => registrar.RegisterSingleton<IService>(new Service(), cleanup));
+        yield return Registration("InstanceWithTag", key,
+            (registrar, cleanup) => registrar.RegisterSingleton<IService>("service", new Service(), cleanup));
+    }
+
+    private static TestCaseData Registration(
+        string name,
+        Key<IService> key,
+        Action<IDependencyRegistrar, Action<IService>> register
+    )
+    {
+        return new TestCaseData(register, key).SetName($"CustomCleanup_{name}");
+    }
+}

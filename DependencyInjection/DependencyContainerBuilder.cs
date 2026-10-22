@@ -10,35 +10,40 @@ public sealed class DependencyContainerBuilder : IDependencyRegistrar
     #endregion
 
     #region IDependencyRegistrar Inteface
-    void IDependencyRegistrar.RegisterTransient(Type type, object? tag, Func<IDependencyContainer, object> factory)
+    void IDependencyRegistrar.RegisterTransient(
+        Type type,
+        object? tag,
+        Func<IDependencyContainer, object> factory,
+        Action<object>? cleanup
+    )
     {
         var key = (type, tag);
 
-        _typeRegistrations.Add(key, new TypeRegistration.Transient(factory));
+        _typeRegistrations.Add(key, new TypeRegistration.Transient(factory, cleanup));
     }
 
-    void IDependencyRegistrar.RegisterScoped(Type type, object? tag, Func<IDependencyContainer, object> factory)
+    void IDependencyRegistrar.RegisterScoped(
+        Type type,
+        object? tag,
+        Func<IDependencyContainer, object> factory,
+        Action<object>? cleanup
+    )
     {
         var key = (type, tag);
 
-        _typeRegistrations.Add(key, new TypeRegistration.Scoped(factory));
+        _typeRegistrations.Add(key, new TypeRegistration.Scoped(factory, cleanup));
     }
 
     void IDependencyRegistrar.RegisterSingleton(
         Type type,
         object? tag,
         Func<IDependencyContainer, object> factory,
-        Ownership ownership
+        Action<object>? cleanup
     )
     {
         var key = (type, tag);
 
-        _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, ExternallyOwned: ownership switch
-        {
-            Ownership.Container => false,
-            Ownership.External => true,
-            _ => throw new ArgumentOutOfRangeException(paramName: nameof(ownership)),
-        }));
+        _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, cleanup));
     }
     #endregion
 

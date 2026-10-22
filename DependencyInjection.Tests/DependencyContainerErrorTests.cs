@@ -39,12 +39,12 @@ public class DependencyContainerErrorTests
     }
 
     [Test]
-    public void ExternallyOwnedSingletonNullFactoryResult_ShouldThrow_WithRegistrationKey()
+    public void SingletonNullFactoryResultWithEmptyCleanup_ShouldThrow_WithRegistrationKey()
     {
         var key = Key.Of<string>("external-service");
         var builder = new DependencyContainerBuilder();
 
-        builder.RegisterSingleton(key, factory: _ => (string)null!, ownership: Ownership.External);
+        builder.RegisterSingleton(key, factory: _ => (string)null!, cleanup: _ => { });
 
         using var container = builder.Build();
         var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));

@@ -156,13 +156,13 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void RegisterSingletonWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    public void RegisterSingletonWithEmptyCleanup_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
         var isDisposed = false;
         var foo = new Foo(onDispose: () => isDisposed = true);
 
         var builder = new DependencyContainerBuilder();
-        builder.RegisterSingleton(foo, ownership: Ownership.External);
+        builder.RegisterSingleton(foo, cleanup: _ => { });
 
         var container = builder.Build();
         container.Resolve(Key.Of<Foo>());
@@ -172,28 +172,28 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void RegisterSingletonFactoryWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    public void RegisterSingletonFactoryWithEmptyCleanup_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
-        var isDispoed = false;
+        var isDisposed = false;
 
         var builder = new DependencyContainerBuilder();
         builder.RegisterSingleton(
-            factory: _ => new Foo(onDispose: () => isDispoed = true),
-            ownership: Ownership.External
+            factory: _ => new Foo(onDispose: () => isDisposed = true),
+            cleanup: _ => { }
         );
 
         var container = builder.Build();
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
-        Assert.That(isDispoed, Is.False);
+        Assert.That(isDisposed, Is.False);
     }
 
     [Test]
-    public void RegisterSingletonImplementationWithExternallyOwnedOption_ShouldNotDisposeInstance_WhenContainerDisposed()
+    public void RegisterSingletonImplementationWithEmptyCleanup_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
         var builder = new DependencyContainerBuilder();
-        builder.RegisterSingleton<IDisposable, Foo>(ownership: Ownership.External);
+        builder.RegisterSingleton<IDisposable, Foo>(cleanup: _ => { });
 
         var container = builder.Build();
         var foo = (Foo)container.Resolve(Key.Of<IDisposable>());
