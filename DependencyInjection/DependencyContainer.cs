@@ -74,13 +74,30 @@ public sealed class DependencyContainer(
         _parent = null;
         _registry = ImmutableDictionary<(Type, object?), TypeRegistration>.Empty;
 
-        foreach (var (instance, cleanup) in _cleanups)
+        List<Exception>? exceptions = null;
+
+        for (var index = _cleanups.Count - 1; index >= 0; index--)
         {
-            (cleanup ?? (static instance => (instance as IDisposable)?.Dispose()))(instance);
+            var (instance, cleanup) = _cleanups[index];
+
+            try
+            {
+                (cleanup ?? (static instance => (instance as IDisposable)?.Dispose()))(instance);
+            }
+            catch (Exception exception)
+            {
+                exceptions ??= [];
+                exceptions.Add(exception);
+            }
         }
 
         _cleanups.Clear();
         _instances.Clear();
+
+        if (exceptions is not null)
+        {
+            throw new AggregateException(exceptions);
+        }
     }
     #endregion
 

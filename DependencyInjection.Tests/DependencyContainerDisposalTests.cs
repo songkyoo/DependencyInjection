@@ -1,4 +1,5 @@
-﻿namespace Macaron.DependencyInjection.Tests;
+﻿// ReSharper disable AccessToDisposedClosure
+namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerDisposalTests
 {
@@ -143,7 +144,7 @@ public class DependencyContainerDisposalTests
             Throws.TypeOf<ObjectDisposedException>()
         );
         Assert.That(configurationCalled, Is.False);
-        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateScope, Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
@@ -155,7 +156,6 @@ public class DependencyContainerDisposalTests
 
         var foo = new Foo();
 
-        // ReSharper disable once AccessToDisposedClosure
         Assert.That(() => container.AddDisposable(foo), Throws.TypeOf<ObjectDisposedException>());
 
         container.Dispose();
