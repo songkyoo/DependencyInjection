@@ -67,6 +67,11 @@ public sealed class DependencyContainer(
             return;
         }
 
+        if (_creationDepth > 0)
+        {
+            throw new InvalidOperationException("Cannot call Dispose while a service is being created.");
+        }
+
         _isDisposed = true;
         _parent = null;
         _registry = ImmutableDictionary<(Type, object?), TypeRegistration>.Empty;
