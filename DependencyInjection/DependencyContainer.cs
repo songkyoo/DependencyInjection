@@ -24,6 +24,7 @@ public sealed class DependencyContainer(
     private readonly Dictionary<Key, object> _instances = new();
     private readonly List<CleanupEntry> _cleanups = [];
     private readonly Stack<Key> _resolutionStack = new();
+    private int _creationDepth;
     private bool _isDisposed;
 
     private DependencyContainer? _parent = parent;
@@ -46,6 +47,11 @@ public sealed class DependencyContainer(
     public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
     {
         ThrowIfDisposed();
+
+        if (_creationDepth > 0)
+        {
+            throw new InvalidOperationException("Cannot call CreateScope while a service is being created.");
+        }
 
         var builder = new DependencyContainerBuilder();
 
@@ -174,6 +180,8 @@ public sealed class DependencyContainer(
         var cleanupCollector = new CleanupCollector();
         object instance;
 
+        _creationDepth += 1;
+
         try
         {
             instance = factory.Invoke(this, key, ref cleanupCollector);
@@ -185,6 +193,10 @@ public sealed class DependencyContainer(
             CleanupFailedFactory(in cleanupCollector, exception);
 
             throw;
+        }
+        finally
+        {
+            _creationDepth -= 1;
         }
 
         _cleanups.Add(new CleanupEntry(instance, cleanup));
