@@ -29,6 +29,7 @@ public class DependencyContainerDisposalTests
     {
         var disposed = false;
         var builder = new DependencyContainerBuilder();
+
         builder.Register(
             Key.Of<Foo>(),
             factory: _ => new Foo(onDispose: () => disposed = true),
@@ -36,6 +37,7 @@ public class DependencyContainerDisposalTests
         );
 
         var container = builder.Build();
+
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
@@ -49,15 +51,15 @@ public class DependencyContainerDisposalTests
         var disposedInChild = false;
 
         var key = Key.Of<Foo>();
-
         var rootBuilder = new DependencyContainerBuilder();
+
         rootBuilder.Register(key, _ => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
 
-        var root = rootBuilder.Build();
-
         var childBuilder = new DependencyContainerBuilder();
+
         childBuilder.Register(key, _ => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
 
+        var root = rootBuilder.Build();
         var child = childBuilder.Build(root);
 
         root.Resolve(key);
@@ -74,10 +76,11 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void TransientDisposable_ShouldNotBeTrackedOrDisposed()
+    public void TransientDisposable_ShouldBeDisposed_WhenContainerDisposed()
     {
         var disposed = false;
         var builder = new DependencyContainerBuilder();
+
         builder.Register(
             Key.Of<Foo>(),
             factory: _ => new Foo(onDispose: () => disposed = true),
@@ -85,10 +88,11 @@ public class DependencyContainerDisposalTests
         );
 
         var container = builder.Build();
+
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
-        Assert.That(disposed, Is.False);
+        Assert.That(disposed, Is.True);
     }
 
     [Test]
@@ -96,6 +100,7 @@ public class DependencyContainerDisposalTests
     {
         var disposed = false;
         var builder = new DependencyContainerBuilder();
+
         builder.Register(
             Key.Of<Foo>(),
             factory: _ => new Foo(onDispose: () => disposed = true),
@@ -103,6 +108,7 @@ public class DependencyContainerDisposalTests
         );
 
         var container = builder.Build();
+
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
@@ -113,9 +119,11 @@ public class DependencyContainerDisposalTests
     public void Resolve_AfterDisposal_ShouldThrow()
     {
         var builder = new DependencyContainerBuilder();
+
         builder.Register(Key.Of<string>(), factory: _ => "Hello", LifeTime.Singleton);
 
         var container = builder.Build();
+
         container.Dispose();
 
         Assert.That(() => container.Resolve(Key.Of<string>()), Throws.TypeOf<ObjectDisposedException>());
@@ -162,9 +170,11 @@ public class DependencyContainerDisposalTests
         var foo = new Foo(onDispose: () => isDisposed = true);
 
         var builder = new DependencyContainerBuilder();
+
         builder.RegisterSingleton(foo, cleanup: _ => { });
 
         var container = builder.Build();
+
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
@@ -177,12 +187,14 @@ public class DependencyContainerDisposalTests
         var isDisposed = false;
 
         var builder = new DependencyContainerBuilder();
+
         builder.RegisterSingleton(
             factory: _ => new Foo(onDispose: () => isDisposed = true),
             cleanup: _ => { }
         );
 
         var container = builder.Build();
+
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
 
@@ -193,10 +205,12 @@ public class DependencyContainerDisposalTests
     public void RegisterSingletonImplementationWithEmptyCleanup_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
         var builder = new DependencyContainerBuilder();
+
         builder.RegisterSingleton<IDisposable, Foo>(cleanup: _ => { });
 
         var container = builder.Build();
         var foo = (Foo)container.Resolve(Key.Of<IDisposable>());
+
         container.Dispose();
 
         Assert.That(foo.IsDisposed, Is.False);

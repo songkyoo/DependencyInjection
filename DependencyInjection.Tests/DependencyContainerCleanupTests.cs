@@ -28,7 +28,9 @@ public class DependencyContainerCleanupTests
     )
     {
         var builder = new DependencyContainerBuilder();
+
         builder.Register(factory: () => new Resource(), lifeTime);
+
         var container = builder.Build();
         var resource = container.Resolve<Resource>();
 
@@ -48,7 +50,9 @@ public class DependencyContainerCleanupTests
     {
         var cleanedInstances = new List<Resource>();
         var builder = new DependencyContainerBuilder();
+
         builder.Register(factory: _ => new Resource(), lifeTime, cleanup: cleanedInstances.Add);
+
         var container = builder.Build();
         var resource = container.Resolve<Resource>();
 
@@ -64,31 +68,40 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void EmptyCleanup_ShouldLeaveDisposalToCaller(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
         var builder = new DependencyContainerBuilder();
+
         builder.Register<Resource>(lifeTime, cleanup: _ => { });
+
         var container = builder.Build();
         var resource = container.Resolve<Resource>();
 
         container.Dispose();
 
         Assert.That(resource.DisposeCount, Is.Zero);
+
         resource.Dispose();
+
         Assert.That(resource.DisposeCount, Is.EqualTo(1));
     }
 
     [Test]
     public void NonDisposableService_ShouldSupportDefaultAndCustomCleanup(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
         [Values(false, true)] bool customCleanup
     )
     {
         var key = Key.Of<IService>("service");
         var builder = new DependencyContainerBuilder();
-        builder.Register<IService, Service>(key, lifeTime,
-            cleanup: customCleanup ? service => service.CleanupCount++ : null);
+
+        builder.Register<IService, Service>(
+            key,
+            lifeTime,
+            cleanup: customCleanup ? service => service.CleanupCount++ : null
+        );
+
         var container = builder.Build();
         var service = container.Resolve(key);
 
@@ -99,11 +112,13 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void InheritedService_ShouldRunCleanupInItsOwningContainer(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
         var builder = new DependencyContainerBuilder();
+
         builder.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
+
         var root = builder.Build();
         var child = root.CreateScope();
         var rootService = root.Resolve<Service>();
@@ -111,7 +126,7 @@ public class DependencyContainerCleanupTests
 
         child.Dispose();
 
-        if (lifeTime == LifeTime.Scoped)
+        if (lifeTime != LifeTime.Singleton)
         {
             Assert.That(childService, Is.Not.SameAs(rootService));
             Assert.That(childService.CleanupCount, Is.EqualTo(1));
@@ -157,22 +172,31 @@ public class DependencyContainerCleanupTests
 
         container.Dispose();
 
-        var tracked = lifeTime != LifeTime.Transient;
-        Assert.That(cleanupCount, Is.EqualTo(tracked && customCleanup ? 1 : 0));
-        Assert.That(resource.DisposeCount, Is.EqualTo(tracked && !customCleanup ? 1 : 0));
+        Assert.That(cleanupCount, Is.EqualTo(customCleanup ? 1 : 0));
+        Assert.That(resource.DisposeCount, Is.EqualTo(customCleanup ? 0 : 1));
     }
 
     [Test]
-    public void TransientCustomCleanup_ShouldNotRun_WhenContainerDisposed()
+    public void TransientCustomCleanup_ShouldReplaceDispose_AndReceiveEachInstanceOnce()
     {
+        var cleanedInstances = new List<Resource>();
         var builder = new DependencyContainerBuilder();
-        builder.RegisterTransient<Service>(cleanup: service => service.CleanupCount++);
+
+        builder.RegisterTransient<Resource>(cleanup: cleanedInstances.Add);
+
         var container = builder.Build();
-        var service = container.Resolve<Service>();
+        var first = container.Resolve<Resource>();
+        var second = container.Resolve<Resource>();
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(cleanedInstances, Is.Empty);
 
         container.Dispose();
+        container.Dispose();
 
-        Assert.That(service.CleanupCount, Is.Zero);
+        Assert.That(cleanedInstances, Is.EquivalentTo(new[] { first, second }));
+        Assert.That(first.DisposeCount, Is.Zero);
+        Assert.That(second.DisposeCount, Is.Zero);
     }
 
     [TestCaseSource(nameof(CustomCleanupRegistrations))]
@@ -182,7 +206,9 @@ public class DependencyContainerCleanupTests
     )
     {
         var builder = new DependencyContainerBuilder();
+
         register(builder, service => service.CleanupCount++);
+
         var container = builder.Build();
         var service = container.Resolve(key);
 

@@ -109,8 +109,8 @@ public sealed class DependencyContainer(
             {
                 return typeRegistration switch
                 {
-                    TypeRegistration.Transient { Factory: var factory } =>
-                        factory.Invoke(dependencyContainer, key),
+                    TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
+                        dependencyContainer.CreateInstance(key, factory, cleanup),
                     TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
                         dependencyContainer.GetOrAdd(scopedInstances, key, factory, cleanup),
                     TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
@@ -152,13 +152,24 @@ public sealed class DependencyContainer(
             return instance;
         }
 
-        var newInstance = factory.Invoke(this, key);
+        var newInstance = CreateInstance(key, factory, cleanup);
 
         instances.Add(key, newInstance);
 
-        _cleanups.Add(new CleanupEntry(newInstance, cleanup));
-
         return newInstance;
+    }
+
+    private object CreateInstance(
+        Key key,
+        Func<IDependencyContainer, object> factory,
+        Action<object>? cleanup
+    )
+    {
+        var instance = factory.Invoke(this, key);
+
+        _cleanups.Add(new CleanupEntry(instance, cleanup));
+
+        return instance;
     }
     #endregion
 }
