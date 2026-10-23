@@ -50,9 +50,9 @@ public class DependencyContainerFactoryTests
     }
 
     [Test]
-    public void CreateWithoutConfiguration_ShouldReturnUsableEmptyContainer()
+    public void ExplicitEmptyConfiguration_ShouldReturnUsableEmptyContainer()
     {
-        using var container = DependencyContainerFactory.Create();
+        using var container = DependencyContainerFactory.Create(_ => { });
 
         Assert.That(container.Contains<Foo>(), Is.False);
 

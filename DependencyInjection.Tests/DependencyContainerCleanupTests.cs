@@ -115,7 +115,7 @@ public class DependencyContainerCleanupTests
         {
             registrar.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
         });
-        var child = root.CreateScope();
+        var child = root.CreateScope(_ => { });
         var rootService = root.Resolve<Service>();
         var childService = child.Resolve<Service>();
 

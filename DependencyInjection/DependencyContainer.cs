@@ -31,7 +31,7 @@ internal sealed class DependencyContainer(
         return _registry.ContainsKey(key) || (_parent as IDependencyResolver)?.Contains(key) is true;
     }
 
-    public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
+    public IDependencyContainer CreateScope(IDependencyInstaller installer)
     {
         ThrowIfDisposed();
 
@@ -42,7 +42,7 @@ internal sealed class DependencyContainer(
 
         var builder = new DependencyContainerBuilder();
 
-        configure?.Invoke(builder);
+        installer.Install(builder);
 
         return builder.Build(parent: this);
     }

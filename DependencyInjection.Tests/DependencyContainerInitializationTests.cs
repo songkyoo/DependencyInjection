@@ -145,7 +145,7 @@ public class DependencyContainerInitializationTests
     [Test]
     public void Build_ShouldStopAtFirstEscapingFactoryError([Values] bool createChild)
     {
-        using var parent = DependencyContainerFactory.Create();
+        using var parent = DependencyContainerFactory.Create(_ => { });
         var factoryCalls = 0;
         var failure = new ArgumentException("Creation failed.");
         var exception = Assert.Throws<AggregateException>(() =>

@@ -56,7 +56,7 @@ public class DependencyContainerDisposalTests
     [Test]
     public void CreateScope_AfterDisposal_ShouldThrow_BeforeConfiguration()
     {
-        var container = DependencyContainerFactory.Create();
+        var container = DependencyContainerFactory.Create(_ => { });
 
         container.Dispose();
 
@@ -67,13 +67,13 @@ public class DependencyContainerDisposalTests
             Throws.TypeOf<ObjectDisposedException>()
         );
         Assert.That(configurationCalled, Is.False);
-        Assert.That(container.CreateScope, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateScope(_ => { }), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
     public void Contains_AfterDisposal_ShouldThrow()
     {
-        var container = DependencyContainerFactory.Create();
+        var container = DependencyContainerFactory.Create(_ => { });
 
         container.Dispose();
 

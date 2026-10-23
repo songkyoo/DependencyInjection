@@ -111,7 +111,7 @@ public class DependencyContainerResolveTests
     public void UnregisteredKey_ShouldThrowWithTypeAndName()
     {
         var key = new Key<Foo>("missing");
-        using var container = DependencyContainerFactory.Create();
+        using var container = DependencyContainerFactory.Create(_ => { });
 
         var error = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
 

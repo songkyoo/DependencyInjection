@@ -56,8 +56,8 @@ public class DependencyContainerChildInitializationTests
         Assert.That(scopedInstances, Has.Count.EqualTo(2));
         Assert.That(childSingletonCreations, Is.EqualTo(1));
 
-        using var sibling = root.CreateScope();
-        using var grandchild = child.CreateScope();
+        using var sibling = root.CreateScope(_ => { });
+        using var grandchild = child.CreateScope(_ => { });
 
         Assert.That(scopedInstances, Has.Count.EqualTo(4));
         Assert.That(scopedInstances.Values.Distinct().Count(), Is.EqualTo(4));
@@ -105,7 +105,7 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(childCreations, Is.EqualTo(childLifetime == LifeTime.Transient ? 0 : 1));
 
-        using var grandchild = child.CreateScope();
+        using var grandchild = child.CreateScope(_ => { });
 
         var expectedChildCreations = childLifetime switch
         {
@@ -154,7 +154,7 @@ public class DependencyContainerChildInitializationTests
         Assert.That(child.Resolve<Service>().Resource, Is.SameAs(childResource));
         Assert.That(child.Resolve<Consumer>().Service, Is.SameAs(child.Resolve<Service>()));
 
-        using var grandchild = child.CreateScope();
+        using var grandchild = child.CreateScope(_ => { });
 
         Assert.That(transientResources, Has.Count.EqualTo(2));
         Assert.That(grandchild.Resolve<Service>().Resource, Is.SameAs(transientResources[1]));

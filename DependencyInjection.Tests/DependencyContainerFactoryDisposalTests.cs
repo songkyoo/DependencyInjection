@@ -49,7 +49,7 @@ public class DependencyContainerFactoryDisposalTests
             );
         }))
         {
-            using var child = root.CreateScope();
+            using var child = root.CreateScope(_ => { });
             var requestingContainer = resolveFromChild ? child : root;
             var owningContainer = lifeTime == LifeTime.Singleton ? root : requestingContainer;
             var dependency = owningContainer.Resolve<Dependency>();
@@ -63,7 +63,7 @@ public class DependencyContainerFactoryDisposalTests
 
             Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
 
-            using var scope = owningContainer.CreateScope();
+            using var scope = owningContainer.CreateScope(_ => { });
 
             Assert.That(scope.Contains<Service>(), Is.True);
         }
@@ -124,7 +124,7 @@ public class DependencyContainerFactoryDisposalTests
 
         Assert.That(service.Dependency, Is.Not.Null);
 
-        using var scope = container.CreateScope();
+        using var scope = container.CreateScope(_ => { });
 
         Assert.That(scope.Contains<Service>(), Is.True);
     }
@@ -178,7 +178,7 @@ public class DependencyContainerFactoryDisposalTests
             );
         }))
         {
-            using var child = root.CreateScope();
+            using var child = root.CreateScope(_ => { });
             var requestingContainer = resolveFromChild ? child : root;
             var owningContainer = requestingContainer;
 
@@ -206,7 +206,7 @@ public class DependencyContainerFactoryDisposalTests
             Assert.That(serviceCleanups, Is.Zero);
             Assert.That(collectedCleanups, Is.EqualTo(1));
 
-            using var scope = owningContainer.CreateScope();
+            using var scope = owningContainer.CreateScope(_ => { });
 
             if (retryCreation)
             {

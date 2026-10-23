@@ -22,7 +22,7 @@ public class DependencyContainerErrorTests
         {
             registrar.RegisterTransient(key, factory: (_, ref _) => returnNull ? null! : "Hello");
         });
-        using var child = root.CreateScope();
+        using var child = root.CreateScope(_ => { });
 
         var ex = Assert.Throws<InvalidOperationException>(() => child.Resolve(key));
 
@@ -51,7 +51,7 @@ public class DependencyContainerErrorTests
 
         failCreation = true;
 
-        var exception = Assert.Throws<AggregateException>(() => root.CreateScope());
+        var exception = Assert.Throws<AggregateException>(() => root.CreateScope(_ => { }));
 
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
         Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
@@ -63,7 +63,7 @@ public class DependencyContainerErrorTests
 
         failCreation = false;
 
-        using var child = root.CreateScope();
+        using var child = root.CreateScope(_ => { });
 
         Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
     }
