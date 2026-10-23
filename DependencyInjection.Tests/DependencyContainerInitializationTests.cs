@@ -69,13 +69,15 @@ public class DependencyContainerInitializationTests
         [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime dependencyLifetime
     )
     {
+        var firstKey = new Key<Service>("first");
+        var secondKey = new Key<Service>("second");
         var events = new List<string>();
         var dependencyCreations = 0;
         var serviceCreations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register("first", CreateService, serviceLifetime);
-            registrar.Register("second", CreateService, serviceLifetime);
+            registrar.Register(firstKey, CreateService, serviceLifetime);
+            registrar.Register(secondKey, CreateService, serviceLifetime);
             registrar.Register(factory: () =>
             {
                 dependencyCreations++;
@@ -88,8 +90,8 @@ public class DependencyContainerInitializationTests
         Assert.That(dependencyCreations, Is.EqualTo(1));
         Assert.That(serviceCreations, Is.EqualTo(2));
         Assert.That(events, Is.EqualTo(new[] { "dependency", "service", "service" }));
-        Assert.That(root.Resolve<Service>("first").Resource, Is.SameAs(root.Resolve<Resource>()));
-        Assert.That(root.Resolve<Service>("second").Resource, Is.SameAs(root.Resolve<Resource>()));
+        Assert.That(root.Resolve(firstKey).Resource, Is.SameAs(root.Resolve<Resource>()));
+        Assert.That(root.Resolve(secondKey).Resource, Is.SameAs(root.Resolve<Resource>()));
 
         Service CreateService(IDependencyContainer container, ref CleanupCollector collector)
         {
@@ -163,9 +165,9 @@ public class DependencyContainerInitializationTests
 
         void Configure(IDependencyRegistrar registrar)
         {
-            foreach (var tag in new[] { "first", "second", "third" })
+            foreach (var name in new[] { "first", "second", "third" })
             {
-                registrar.RegisterSingleton<object>(tag, factory: () =>
+                registrar.RegisterSingleton(new Key<object>(name), factory: () =>
                 {
                     factoryCalls++;
                     throw failure;

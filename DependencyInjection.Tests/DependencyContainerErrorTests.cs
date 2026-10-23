@@ -1,4 +1,4 @@
-﻿// ReSharper disable AccessToModifiedClosure
+// ReSharper disable AccessToModifiedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerErrorTests
@@ -13,10 +13,10 @@ public class DependencyContainerErrorTests
 
     [Test]
     public void NullFactoryResultDuringResolve_ShouldThrow_WithRegistrationKey_AndAllowRetry(
-        [Values(null, "service-tag")] string? tag
+        [Values] bool useDefaultKey
     )
     {
-        var key = Key.Of<string>(tag);
+        var key = useDefaultKey ? Key<string>.Default : new Key<string>("service");
         var returnNull = true;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
@@ -35,19 +35,17 @@ public class DependencyContainerErrorTests
     }
 
     [Test]
-    public void InheritedScopedInvalidFactoryResult_ShouldFailChildCreation_AndPreserveParent(
-        [Values(null, "service-tag")] string? tag,
-        [Values] bool wrongType
+    public void InheritedScopedNullFactoryResult_ShouldFailChildCreation_AndPreserveParent(
+        [Values] bool useDefaultKey
     )
     {
-        var key = Key.Of<string>(tag);
+        var key = useDefaultKey ? Key<string>.Default : new Key<string>("service");
         var failCreation = false;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterScoped(
-                typeof(string),
-                tag,
-                factory: (_, ref _) => failCreation ? (wrongType ? new object() : null!) : "Hello"
+                key,
+                factory: (_, ref _) => failCreation ? null! : "Hello"
             );
         });
 
@@ -59,10 +57,7 @@ public class DependencyContainerErrorTests
         Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions[0].Message, Does.Contain(typeof(string).ToString()));
 
-        if (!wrongType)
-        {
-            Assert.That(exception.InnerExceptions[0].Message, Does.Contain(key.ToString()));
-        }
+        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(key.ToString()));
 
         Assert.That(root.Resolve(key), Is.EqualTo("Hello"));
 
@@ -78,11 +73,11 @@ public class DependencyContainerErrorTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(Key.Of<A>(), factory: (resolver, ref _) => new A(b: resolver.Resolve<B>()), LifeTime.Transient);
-            registrar.Register(Key.Of<B>(), factory: (resolver, ref _) => new B(c: resolver.Resolve<C>()), LifeTime.Transient);
-            registrar.Register(Key.Of<C>(), factory: (resolver, ref _) => new C(a: resolver.Resolve<A>()), LifeTime.Transient);
+            registrar.Register(Key<A>.Default, factory: (resolver, ref _) => new A(b: resolver.Resolve<B>()), LifeTime.Transient);
+            registrar.Register(Key<B>.Default, factory: (resolver, ref _) => new B(c: resolver.Resolve<C>()), LifeTime.Transient);
+            registrar.Register(Key<C>.Default, factory: (resolver, ref _) => new C(a: resolver.Resolve<A>()), LifeTime.Transient);
         });
-        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(Key.Of<A>()));
+        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(Key<A>.Default));
 
         Assert.That(ex!.Message, Does.Contain("Cyclic dependency detected"));
         Assert.That(ex.Message, Does.Contain("Macaron.DependencyInjection.Tests.DependencyContainerErrorTests+A"));

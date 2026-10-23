@@ -5,49 +5,66 @@ namespace Macaron.DependencyInjection;
 internal sealed class DependencyContainerBuilder : IDependencyRegistrar
 {
     #region Fields
-    private readonly ImmutableDictionary<(Type, object?), TypeRegistration>.Builder _typeRegistrations =
-        ImmutableDictionary.CreateBuilder<(Type, object?), TypeRegistration>();
+    private readonly ImmutableDictionary<object, TypeRegistration>.Builder _typeRegistrations =
+        ImmutableDictionary.CreateBuilder<object, TypeRegistration>(KeyReferenceComparer.Instance);
     #endregion
 
     #region IDependencyRegistrar Inteface
-    void IDependencyRegistrar.RegisterTransient(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup
+    void IDependencyRegistrar.RegisterTransient<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup
     )
     {
-        var key = (type, tag);
-
-        _typeRegistrations.Add(key, new TypeRegistration.Transient(factory, cleanup));
+        AddRegistration(
+            key,
+            registration: new TypeRegistration.Transient(
+                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
+            )
+        );
     }
 
-    void IDependencyRegistrar.RegisterScoped(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup
+    void IDependencyRegistrar.RegisterScoped<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup
     )
     {
-        var key = (type, tag);
-
-        _typeRegistrations.Add(key, new TypeRegistration.Scoped(factory, cleanup));
+        AddRegistration(
+            key,
+            registration: new TypeRegistration.Scoped(
+                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
+            )
+        );
     }
 
-    void IDependencyRegistrar.RegisterSingleton(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup
+    void IDependencyRegistrar.RegisterSingleton<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup
     )
     {
-        var key = (type, tag);
-
-        _typeRegistrations.Add(key, new TypeRegistration.Singleton(factory, cleanup));
+        AddRegistration(
+            key,
+            registration: new TypeRegistration.Singleton(
+                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
+            )
+        );
     }
     #endregion
 
     #region Methods
+    private void AddRegistration(object key, TypeRegistration registration)
+    {
+        if (!_typeRegistrations.TryAdd(key, registration))
+        {
+            throw new ArgumentException($"Key already registered: {key}", nameof(key));
+        }
+    }
+
     public DependencyContainer Build(DependencyContainer? parent = null)
     {
         var container = new DependencyContainer(parent, registry: _typeRegistrations.ToImmutable());

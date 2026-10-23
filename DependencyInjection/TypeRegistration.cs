@@ -1,6 +1,6 @@
 ﻿namespace Macaron.DependencyInjection;
 
-public abstract record TypeRegistration
+internal abstract record TypeRegistration
 {
     public sealed record Transient(DependencyFactory<object> Factory, Action<object>? Cleanup) : TypeRegistration;
 

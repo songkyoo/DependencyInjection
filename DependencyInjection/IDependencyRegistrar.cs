@@ -2,24 +2,21 @@
 
 public interface IDependencyRegistrar
 {
-    void RegisterTransient(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup = null
-    );
+    void RegisterTransient<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup = null
+    ) where T : notnull;
 
-    void RegisterScoped(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup = null
-    );
+    void RegisterScoped<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup = null
+    ) where T : notnull;
 
-    void RegisterSingleton(
-        Type type,
-        object? tag,
-        DependencyFactory<object> factory,
-        Action<object>? cleanup = null
-    );
+    void RegisterSingleton<T>(
+        Key<T> key,
+        DependencyFactory<T> factory,
+        Action<T>? cleanup = null
+    ) where T : notnull;
 }

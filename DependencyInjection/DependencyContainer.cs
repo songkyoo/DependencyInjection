@@ -4,43 +4,31 @@ namespace Macaron.DependencyInjection;
 
 internal sealed class DependencyContainer(
     DependencyContainer? parent,
-    ImmutableDictionary<(Type, object?), TypeRegistration> registry
+    ImmutableDictionary<object, TypeRegistration> registry
 ) : IDependencyContainer
 {
-    #region Types
-    internal readonly record struct Key(Type Type, object? Tag)
-    {
-        public override string ToString()
-        {
-            return Tag is null
-                ? $"Key {{ Type = {Type} }}"
-                : $"Key {{ Type = {Type}, Tag = {Tag} }}";
-        }
-    }
-    #endregion
-
     #region Fields
-    private readonly Dictionary<Key, object> _instances = new();
+    private readonly Dictionary<object, object> _instances = new(KeyReferenceComparer.Instance);
     private readonly List<CleanupEntry> _cleanups = [];
-    private readonly Stack<Key> _resolutionStack = new();
+    private readonly Stack<object> _resolutionStack = new();
     private int _creationDepth;
     private bool _isDisposed;
 
     private DependencyContainer? _parent = parent;
-    private ImmutableDictionary<(Type, object?), TypeRegistration> _registry = registry;
+    private ImmutableDictionary<object, TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
-    object IDependencyResolver.Resolve(Type type, object? tag)
+    T IDependencyResolver.Resolve<T>(Key<T> key)
     {
-        return ResolveRecursively(type, tag, scopedInstances: _instances, dependencyContainer: this);
+        return (T)ResolveRecursively(key, scopedInstances: _instances, dependencyContainer: this);
     }
 
-    bool IDependencyResolver.Contains(Type type, object? tag)
+    bool IDependencyResolver.Contains<T>(Key<T> key)
     {
         ThrowIfDisposed();
 
-        return _registry.ContainsKey((type, tag)) || (_parent as IDependencyResolver)?.Contains(type, tag) is true;
+        return _registry.ContainsKey(key) || (_parent as IDependencyResolver)?.Contains(key) is true;
     }
 
     public IDependencyContainer CreateScope(Action<IDependencyRegistrar>? configure)
@@ -73,7 +61,7 @@ internal sealed class DependencyContainer(
 
         _isDisposed = true;
         _parent = null;
-        _registry = ImmutableDictionary<(Type, object?), TypeRegistration>.Empty;
+        _registry = _registry.Clear();
 
         List<Exception>? exceptions = null;
 
@@ -101,11 +89,11 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Methods
-    internal void InitializeSharedInstances()
+    public void InitializeSharedInstances()
     {
         ThrowIfDisposed();
 
-        var visitedKeys = new HashSet<(Type, object?)>();
+        var visitedKeys = new HashSet<object>(KeyReferenceComparer.Instance);
 
         for (
             DependencyContainer? registrationContainer = this;
@@ -130,34 +118,32 @@ internal sealed class DependencyContainer(
                     continue;
                 }
 
-                var (type, tag) = key;
-
-                ResolveRecursively(type, tag, scopedInstances: _instances, dependencyContainer: this);
+                ResolveRecursively(key, scopedInstances: _instances, dependencyContainer: this);
             }
         }
     }
 
     private object ResolveRecursively(
-        Type type,
-        object? tag,
-        Dictionary<Key, object> scopedInstances,
+        object key,
+        Dictionary<object, object> scopedInstances,
         DependencyContainer dependencyContainer
     )
     {
         ThrowIfDisposed();
 
-        var key = new Key(type, tag);
-
-        if (_resolutionStack.Contains(key))
+        foreach (var resolvingKey in _resolutionStack)
         {
-            throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Reverse().Append(key))}");
+            if (ReferenceEquals(resolvingKey, key))
+            {
+                throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Reverse().Append(key))}");
+            }
         }
 
         _resolutionStack.Push(key);
 
         try
         {
-            if (_registry.TryGetValue((type, tag), out var typeRegistration))
+            if (_registry.TryGetValue(key, out var typeRegistration))
             {
                 return typeRegistration switch
                 {
@@ -176,7 +162,7 @@ internal sealed class DependencyContainer(
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return _parent.ResolveRecursively(type, tag, scopedInstances, dependencyContainer);
+            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer);
         }
         finally
         {
@@ -185,8 +171,8 @@ internal sealed class DependencyContainer(
     }
 
     private object GetOrAdd(
-        Dictionary<Key, object> instances,
-        Key key,
+        Dictionary<object, object> instances,
+        object key,
         DependencyFactory<object> factory,
         Action<object>? cleanup
     )
@@ -204,7 +190,7 @@ internal sealed class DependencyContainer(
     }
 
     private object CreateInstance(
-        Key key,
+        object key,
         DependencyFactory<object> factory,
         Action<object>? cleanup
     )

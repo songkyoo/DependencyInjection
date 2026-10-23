@@ -1,4 +1,4 @@
-﻿// ReSharper disable AccessToDisposedClosure
+// ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerDisposalTests
@@ -17,7 +17,7 @@ public class DependencyContainerDisposalTests
         var disposedInRoot = false;
         var disposedInChild = false;
 
-        var key = Key.Of<Foo>();
+        var key = Key<Foo>.Default;
         var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
@@ -45,12 +45,12 @@ public class DependencyContainerDisposalTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(Key.Of<string>(), factory: (_, ref _) => "Hello", LifeTime.Singleton);
+            registrar.Register(Key<string>.Default, factory: (_, ref _) => "Hello", LifeTime.Singleton);
         });
 
         container.Dispose();
 
-        Assert.That(() => container.Resolve(Key.Of<string>()), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.Resolve(Key<string>.Default), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]

@@ -21,6 +21,8 @@ public class DependencyContainerChildInitializationTests
     [Test]
     public void ChildAndGrandchild_ShouldPrepareScopedInstances_AndShareInheritedSingletons()
     {
+        var rootKey = new Key<object>("root");
+        var childKey = new Key<object>("child");
         var scopedInstances = new Dictionary<IDependencyContainer, Resource>();
         var rootSingletonCreations = 0;
         var childSingletonCreations = 0;
@@ -34,7 +36,7 @@ public class DependencyContainerChildInitializationTests
 
                 return resource;
             });
-            registrar.RegisterSingleton("root", factory: () =>
+            registrar.RegisterSingleton(rootKey, factory: () =>
             {
                 rootSingletonCreations++;
 
@@ -43,7 +45,7 @@ public class DependencyContainerChildInitializationTests
         });
         using var child = root.CreateScope(registrar =>
         {
-            registrar.RegisterSingleton("child", factory: () =>
+            registrar.RegisterSingleton(childKey, factory: () =>
             {
                 childSingletonCreations++;
 
@@ -65,23 +67,23 @@ public class DependencyContainerChildInitializationTests
         foreach (var container in new[] { root, child, sibling, grandchild })
         {
             Assert.That(container.Resolve<Resource>(), Is.SameAs(scopedInstances[container]));
-            Assert.That(container.Resolve<object>("root"), Is.SameAs(root.Resolve<object>("root")));
+            Assert.That(container.Resolve(rootKey), Is.SameAs(root.Resolve(rootKey)));
         }
 
-        Assert.That(grandchild.Resolve<object>("child"), Is.SameAs(child.Resolve<object>("child")));
-        Assert.That(sibling.Contains<object>("child"), Is.False);
+        Assert.That(grandchild.Resolve(childKey), Is.SameAs(child.Resolve(childKey)));
+        Assert.That(sibling.Contains(childKey), Is.False);
     }
 
     [Test]
     public void NearestRegistration_ShouldControlInitialization_EvenWhenTransientMasksSharedParent(
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime parentLifetime,
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime childLifetime,
-        [Values(null, "service-tag")] string? tag
+        [Values] bool useDefaultKey
     )
     {
         var parentCreations = 0;
         var childCreations = 0;
-        var key = Key.Of<Resource>(tag);
+        var key = useDefaultKey ? Key<Resource>.Default : new Key<Resource>("service");
         using var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register(key, factory: () =>

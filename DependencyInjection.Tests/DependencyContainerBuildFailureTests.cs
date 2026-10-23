@@ -22,16 +22,15 @@ public class DependencyContainerBuildFailureTests
     private sealed class CycleB;
 
     [Test]
-    public void InvalidSharedFactoryResult_ShouldFailBuild_CleanCollector_AndRejectServiceOwnership(
+    public void NullSharedFactoryResult_ShouldFailBuild_CleanCollector_AndRejectServiceOwnership(
         [Values] bool createChild,
         [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
-        [Values(null, "service-tag")] string? tag,
-        [Values] bool wrongType
+        [Values] bool useDefaultKey
     )
     {
+        var key = useDefaultKey ? Key<Service>.Default : new Key<Service>("service");
         using var parent = DependencyContainerFactory.Create();
         var collected = new Resource();
-        var invalidResult = new Resource();
         var serviceCleanups = 0;
         IDependencyContainer? failedContainer = null;
 
@@ -53,13 +52,9 @@ public class DependencyContainerBuildFailureTests
         Assert.That(validationError, Is.TypeOf<InvalidOperationException>());
         Assert.That(validationError.Message, Does.Contain(typeof(Service).ToString()));
 
-        if (!wrongType)
-        {
-            Assert.That(validationError.Message, Does.Contain(Key.Of<Service>(tag).ToString()));
-        }
+        Assert.That(validationError.Message, Does.Contain(key.ToString()));
 
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
-        Assert.That(invalidResult.DisposeCount, Is.Zero);
         Assert.That(serviceCleanups, Is.Zero);
         Assert.That(failedContainer!.Contains<Service>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedContainer!.Dispose, Throws.Nothing);
@@ -68,21 +63,21 @@ public class DependencyContainerBuildFailureTests
 
         void Configure(IDependencyRegistrar registrar)
         {
-            DependencyFactory<object> factory = (container, ref collector) =>
+            DependencyFactory<Service> factory = (container, ref collector) =>
             {
                 failedContainer = container;
                 collector.Add(collected);
 
-                return wrongType ? invalidResult : null!;
+                return null!;
             };
 
             if (lifeTime == LifeTime.Scoped)
             {
-                registrar.RegisterScoped(typeof(Service), tag, factory, _ => serviceCleanups++);
+                registrar.RegisterScoped(key, factory, _ => serviceCleanups++);
             }
             else
             {
-                registrar.RegisterSingleton(typeof(Service), tag, factory, _ => serviceCleanups++);
+                registrar.RegisterSingleton(key, factory, _ => serviceCleanups++);
             }
         }
     }
@@ -95,8 +90,8 @@ public class DependencyContainerBuildFailureTests
     {
         using var parent = DependencyContainerFactory.Create();
         IDependencyContainer? failedContainer = null;
-        var firstKey = Key.Of<CycleA>("cycle");
-        var secondKey = Key.Of<CycleB>("cycle");
+        var firstKey = new Key<CycleA>("cycle");
+        var secondKey = new Key<CycleB>("cycle");
 
         var exception = Assert.Throws<AggregateException>(() =>
         {
@@ -144,10 +139,13 @@ public class DependencyContainerBuildFailureTests
         [Values] bool rollbackFails
     )
     {
+        var parentScopedKey = new Key<Resource>("parent-scoped");
+        var parentSingletonKey = new Key<Resource>("parent-singleton");
+        var ownedKey = new Key<Resource>("owned");
         var scopedInstances = new Dictionary<IDependencyContainer, Resource>();
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Resource>("parent-scoped", factory: (container, ref _) =>
+            registrar.RegisterScoped<Resource>(parentScopedKey, factory: (container, ref _) =>
             {
                 var resource = new Resource();
 
@@ -155,12 +153,12 @@ public class DependencyContainerBuildFailureTests
 
                 return resource;
             });
-            registrar.RegisterSingleton("parent-singleton", factory: () => new Resource());
+            registrar.RegisterSingleton(parentSingletonKey, factory: () => new Resource());
         });
         using var sibling = parent.CreateScope();
         var parentResource = scopedInstances[parent];
         var siblingResource = scopedInstances[sibling];
-        var sharedResource = parent.Resolve<Resource>("parent-singleton");
+        var sharedResource = parent.Resolve(parentSingletonKey);
         var creationFailure = new AggregateException(new ArgumentException("Creation failed."));
         var collectorFailure = new AggregateException(new ArgumentException("Collected cleanup failed."));
         var rollbackFailure = new AggregateException(new ArgumentException("Rollback collection failed."));
@@ -208,8 +206,8 @@ public class DependencyContainerBuildFailureTests
         Assert.That(failedContainer!.CreateScope, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedContainer!.Dispose, Throws.Nothing);
         Assert.That(cleanups, Has.Count.EqualTo(5));
-        Assert.That(parent.Resolve<Resource>("parent-scoped"), Is.SameAs(parentResource));
-        Assert.That(sibling.Resolve<Resource>("parent-scoped"), Is.SameAs(siblingResource));
+        Assert.That(parent.Resolve(parentScopedKey), Is.SameAs(parentResource));
+        Assert.That(sibling.Resolve(parentScopedKey), Is.SameAs(siblingResource));
         Assert.That(parentResource.DisposeCount, Is.Zero);
         Assert.That(siblingResource.DisposeCount, Is.Zero);
         Assert.That(sharedResource.DisposeCount, Is.Zero);
@@ -221,12 +219,12 @@ public class DependencyContainerBuildFailureTests
 
         using var retry = parent.CreateScope();
 
-        Assert.That(retry.Resolve<Resource>("parent-singleton"), Is.SameAs(sharedResource));
+        Assert.That(retry.Resolve(parentSingletonKey), Is.SameAs(sharedResource));
 
         #region Local Functions
         void Configure(IDependencyRegistrar registrar)
         {
-            registrar.RegisterScoped<Resource>("owned", factory: (_, ref collector) =>
+            registrar.RegisterScoped<Resource>(ownedKey, factory: (_, ref collector) =>
             {
                 collector.Add(new object(), _ => cleanups.Add("owned-first"));
                 collector.Add(new object(), _ =>
@@ -252,12 +250,12 @@ public class DependencyContainerBuildFailureTests
             registrar.RegisterSingleton<Service>(factory: (container, ref collector) =>
             {
                 failedContainer = container;
-                container.Resolve<Resource>("owned");
+                container.Resolve(ownedKey);
 
                 if (createChild)
                 {
-                    container.Resolve<Resource>("parent-scoped");
-                    container.Resolve<Resource>("parent-singleton");
+                    container.Resolve(parentScopedKey);
+                    container.Resolve(parentSingletonKey);
                 }
 
                 collector.Add(new object(), _ => cleanups.Add("failed-first"));
@@ -283,8 +281,11 @@ public class DependencyContainerBuildFailureTests
         [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
+        var parentKey = new Key<Resource>("parent");
+        var firstKey = new Key<Resource>("first");
+        var secondKey = new Key<object>("second");
         var protectedResource = new Resource();
-        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton("parent", protectedResource));
+        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(parentKey, protectedResource));
         var sharedResource = new Resource();
         var creationOrder = new List<string>();
         var cleanupOrder = new List<string>();
@@ -307,12 +308,12 @@ public class DependencyContainerBuildFailureTests
         Assert.That(cleanupOrder, Is.EqualTo(new[] { "failed-collected" }.Concat(creationOrder.AsEnumerable().Reverse())));
         Assert.That(sharedResource.DisposeCount, Is.EqualTo(1));
         Assert.That(protectedResource.DisposeCount, Is.Zero);
-        Assert.That(parent.Resolve<Resource>("parent"), Is.SameAs(protectedResource));
+        Assert.That(parent.Resolve(parentKey), Is.SameAs(protectedResource));
 
         void Configure(IDependencyRegistrar registrar)
         {
             registrar.Register(
-                tag: "first",
+                key: firstKey,
                 factory: () =>
                 {
                     creationOrder.Add("first");
@@ -327,7 +328,7 @@ public class DependencyContainerBuildFailureTests
                 }
             );
             registrar.Register<object>(
-                tag: "second",
+                key: secondKey,
                 factory: () =>
                 {
                     creationOrder.Add("second");
@@ -340,13 +341,13 @@ public class DependencyContainerBuildFailureTests
             registrar.RegisterSingleton<Service>(
                 factory: (container, ref collector) =>
                 {
-                    container.Resolve<Resource>("first");
-                    container.Resolve<object>("second");
+                    container.Resolve(firstKey);
+                    container.Resolve(secondKey);
 
                     if (createChild)
                     {
-                        container.Resolve<Resource>("parent");
-                        container.Resolve<Resource>("parent");
+                        container.Resolve(parentKey);
+                        container.Resolve(parentKey);
                     }
 
                     collector.Add(sharedResource, _ => cleanupOrder.Add("failed-collected"));

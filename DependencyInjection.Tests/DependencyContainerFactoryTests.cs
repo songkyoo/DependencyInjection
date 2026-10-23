@@ -1,4 +1,4 @@
-﻿namespace Macaron.DependencyInjection.Tests;
+namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerFactoryTests
 {
@@ -12,7 +12,7 @@ public class DependencyContainerFactoryTests
     [Test]
     public void Register_SameKeyTwice_ShouldThrowArgumentException()
     {
-        var key = Key.Of<Foo>();
+        var key = Key<Foo>.Default;
 
         Assert.That(() => DependencyContainerFactory.Create(registrar =>
         {
@@ -24,7 +24,7 @@ public class DependencyContainerFactoryTests
     [Test]
     public void Register_GenericFactory_ShouldResolveCorrectly()
     {
-        var key = Key.Of<Foo>();
+        var key = Key<Foo>.Default;
         var configurationCalls = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
@@ -39,7 +39,7 @@ public class DependencyContainerFactoryTests
     [Test]
     public void Register_DefaultConstructor_ShouldResolveInstance()
     {
-        var key = Key.Of<FooWithDefaultCtor>();
+        var key = Key<FooWithDefaultCtor>.Default;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register(key, LifeTime.Singleton);

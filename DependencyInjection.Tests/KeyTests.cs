@@ -1,92 +1,52 @@
-﻿namespace Macaron.DependencyInjection.Tests;
+namespace Macaron.DependencyInjection.Tests;
 
 public class KeyTests
 {
-    private enum TestTag
-    {
-        Primary,
-        Secondary,
-    }
-
-    private sealed record NamedTag(string Value);
-
     [Test]
-    public void Keys_WithSameTypeAndTag_ShouldBeEqual()
+    public void Default_ShouldReturnSameKeyForSameServiceType()
     {
-        var key1 = Key.Of<string>("tag");
-        var key2 = Key.Of<string>("tag");
+        var first = Key<string>.Default;
+        var second = Key<string>.Default;
 
-        Assert.That(key1, Is.EqualTo(key2));
-        Assert.That(((IKey)key1).Equals(key2), Is.True);
-        Assert.That(key1.GetHashCode(), Is.EqualTo(key2.GetHashCode()));
+        Assert.That(first, Is.SameAs(second));
+        Assert.That(first.Name, Is.Empty);
+        Assert.That((object)Key<int>.Default, Is.Not.SameAs(first));
     }
 
     [Test]
-    public void Keys_WithDifferentTags_ShouldNotBeEqual()
+    public void Keys_WithSameName_ShouldHaveReferenceEquality()
     {
-        var key1 = Key.Of<int>("a");
-        var key2 = Key.Of<int>("b");
+        var first = new Key<string>("service");
+        var second = new Key<string>("service");
+        var shared = first;
 
-        Assert.That(key1, Is.Not.EqualTo(key2));
-        Assert.That(((IKey)key1).Equals(key2), Is.False);
+        Assert.That(first, Is.Not.EqualTo(second));
+        Assert.That(first == second, Is.False);
+        Assert.That(first.Equals(shared), Is.True);
+        Assert.That(first == shared, Is.True);
     }
 
     [Test]
-    public void Keys_WithDifferentTypes_ShouldNotBeEqual()
+    public void UnnamedKeys_ShouldBeDistinctFromEachOtherAndDefaultKey()
     {
-        var key1 = Key.Of<int>("tag");
-        var key2 = Key.Of<float>("tag");
+        var first = new Key<string>();
+        var second = new Key<string>();
 
-        Assert.That(key1, Is.Not.EqualTo((IKey)key2));
-        Assert.That(((IKey)key1).Equals(key2), Is.False);
+        Assert.That(first.Name, Is.Empty);
+        Assert.That(first, Is.Not.EqualTo(second));
+        Assert.That(first, Is.Not.EqualTo(Key<string>.Default));
     }
 
-    [Test]
-    public void Key_OfWithoutTag_ShouldReturnCachedInstance()
+    [TestCase("")]
+    [TestCase("Application")]
+    public void ToString_ShouldDescribeServiceTypeAndOptionalName(string name)
     {
-        var key1 = Key.Of<Guid>();
-        var key2 = Key.Of<Guid>();
+        var key = new Key<DateTime>(name);
+        var expected = name.Length == 0
+            ? $"Key {{ Type = {typeof(DateTime)} }}"
+            : $"Key {{ Type = {typeof(DateTime)}, Name = {name} }}";
 
-        Assert.That(key1, Is.SameAs(key2));
-        Assert.That(key1, Is.EqualTo(key2));
-    }
-
-    [Test]
-    public void Keys_WithSameObjectTagValue_ShouldBeEqual()
-    {
-        var key1 = Key.Of<string>(new NamedTag("tag"));
-        var key2 = Key.Of<string>(new NamedTag("tag"));
-
-        Assert.That(key1, Is.EqualTo(key2));
-        Assert.That(((IKey)key1).Equals(key2), Is.True);
-        Assert.That(key1.GetHashCode(), Is.EqualTo(key2.GetHashCode()));
-    }
-
-    [Test]
-    public void Keys_WithDifferentObjectTags_ShouldNotBeEqual()
-    {
-        var key1 = Key.Of<string>(TestTag.Primary);
-        var key2 = Key.Of<string>(TestTag.Secondary);
-
-        Assert.That(key1, Is.Not.EqualTo(key2));
-        Assert.That(((IKey)key1).Equals(key2), Is.False);
-    }
-
-    [Test]
-    public void ToString_ShouldContainTypeAndTag()
-    {
-        var key = Key.Of<DateTime>("MyTag");
-        var str = key.ToString();
-
-        Assert.That(str, Does.Contain("DateTime"));
-        Assert.That(str, Does.Contain("MyTag"));
-    }
-
-    [Test]
-    public void Equals_WithNull_ShouldReturnFalse()
-    {
-        var key = Key.Of<string>("x");
-
-        Assert.That(key, Is.Not.EqualTo(null));
+        Assert.That(key.Name, Is.EqualTo(name));
+        Assert.That(key.ToString(), Is.EqualTo(expected));
     }
 }

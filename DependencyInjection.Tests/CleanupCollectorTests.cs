@@ -125,20 +125,17 @@ public class CleanupCollectorTests
     }
 
     [Test]
-    public void InvalidTransientFactoryResult_ShouldCleanCollector_WithoutOwningInvalidReturn(
-        [Values] bool wrongType
-    )
+    public void NullTransientFactoryResult_ShouldCleanCollector_WithoutOwningService()
     {
         var collected = new Resource();
-        var invalidResult = new Resource();
         var serviceCleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient(typeof(string), tag: null, factory: (_, ref collector) =>
+            registrar.RegisterTransient<string>( factory: (_, ref collector) =>
             {
                 collector.Add(collected);
 
-                return wrongType ? invalidResult : null!;
+                return null!;
             }, cleanup: _ => serviceCleanupCount++);
         });
 
@@ -147,7 +144,6 @@ public class CleanupCollectorTests
         container.Dispose();
 
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
-        Assert.That(invalidResult.DisposeCount, Is.Zero);
         Assert.That(serviceCleanupCount, Is.Zero);
     }
 

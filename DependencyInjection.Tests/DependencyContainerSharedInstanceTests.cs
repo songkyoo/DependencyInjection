@@ -132,17 +132,19 @@ public class DependencyContainerSharedInstanceTests
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
+        var ownerKey = new Key<Resource>("owner");
+        var otherKey = new Key<object>("other");
         var resource = new Resource();
         var customCleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(tag: "owner", instance: resource);
-            registrar.Register<object>(tag: "other", factory: () => resource, lifeTime,
+            registrar.RegisterSingleton(key: ownerKey, instance: resource);
+            registrar.Register<object>(key: otherKey, factory: () => resource, lifeTime,
                 cleanup: _ => customCleanupCount++);
         });
 
-        Assert.That(container.Resolve<Resource>("owner"), Is.SameAs(resource));
-        Assert.That(container.Resolve<object>("other"), Is.SameAs(resource));
+        Assert.That(container.Resolve(ownerKey), Is.SameAs(resource));
+        Assert.That(container.Resolve(otherKey), Is.SameAs(resource));
         Assert.That(resource.DisposeCount, Is.Zero);
         Assert.That(customCleanupCount, Is.Zero);
 
