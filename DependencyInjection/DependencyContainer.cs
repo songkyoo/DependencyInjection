@@ -101,6 +101,42 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Methods
+    internal void InitializeSharedInstances()
+    {
+        ThrowIfDisposed();
+
+        var visitedKeys = new HashSet<(Type, object?)>();
+
+        for (
+            DependencyContainer? registrationContainer = this;
+            registrationContainer is not null;
+            registrationContainer = registrationContainer._parent
+        )
+        {
+            registrationContainer.ThrowIfDisposed();
+
+            foreach (var (key, registration) in registrationContainer._registry)
+            {
+                if (!visitedKeys.Add(key))
+                {
+                    continue;
+                }
+
+                var isInitializationTarget = registration is TypeRegistration.Scoped
+                    || (ReferenceEquals(registrationContainer, this) && registration is TypeRegistration.Singleton);
+
+                if (!isInitializationTarget)
+                {
+                    continue;
+                }
+
+                var (type, tag) = key;
+
+                ResolveRecursively(type, tag, scopedInstances: _instances, dependencyContainer: this);
+            }
+        }
+    }
+
     private object ResolveRecursively(
         Type type,
         object? tag,

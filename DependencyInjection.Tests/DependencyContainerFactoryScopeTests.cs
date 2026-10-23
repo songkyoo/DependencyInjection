@@ -17,36 +17,40 @@ public class DependencyContainerFactoryScopeTests
         [Values] bool configureScope
     )
     {
-        var configurationCalled = false;
+        var configurationCalls = 0;
         var factoryCalls = 0;
         var serviceCleanups = 0;
         var collectedCleanups = 0;
-        IDependencyContainer? factoryContainer = null;
+        var factoryContainers = new Dictionary<Dependency, IDependencyContainer>();
         using (var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register<Dependency>(
                 factory: (container, ref collector) =>
                 {
                     factoryCalls++;
-                    factoryContainer = container;
+                    var previousConfigurationCalls = configurationCalls;
 
                     Assert.That(container.Contains<Dependency>(), Is.True);
 
                     var exception = Assert.Throws<InvalidOperationException>(() =>
                     {
                         using var scope = configureScope
-                            ? container.CreateScope(_ => configurationCalled = true)
+                            ? container.CreateScope(_ => configurationCalls++)
                             : container.CreateScope();
                     });
 
                     Assert.That(exception!.Message, Does.Contain("CreateScope"));
-                    Assert.That(configurationCalled, Is.False);
+                    Assert.That(configurationCalls, Is.EqualTo(previousConfigurationCalls));
                     Assert.That(serviceCleanups, Is.Zero);
                     Assert.That(collectedCleanups, Is.Zero);
 
                     collector.Add(new object(), _ => collectedCleanups++);
 
-                    return new Dependency();
+                    var dependency = new Dependency();
+
+                    factoryContainers.Add(dependency, container);
+
+                    return dependency;
                 },
                 lifeTime,
                 cleanup: _ => serviceCleanups++
@@ -54,20 +58,25 @@ public class DependencyContainerFactoryScopeTests
         }))
         {
             using var child = root.CreateScope();
-            var requestingContainer = resolveFromChild ? child : (IDependencyContainer)root;
+            var requestingContainer = resolveFromChild ? child : root;
             var first = requestingContainer.Resolve<Dependency>();
             var second = requestingContainer.Resolve<Dependency>();
 
             Assert.That(second, lifeTime == LifeTime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
-            Assert.That(factoryCalls, Is.EqualTo(lifeTime == LifeTime.Transient ? 2 : 1));
-            Assert.That(factoryContainer, Is.SameAs(lifeTime == LifeTime.Singleton ? root : requestingContainer));
+            var expectedCreations = lifeTime == LifeTime.Singleton ? 1 : 2;
+
+            Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
+            var owningContainer = lifeTime == LifeTime.Singleton ? root : requestingContainer;
+
+            Assert.That(factoryContainers[first], Is.SameAs(owningContainer));
+            Assert.That(factoryContainers[second], Is.SameAs(owningContainer));
             Assert.That(requestingContainer.Contains<Dependency>(), Is.True);
             Assert.That(serviceCleanups, Is.Zero);
             Assert.That(collectedCleanups, Is.Zero);
 
-            using var scope = factoryContainer!.CreateScope(_ => configurationCalled = true);
+            using var scope = owningContainer.CreateScope(_ => configurationCalls++);
 
-            Assert.That(configurationCalled, Is.True);
+            Assert.That(configurationCalls, Is.EqualTo(1));
         }
 
         Assert.That(serviceCleanups, Is.EqualTo(factoryCalls));
@@ -115,7 +124,6 @@ public class DependencyContainerFactoryScopeTests
 
     [Test]
     public void RejectedScopeCreation_ShouldCleanFailedFactory_AndAllowRetryAndLaterScopes(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
         [Values] bool resolveFromChild,
         [Values] bool cleanupFails
     )
@@ -154,13 +162,13 @@ public class DependencyContainerFactoryScopeTests
 
                     return new Dependency();
                 },
-                lifeTime,
+                LifeTime.Transient,
                 cleanup: _ => serviceCleanups++
             );
         }))
         {
             using var child = root.CreateScope();
-            var requestingContainer = resolveFromChild ? child : (IDependencyContainer)root;
+            var requestingContainer = resolveFromChild ? child : root;
 
             if (cleanupFails)
             {

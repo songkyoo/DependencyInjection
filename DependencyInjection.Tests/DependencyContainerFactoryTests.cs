@@ -79,7 +79,7 @@ public class DependencyContainerFactoryTests
     {
         void Configure(IDependencyRegistrar registrar)
         {
-            registrar.Register<Foo>(factory: () => new Foo(), lifeTime);
+            registrar.Register(factory: () => new Foo(), lifeTime);
         }
 
         using var first = DependencyContainerFactory.Create(Configure);

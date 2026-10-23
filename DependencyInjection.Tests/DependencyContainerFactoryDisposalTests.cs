@@ -59,14 +59,16 @@ public class DependencyContainerFactoryDisposalTests
             Assert.That(first.Dependency, Is.SameAs(dependency));
             Assert.That(second.Dependency, Is.SameAs(dependency));
             Assert.That(second, lifeTime == LifeTime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
-            Assert.That(factoryCalls, Is.EqualTo(lifeTime == LifeTime.Transient ? 2 : 1));
+            var expectedCreations = lifeTime == LifeTime.Singleton ? 1 : 2;
+
+            Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
 
             using var scope = owningContainer.CreateScope();
 
             Assert.That(scope.Contains<Service>(), Is.True);
         }
 
-        Assert.That(dependencyCleanups, Is.EqualTo(1));
+        Assert.That(dependencyCleanups, Is.EqualTo(3));
         Assert.That(serviceCleanups, Is.EqualTo(factoryCalls));
         Assert.That(collectedCleanups, Is.EqualTo(factoryCalls));
     }
@@ -94,13 +96,15 @@ public class DependencyContainerFactoryDisposalTests
 
                     return new Dependency();
                 },
-                lifeTime
+                LifeTime.Transient
             );
             registrar.Register<Service>(
                 factory: (container, ref _) =>
                 {
                     if (dependencyFails)
                     {
+                        failDependency = true;
+
                         var exception = Assert.Throws<ArgumentException>(() => container.Resolve<Dependency>());
 
                         Assert.That(exception, Is.SameAs(dependencyFailure));
@@ -127,7 +131,6 @@ public class DependencyContainerFactoryDisposalTests
 
     [Test]
     public void RejectedDisposal_ShouldCleanFailedFactory_AndAllowRetryOrNormalDisposal(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
         [Values] bool resolveFromChild,
         [Values] bool cleanupFails,
         [Values] bool retryCreation
@@ -170,14 +173,14 @@ public class DependencyContainerFactoryDisposalTests
 
                     return new Service(resolvedDependency);
                 },
-                lifeTime,
+                LifeTime.Transient,
                 cleanup: _ => serviceCleanups++
             );
         }))
         {
             using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : root;
-            var owningContainer = lifeTime == LifeTime.Singleton ? root : requestingContainer;
+            var owningContainer = requestingContainer;
 
             if (cleanupFails)
             {
@@ -217,7 +220,7 @@ public class DependencyContainerFactoryDisposalTests
             }
         }
 
-        Assert.That(dependencyCleanups, Is.EqualTo(1));
+        Assert.That(dependencyCleanups, Is.EqualTo(3));
         Assert.That(serviceCleanups, Is.EqualTo(retryCreation ? 1 : 0));
         Assert.That(collectedCleanups, Is.EqualTo(1));
     }

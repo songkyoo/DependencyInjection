@@ -53,7 +53,6 @@ public class CleanupCollectorTests
 
     [Test]
     public void FailedFactory_ShouldCleanCollectedEntries_PreserveError_AndAllowRetry(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
         [Values] bool cleanupFails
     )
     {
@@ -84,7 +83,7 @@ public class CleanupCollectorTests
 
                     return new object();
                 },
-                lifeTime,
+                LifeTime.Transient,
                 cleanup: _ => calls.Add("service")
             );
         });
@@ -126,43 +125,30 @@ public class CleanupCollectorTests
     }
 
     [Test]
-    public void InvalidFactoryResult_ShouldCleanCollectedEntries_WithoutRunningServiceCleanup(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+    public void InvalidTransientFactoryResult_ShouldCleanCollector_WithoutOwningInvalidReturn(
         [Values] bool wrongType
     )
     {
-        var resource = new Resource();
+        var collected = new Resource();
+        var invalidResult = new Resource();
         var serviceCleanupCount = 0;
-        DependencyFactory<object> factory = (_, ref collector) =>
-        {
-            collector.Add(resource);
-
-            return wrongType ? "invalid" : null!;
-        };
-
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            switch (lifeTime)
+            registrar.RegisterTransient(typeof(string), tag: null, factory: (_, ref collector) =>
             {
-                case LifeTime.Transient:
-                    registrar.RegisterTransient(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                    break;
-                case LifeTime.Scoped:
-                    registrar.RegisterScoped(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                    break;
-                case LifeTime.Singleton:
-                    registrar.RegisterSingleton(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                    break;
-            }
+                collector.Add(collected);
+
+                return wrongType ? invalidResult : null!;
+            }, cleanup: _ => serviceCleanupCount++);
         });
 
-        Assert.That(container.Resolve<Resource>, Throws.InvalidOperationException);
-        Assert.That(resource.DisposeCount, Is.EqualTo(1));
-        Assert.That(serviceCleanupCount, Is.Zero);
+        Assert.That(container.Resolve<string>, Throws.InvalidOperationException);
 
         container.Dispose();
 
-        Assert.That(resource.DisposeCount, Is.EqualTo(1));
+        Assert.That(collected.DisposeCount, Is.EqualTo(1));
+        Assert.That(invalidResult.DisposeCount, Is.Zero);
+        Assert.That(serviceCleanupCount, Is.Zero);
     }
 
     [Test]
@@ -198,7 +184,14 @@ public class CleanupCollectorTests
 
         root.Dispose();
 
-        Assert.That(cleanupCount, Is.EqualTo(lifeTime == LifeTime.Singleton ? 1 : 2));
+        var expectedCleanups = lifeTime switch
+        {
+            LifeTime.Singleton => 1,
+            LifeTime.Scoped => 3,
+            _ => 2
+        };
+
+        Assert.That(cleanupCount, Is.EqualTo(expectedCleanups));
     }
 
     [Test]
@@ -209,7 +202,7 @@ public class CleanupCollectorTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterScoped(factory: () => dependency);
-            registrar.RegisterSingleton<object>(factory: (resolver, ref collector) =>
+            registrar.RegisterTransient<object>(factory: (resolver, ref collector) =>
             {
                 collector.Add(collected);
                 resolver.Resolve<Resource>();

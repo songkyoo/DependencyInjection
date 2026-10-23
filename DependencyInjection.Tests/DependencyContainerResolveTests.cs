@@ -22,33 +22,6 @@ public class DependencyContainerResolveTests
     }
 
     [Test]
-    public void Scoped_ShouldReuseInstanceInSameContainer()
-    {
-        var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
-        });
-        var foo1 = container.Resolve(Key.Of<Foo>());
-        var foo2 = container.Resolve(Key.Of<Foo>());
-
-        Assert.That(foo1, Is.SameAs(foo2));
-    }
-
-    [Test]
-    public void Singleton_ShouldReuseInstanceAcrossContainers()
-    {
-        var root = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-        });
-        var child = root.CreateScope();
-        var rootFoo = root.Resolve(Key.Of<Foo>());
-        var childFoo = child.Resolve(Key.Of<Foo>());
-
-        Assert.That(rootFoo, Is.SameAs(childFoo));
-    }
-
-    [Test]
     public void Resolve_WithObjectTag_ShouldUseTagValueEquality()
     {
         var container = DependencyContainerFactory.Create(registrar =>

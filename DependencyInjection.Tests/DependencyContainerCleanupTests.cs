@@ -217,17 +217,17 @@ public class DependencyContainerCleanupTests
         yield return Registration("GeneralFactoryWithKey", key,
             (registrar, cleanup) => registrar.Register(key, () => new Service(), LifeTime.Scoped, cleanup));
         yield return Registration("GeneralFactoryWithTag", key,
-            (registrar, cleanup) => registrar.Register<IService>("service", () => new Service(), LifeTime.Singleton, cleanup));
+            (registrar, cleanup) => registrar.Register("service", () => new Service(), LifeTime.Singleton, cleanup));
         yield return Registration("GeneralContainerFactoryWithTag", key,
-            (registrar, cleanup) => registrar.Register<IService>("service", (_, ref _) => new Service(), LifeTime.Scoped, cleanup));
+            (registrar, cleanup) => registrar.Register("service", (_, ref _) => new Service(), LifeTime.Scoped, cleanup));
         yield return Registration("ScopedContainerFactoryWithKey", key,
             (registrar, cleanup) => registrar.RegisterScoped(key, (_, ref _) => new Service(), cleanup));
         yield return Registration("ScopedFactoryWithTag", key,
-            (registrar, cleanup) => registrar.RegisterScoped<IService>("service", () => new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterScoped("service", () => new Service(), cleanup));
         yield return Registration("SingletonContainerFactory", Key.Of<IService>(),
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>((_, ref _) => new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterSingleton((_, ref _) => new Service(), cleanup));
         yield return Registration("SingletonFactory", Key.Of<IService>(),
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>(() => new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterSingleton(() => new Service(), cleanup));
         yield return Registration("ScopedImplementationWithKey", key,
             (registrar, cleanup) => registrar.RegisterScoped<IService, Service>(key, cleanup));
         yield return Registration("SingletonImplementation", Key.Of<IService>(),
@@ -239,11 +239,11 @@ public class DependencyContainerCleanupTests
         yield return Registration("GeneralImplementationWithTag", key,
             (registrar, cleanup) => registrar.Register<IService, Service>("service", LifeTime.Singleton, cleanup));
         yield return Registration("InstanceWithKey", key,
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>(key, new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterSingleton(key, new Service(), cleanup));
         yield return Registration("Instance", Key.Of<IService>(),
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>(new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterSingleton(new Service(), cleanup));
         yield return Registration("InstanceWithTag", key,
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>("service", new Service(), cleanup));
+            (registrar, cleanup) => registrar.RegisterSingleton("service", new Service(), cleanup));
     }
 
     private static TestCaseData Registration(

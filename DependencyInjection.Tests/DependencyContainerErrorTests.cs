@@ -12,43 +12,65 @@ public class DependencyContainerErrorTests
     #pragma warning restore CS9113
 
     [Test]
-    public void NullFactoryResult_ShouldThrow_WithRegistrationKey_AndAllowRetry(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
-        [Values(null, "service-tag")] string? tag,
-        [Values] bool resolveFromChild
+    public void NullFactoryResultDuringResolve_ShouldThrow_WithRegistrationKey_AndAllowRetry(
+        [Values(null, "service-tag")] string? tag
     )
     {
         var key = Key.Of<string>(tag);
         var returnNull = true;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, factory: (_, ref _) => returnNull ? null! : "Hello", lifeTime);
+            registrar.RegisterTransient(key, factory: (_, ref _) => returnNull ? null! : "Hello");
         });
         using var child = root.CreateScope();
-        var container = resolveFromChild ? child : root;
 
-        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
+        var ex = Assert.Throws<InvalidOperationException>(() => child.Resolve(key));
 
         Assert.That(ex!.Message, Does.Contain("Factory returned null"));
         Assert.That(ex.Message, Does.Contain(key.ToString()));
 
         returnNull = false;
 
-        Assert.That(container.Resolve(key), Is.EqualTo("Hello"));
+        Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
     }
 
     [Test]
-    public void SingletonNullFactoryResultWithEmptyCleanup_ShouldThrow_WithRegistrationKey()
+    public void InheritedScopedInvalidFactoryResult_ShouldFailChildCreation_AndPreserveParent(
+        [Values(null, "service-tag")] string? tag,
+        [Values] bool wrongType
+    )
     {
-        var key = Key.Of<string>("external-service");
-        using var container = DependencyContainerFactory.Create(registrar =>
+        var key = Key.Of<string>(tag);
+        var failCreation = false;
+        using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(key, factory: (_, ref _) => (string)null!, cleanup: _ => { });
+            registrar.RegisterScoped(
+                typeof(string),
+                tag,
+                factory: (_, ref _) => failCreation ? (wrongType ? new object() : null!) : "Hello"
+            );
         });
-        var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
 
-        Assert.That(ex!.Message, Does.Contain("Factory returned null"));
-        Assert.That(ex.Message, Does.Contain(key.ToString()));
+        failCreation = true;
+
+        var exception = Assert.Throws<AggregateException>(() => root.CreateScope());
+
+        Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
+        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(typeof(string).ToString()));
+
+        if (!wrongType)
+        {
+            Assert.That(exception.InnerExceptions[0].Message, Does.Contain(key.ToString()));
+        }
+
+        Assert.That(root.Resolve(key), Is.EqualTo("Hello"));
+
+        failCreation = false;
+
+        using var child = root.CreateScope();
+
+        Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
     }
 
     [Test]
