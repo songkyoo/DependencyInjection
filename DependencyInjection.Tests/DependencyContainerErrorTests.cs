@@ -73,9 +73,9 @@ public class DependencyContainerErrorTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(Key<A>.Default, factory: (resolver, ref _) => new A(b: resolver.Resolve<B>()), LifeTime.Transient);
-            registrar.Register(Key<B>.Default, factory: (resolver, ref _) => new B(c: resolver.Resolve<C>()), LifeTime.Transient);
-            registrar.Register(Key<C>.Default, factory: (resolver, ref _) => new C(a: resolver.Resolve<A>()), LifeTime.Transient);
+            registrar.Register(Key<A>.Default, factory: (resolver, ref _) => new A(b: resolver.Resolve<B>()), Lifetime.Transient);
+            registrar.Register(Key<B>.Default, factory: (resolver, ref _) => new B(c: resolver.Resolve<C>()), Lifetime.Transient);
+            registrar.Register(Key<C>.Default, factory: (resolver, ref _) => new C(a: resolver.Resolve<A>()), Lifetime.Transient);
         });
         var ex = Assert.Throws<InvalidOperationException>(() => container.Resolve(Key<A>.Default));
 

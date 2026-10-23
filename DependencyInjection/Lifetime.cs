@@ -1,6 +1,6 @@
 ﻿namespace Macaron.DependencyInjection;
 
-public enum LifeTime
+public enum Lifetime
 {
     Transient,
     Scoped,

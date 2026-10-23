@@ -7,8 +7,8 @@ public class DependencyContainerKeyTests
 
     [Test]
     public void SameKeyRegisteredTwice_ShouldFailBeforeFactoriesRun(
-        [Values] LifeTime firstLifetime,
-        [Values] LifeTime secondLifetime,
+        [Values] Lifetime firstLifetime,
+        [Values] Lifetime secondLifetime,
         [Values] bool useDefaultKey
     )
     {
@@ -32,17 +32,17 @@ public class DependencyContainerKeyTests
     }
 
     [Test]
-    public void DefaultRegistration_ShouldConflictWithExplicitDefaultKey([Values] LifeTime lifeTime)
+    public void DefaultRegistration_ShouldConflictWithExplicitDefaultKey([Values] Lifetime lifetime)
     {
         Assert.That(() => DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Service>(lifeTime);
-            registrar.Register(Key<Service>.Default, lifeTime);
+            registrar.Register<Service>(lifetime);
+            registrar.Register(Key<Service>.Default, lifetime);
         }), Throws.ArgumentException);
     }
 
     [Test]
-    public void SameNameKeys_ShouldKeepIndependentRegistrationsAndCaches([Values] LifeTime lifeTime)
+    public void SameNameKeys_ShouldKeepIndependentRegistrationsAndCaches([Values] Lifetime lifetime)
     {
         var firstKey = new Key<Service>("service");
         var secondKey = new Key<Service>("service");
@@ -50,8 +50,8 @@ public class DependencyContainerKeyTests
         var secondCreations = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(firstKey, () => { firstCreations++; return new Service(); }, lifeTime);
-            registrar.Register(secondKey, () => { secondCreations++; return new Service(); }, lifeTime);
+            registrar.Register(firstKey, () => { firstCreations++; return new Service(); }, lifetime);
+            registrar.Register(secondKey, () => { secondCreations++; return new Service(); }, lifetime);
         });
         var first = container.Resolve(firstKey);
         var second = container.Resolve(secondKey);
@@ -59,16 +59,16 @@ public class DependencyContainerKeyTests
         Assert.That(container.Contains(firstKey), Is.True);
         Assert.That(container.Contains(secondKey), Is.True);
         Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(container.Resolve(firstKey), lifeTime == LifeTime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
-        Assert.That(container.Resolve(secondKey), lifeTime == LifeTime.Transient ? Is.Not.SameAs(second) : Is.SameAs(second));
-        Assert.That(firstCreations, Is.EqualTo(lifeTime == LifeTime.Transient ? 2 : 1));
-        Assert.That(secondCreations, Is.EqualTo(lifeTime == LifeTime.Transient ? 2 : 1));
+        Assert.That(container.Resolve(firstKey), lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
+        Assert.That(container.Resolve(secondKey), lifetime == Lifetime.Transient ? Is.Not.SameAs(second) : Is.SameAs(second));
+        Assert.That(firstCreations, Is.EqualTo(lifetime == Lifetime.Transient ? 2 : 1));
+        Assert.That(secondCreations, Is.EqualTo(lifetime == Lifetime.Transient ? 2 : 1));
     }
 
     [Test]
     public void SameNameChildKey_ShouldNotMaskParentRegistrationOrInitialization(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime parentLifetime,
-        [Values] LifeTime childLifetime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime parentLifetime,
+        [Values] Lifetime childLifetime
     )
     {
         var parentKey = new Key<Service>("service");
@@ -80,12 +80,12 @@ public class DependencyContainerKeyTests
         });
         using var child = root.CreateScope(registrar => registrar.Register(childKey, childLifetime));
 
-        Assert.That(parentCreations, Is.EqualTo(parentLifetime == LifeTime.Scoped ? 2 : 1));
+        Assert.That(parentCreations, Is.EqualTo(parentLifetime == Lifetime.Scoped ? 2 : 1));
         Assert.That(child.Contains(parentKey), Is.True);
         Assert.That(child.Contains(childKey), Is.True);
         Assert.That(root.Contains(childKey), Is.False);
         Assert.That(child.Resolve(parentKey), Is.Not.SameAs(child.Resolve(childKey)));
-        Assert.That(child.Resolve(parentKey), parentLifetime == LifeTime.Singleton
+        Assert.That(child.Resolve(parentKey), parentLifetime == Lifetime.Singleton
             ? Is.SameAs(root.Resolve(parentKey))
             : Is.Not.SameAs(root.Resolve(parentKey)));
         Assert.That(child.Contains(new Key<Service>("service")), Is.False);

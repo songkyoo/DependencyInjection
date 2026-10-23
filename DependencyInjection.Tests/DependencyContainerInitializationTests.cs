@@ -11,7 +11,7 @@ public class DependencyContainerInitializationTests
 
     [Test]
     public void RootCreation_ShouldPrepareSharedService_WithoutCreatingUnusedTransient(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var sharedCreations = 0;
@@ -23,7 +23,7 @@ public class DependencyContainerInitializationTests
                 sharedCreations++;
 
                 return new Resource(() => { });
-            }, lifeTime);
+            }, lifetime);
             registrar.RegisterTransient(factory: () =>
             {
                 transientCreations++;
@@ -65,8 +65,8 @@ public class DependencyContainerInitializationTests
 
     [Test]
     public void SharedServices_ShouldResolveDependencyFirst_AndReuseItsPreparedInstance(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime serviceLifetime,
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime dependencyLifetime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime serviceLifetime,
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime dependencyLifetime
     )
     {
         var firstKey = new Key<Service>("first");
@@ -106,7 +106,7 @@ public class DependencyContainerInitializationTests
 
     [Test]
     public void SharedServiceTransientDependencyAndCollectedEntries_ShouldBelongToRoot(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var cleanups = new List<string>();
@@ -127,7 +127,7 @@ public class DependencyContainerInitializationTests
                 collector.Add(new object(), _ => cleanups.Add("service-collected"));
 
                 return new Service(resource);
-            }, lifeTime, cleanup: _ => cleanups.Add("service"));
+            }, lifetime, cleanup: _ => cleanups.Add("service"));
         });
 
         Assert.That(transientCreations, Is.EqualTo(1));

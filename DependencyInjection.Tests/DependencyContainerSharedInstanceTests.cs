@@ -105,7 +105,7 @@ public class DependencyContainerSharedInstanceTests
 
     [Test]
     public void ReturnedAndCollectedInstance_ShouldCreateSeparateCleanupEntries(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var resource = new Resource();
@@ -115,7 +115,7 @@ public class DependencyContainerSharedInstanceTests
             {
                 collector.Add(resource);
                 return resource;
-            }, lifeTime);
+            }, lifetime);
         });
 
         container.Resolve<Resource>();
@@ -129,7 +129,7 @@ public class DependencyContainerSharedInstanceTests
 
     [Test]
     public void FactoriesReturningSameReference_ShouldKeepIndependentCleanupPolicies(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var ownerKey = new Key<Resource>("owner");
@@ -139,7 +139,7 @@ public class DependencyContainerSharedInstanceTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterSingleton(key: ownerKey, instance: resource);
-            registrar.Register<object>(key: otherKey, factory: () => resource, lifeTime,
+            registrar.Register<object>(key: otherKey, factory: () => resource, lifetime,
                 cleanup: _ => customCleanupCount++);
         });
 
@@ -177,21 +177,21 @@ public class DependencyContainerSharedInstanceTests
 
     [Test]
     public void MultipleInterfaces_ShouldShareInstance_WithIndependentCleanupPolicies(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var customCleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(lifeTime);
+            registrar.Register<Resource>(lifetime);
             registrar.Register<IFirst>(
                 factory: (resolver, ref _) => resolver.Resolve<Resource>(),
-                lifeTime,
+                lifetime,
                 cleanup: _ => customCleanupCount++
             );
             registrar.Register<ISecond>(
                 factory: (resolver, ref _) => resolver.Resolve<Resource>(),
-                lifeTime,
+                lifetime,
                 cleanup: _ => { }
             );
         });

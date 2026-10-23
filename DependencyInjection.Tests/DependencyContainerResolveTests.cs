@@ -11,7 +11,7 @@ public class DependencyContainerResolveTests
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key: Key<IFoo>.Default, factory: (_, ref _) => new Foo(), LifeTime.Transient);
+            registrar.Register(key: Key<IFoo>.Default, factory: (_, ref _) => new Foo(), Lifetime.Transient);
         });
 
         var first = container.Resolve(Key<IFoo>.Default);

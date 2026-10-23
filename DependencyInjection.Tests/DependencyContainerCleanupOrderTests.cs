@@ -22,7 +22,7 @@ public class DependencyContainerCleanupOrderTests
 
     [Test]
     public void CollectedCleanup_ShouldRunBeforeService_AndAfterDependentService(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var calls = new List<string>();
@@ -41,7 +41,7 @@ public class DependencyContainerCleanupOrderTests
 
                     return resource;
                 },
-                lifeTime
+                lifetime
             );
             registrar.Register<Service>(
                 factory: (resolver, ref collector) =>
@@ -54,7 +54,7 @@ public class DependencyContainerCleanupOrderTests
 
                     return service;
                 },
-                lifeTime,
+                lifetime,
                 cleanup: service =>
                 {
                     Assert.That(service.Resource.IsDisposed, Is.False);
@@ -152,10 +152,10 @@ public class DependencyContainerCleanupOrderTests
 
     [Test]
     public void FailedDisposal_ShouldReleaseServiceAndCollectedInstances(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
-        var (container, service, resource) = CreateDisposedContainer(lifeTime);
+        var (container, service, resource) = CreateDisposedContainer(lifetime);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -168,7 +168,7 @@ public class DependencyContainerCleanupOrderTests
 
         #region Local Functions
         [MethodImpl(MethodImplOptions.NoInlining)]
-        static (IDependencyContainer, WeakReference, WeakReference) CreateDisposedContainer(LifeTime lifeTime)
+        static (IDependencyContainer, WeakReference, WeakReference) CreateDisposedContainer(Lifetime lifetime)
         {
             var container = DependencyContainerFactory.Create(registrar =>
             {
@@ -182,7 +182,7 @@ public class DependencyContainerCleanupOrderTests
 
                         return new Service(resource);
                     },
-                    lifeTime
+                    lifetime
                 );
             });
             var service = container.Resolve<Service>();

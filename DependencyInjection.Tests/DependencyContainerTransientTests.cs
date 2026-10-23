@@ -68,7 +68,7 @@ public class DependencyContainerTransientTests
 
     [Test]
     public void NestedTransientDependencies_ShouldFollowServiceOwnership(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         using var root = DependencyContainerFactory.Create(registrar =>
@@ -79,7 +79,7 @@ public class DependencyContainerTransientTests
                 cleanup: dependency => dependency.CleanupCount++
             );
             registrar.Register(
-                factory: (resolver, ref _) => new Service(resolver.Resolve<Dependency>()), lifeTime,
+                factory: (resolver, ref _) => new Service(resolver.Resolve<Dependency>()), lifetime,
                 cleanup: service => service.CleanupCount++
             );
         });
@@ -90,7 +90,7 @@ public class DependencyContainerTransientTests
         var dependency = service.Dependency;
         var resource = dependency.Resource;
 
-        Assert.That(siblingService, lifeTime == LifeTime.Singleton ? Is.SameAs(service) : Is.Not.SameAs(service));
+        Assert.That(siblingService, lifetime == Lifetime.Singleton ? Is.SameAs(service) : Is.Not.SameAs(service));
         Assert.That(dependency.CleanupCount, Is.Zero);
         Assert.That(resource.DisposeCount, Is.Zero);
 
@@ -102,7 +102,7 @@ public class DependencyContainerTransientTests
 
         child.Dispose();
 
-        var cleanedByChild = lifeTime == LifeTime.Singleton ? 0 : 1;
+        var cleanedByChild = lifetime == Lifetime.Singleton ? 0 : 1;
 
         Assert.That(service.CleanupCount, Is.EqualTo(cleanedByChild));
         Assert.That(dependency.CleanupCount, Is.EqualTo(cleanedByChild));

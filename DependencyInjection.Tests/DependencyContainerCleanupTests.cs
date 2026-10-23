@@ -24,12 +24,12 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void OmittedCleanup_ShouldDisposeCachedInstanceOnce(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(factory: () => new Resource(), lifeTime);
+            registrar.Register(factory: () => new Resource(), lifetime);
         });
         var resource = container.Resolve<Resource>();
 
@@ -44,13 +44,13 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void CustomCleanup_ShouldReplaceDispose_AndReceiveCachedInstanceOnce(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var cleanedInstances = new List<Resource>();
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(factory: (_, ref _) => new Resource(), lifeTime, cleanup: cleanedInstances.Add);
+            registrar.Register(factory: (_, ref _) => new Resource(), lifetime, cleanup: cleanedInstances.Add);
         });
         var resource = container.Resolve<Resource>();
 
@@ -66,12 +66,12 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void EmptyCleanup_ShouldLeaveDisposalToCaller(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(lifeTime, cleanup: _ => { });
+            registrar.Register<Resource>(lifetime, cleanup: _ => { });
         });
         var resource = container.Resolve<Resource>();
 
@@ -86,7 +86,7 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void NonDisposableService_ShouldSupportDefaultAndCustomCleanup(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values(false, true)] bool customCleanup
     )
     {
@@ -95,7 +95,7 @@ public class DependencyContainerCleanupTests
         {
             registrar.Register<IService, Service>(
                 key,
-                lifeTime,
+                lifetime,
                 cleanup: customCleanup ? service => service.CleanupCount++ : null
             );
         });
@@ -108,12 +108,12 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void InheritedService_ShouldRunCleanupInItsOwningContainer(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
+            registrar.Register<Service>(lifetime, cleanup: service => service.CleanupCount++);
         });
         var child = root.CreateScope(_ => { });
         var rootService = root.Resolve<Service>();
@@ -121,7 +121,7 @@ public class DependencyContainerCleanupTests
 
         child.Dispose();
 
-        if (lifeTime != LifeTime.Singleton)
+        if (lifetime != Lifetime.Singleton)
         {
             Assert.That(childService, Is.Not.SameAs(rootService));
             Assert.That(childService.CleanupCount, Is.EqualTo(1));
@@ -141,7 +141,7 @@ public class DependencyContainerCleanupTests
 
     [Test]
     public void CoreRegistration_ShouldApplyCleanupPolicy(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values(false, true)] bool customCleanup
     )
     {
@@ -151,15 +151,15 @@ public class DependencyContainerCleanupTests
 
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            switch (lifeTime)
+            switch (lifetime)
             {
-                case LifeTime.Transient:
+                case Lifetime.Transient:
                     registrar.RegisterTransient(key, (_, ref _) => new Resource(), cleanup);
                     break;
-                case LifeTime.Scoped:
+                case Lifetime.Scoped:
                     registrar.RegisterScoped(key, (_, ref _) => new Resource(), cleanup);
                     break;
-                case LifeTime.Singleton:
+                case Lifetime.Singleton:
                     registrar.RegisterSingleton(key, (_, ref _) => new Resource(), cleanup);
                     break;
             }
@@ -216,9 +216,9 @@ public class DependencyContainerCleanupTests
         var key = new Key<IService>("service");
 
         yield return Registration("GeneralFactoryWithKey", key,
-            (registrar, cleanup) => registrar.Register(key, () => new Service(), LifeTime.Scoped, cleanup));
+            (registrar, cleanup) => registrar.Register(key, () => new Service(), Lifetime.Scoped, cleanup));
         yield return Registration("GeneralContainerFactoryWithKey", key,
-            (registrar, cleanup) => registrar.Register(key, (_, ref _) => new Service(), LifeTime.Scoped, cleanup));
+            (registrar, cleanup) => registrar.Register(key, (_, ref _) => new Service(), Lifetime.Scoped, cleanup));
         yield return Registration("ScopedContainerFactoryWithKey", key,
             (registrar, cleanup) => registrar.RegisterScoped(key, (_, ref _) => new Service(), cleanup));
         yield return Registration("SingletonContainerFactory", Key<IService>.Default,
@@ -230,9 +230,9 @@ public class DependencyContainerCleanupTests
         yield return Registration("SingletonImplementation", Key<IService>.Default,
             (registrar, cleanup) => registrar.RegisterSingleton<IService, Service>(cleanup));
         yield return Registration("GeneralImplementation", Key<IService>.Default,
-            (registrar, cleanup) => registrar.Register<IService, Service>(LifeTime.Scoped, cleanup));
+            (registrar, cleanup) => registrar.Register<IService, Service>(Lifetime.Scoped, cleanup));
         yield return Registration("GeneralImplementationWithKey", key,
-            (registrar, cleanup) => registrar.Register<IService, Service>(key, LifeTime.Singleton, cleanup));
+            (registrar, cleanup) => registrar.Register<IService, Service>(key, Lifetime.Singleton, cleanup));
         yield return Registration("InstanceWithKey", key,
             (registrar, cleanup) => registrar.RegisterSingleton(key, new Service(), cleanup));
         yield return Registration("Instance", Key<IService>.Default,

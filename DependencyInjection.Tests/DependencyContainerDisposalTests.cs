@@ -20,11 +20,11 @@ public class DependencyContainerDisposalTests
         var key = Key<Foo>.Default;
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
+            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), Lifetime.Scoped);
         });
         var child = root.CreateScope(registrar =>
         {
-            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
+            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), Lifetime.Scoped);
         });
 
         root.Resolve(key);
@@ -45,7 +45,7 @@ public class DependencyContainerDisposalTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(Key<string>.Default, factory: (_, ref _) => "Hello", LifeTime.Singleton);
+            registrar.Register(Key<string>.Default, factory: (_, ref _) => "Hello", Lifetime.Singleton);
         });
 
         container.Dispose();

@@ -83,7 +83,7 @@ public class CleanupCollectorTests
 
                     return new object();
                 },
-                LifeTime.Transient,
+                Lifetime.Transient,
                 cleanup: _ => calls.Add("service")
             );
         });
@@ -149,7 +149,7 @@ public class CleanupCollectorTests
 
     [Test]
     public void CollectedEntries_ShouldFollowFactoryOwnership(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var cleanupCount = 0;
@@ -162,7 +162,7 @@ public class CleanupCollectorTests
 
                     return new object();
                 },
-                lifeTime
+                lifetime
             );
         });
         using var child = root.CreateScope(_ => { });
@@ -172,18 +172,18 @@ public class CleanupCollectorTests
         sibling.Resolve<object>();
         child.Dispose();
 
-        Assert.That(cleanupCount, Is.EqualTo(lifeTime == LifeTime.Singleton ? 0 : 1));
+        Assert.That(cleanupCount, Is.EqualTo(lifetime == Lifetime.Singleton ? 0 : 1));
 
         sibling.Dispose();
 
-        Assert.That(cleanupCount, Is.EqualTo(lifeTime == LifeTime.Singleton ? 0 : 2));
+        Assert.That(cleanupCount, Is.EqualTo(lifetime == Lifetime.Singleton ? 0 : 2));
 
         root.Dispose();
 
-        var expectedCleanups = lifeTime switch
+        var expectedCleanups = lifetime switch
         {
-            LifeTime.Singleton => 1,
-            LifeTime.Scoped => 3,
+            Lifetime.Singleton => 1,
+            Lifetime.Scoped => 3,
             _ => 2
         };
 

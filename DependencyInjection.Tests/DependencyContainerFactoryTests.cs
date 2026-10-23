@@ -16,8 +16,8 @@ public class DependencyContainerFactoryTests
 
         Assert.That(() => DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Transient);
-            registrar.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+            registrar.Register(key, factory: (_, ref _) => new Foo(), Lifetime.Transient);
+            registrar.Register(key, factory: (_, ref _) => new Foo(), Lifetime.Singleton);
         }), Throws.ArgumentException);
     }
 
@@ -29,7 +29,7 @@ public class DependencyContainerFactoryTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             configurationCalls++;
-            registrar.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Scoped);
+            registrar.Register(key, factory: (_, ref _) => new Foo(), Lifetime.Scoped);
         });
 
         Assert.That(configurationCalls, Is.EqualTo(1));
@@ -42,7 +42,7 @@ public class DependencyContainerFactoryTests
         var key = Key<FooWithDefaultCtor>.Default;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, LifeTime.Singleton);
+            registrar.Register(key, Lifetime.Singleton);
         });
         var instance = container.Resolve(key);
 
@@ -74,12 +74,12 @@ public class DependencyContainerFactoryTests
 
     [Test]
     public void ReusedConfiguration_ShouldCreateIndependentRoots(
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         void Configure(IDependencyRegistrar registrar)
         {
-            registrar.Register(factory: () => new Foo(), lifeTime);
+            registrar.Register(factory: () => new Foo(), lifetime);
         }
 
         using var first = DependencyContainerFactory.Create(Configure);

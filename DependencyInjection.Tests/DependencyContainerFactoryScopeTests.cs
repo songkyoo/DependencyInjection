@@ -12,7 +12,7 @@ public class DependencyContainerFactoryScopeTests
 
     [Test]
     public void CreateScopeDuringFactory_ShouldThrowBeforeConfiguration_WithoutChangingOwnership(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values] bool resolveFromChild,
         [Values] bool useActionOverload
     )
@@ -52,7 +52,7 @@ public class DependencyContainerFactoryScopeTests
 
                     return dependency;
                 },
-                lifeTime,
+                lifetime,
                 cleanup: _ => serviceCleanups++
             );
         }))
@@ -62,11 +62,11 @@ public class DependencyContainerFactoryScopeTests
             var first = requestingContainer.Resolve<Dependency>();
             var second = requestingContainer.Resolve<Dependency>();
 
-            Assert.That(second, lifeTime == LifeTime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
-            var expectedCreations = lifeTime == LifeTime.Singleton ? 1 : 2;
+            Assert.That(second, lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
+            var expectedCreations = lifetime == Lifetime.Singleton ? 1 : 2;
 
             Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
-            var owningContainer = lifeTime == LifeTime.Singleton ? root : requestingContainer;
+            var owningContainer = lifetime == Lifetime.Singleton ? root : requestingContainer;
 
             Assert.That(factoryContainers[first], Is.SameAs(owningContainer));
             Assert.That(factoryContainers[second], Is.SameAs(owningContainer));
@@ -85,7 +85,7 @@ public class DependencyContainerFactoryScopeTests
 
     [Test]
     public void CreateScopeAfterNestedResolve_ShouldRemainBlockedUntilOuterFactoryReturns(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         using var container = DependencyContainerFactory.Create(registrar =>
@@ -97,7 +97,7 @@ public class DependencyContainerFactoryScopeTests
 
                     return new Dependency();
                 },
-                lifeTime
+                lifetime
             );
             registrar.Register<Service>(
                 factory: (container, ref _) =>
@@ -110,7 +110,7 @@ public class DependencyContainerFactoryScopeTests
 
                     return new Service(dependency);
                 },
-                lifeTime
+                lifetime
             );
         });
         var service = container.Resolve<Service>();
@@ -162,7 +162,7 @@ public class DependencyContainerFactoryScopeTests
 
                     return new Dependency();
                 },
-                LifeTime.Transient,
+                Lifetime.Transient,
                 cleanup: _ => serviceCleanups++
             );
         }))

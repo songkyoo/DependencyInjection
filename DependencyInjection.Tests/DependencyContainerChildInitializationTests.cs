@@ -76,8 +76,8 @@ public class DependencyContainerChildInitializationTests
 
     [Test]
     public void NearestRegistration_ShouldControlInitialization_EvenWhenTransientMasksSharedParent(
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime parentLifetime,
-        [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime childLifetime,
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime parentLifetime,
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime childLifetime,
         [Values] bool useDefaultKey
     )
     {
@@ -103,26 +103,26 @@ public class DependencyContainerChildInitializationTests
             }, childLifetime);
         });
 
-        Assert.That(childCreations, Is.EqualTo(childLifetime == LifeTime.Transient ? 0 : 1));
+        Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 0 : 1));
 
         using var grandchild = child.CreateScope(_ => { });
 
         var expectedChildCreations = childLifetime switch
         {
-            LifeTime.Transient => 0,
-            LifeTime.Scoped => 2,
+            Lifetime.Transient => 0,
+            Lifetime.Scoped => 2,
             _ => 1
         };
 
         Assert.That(childCreations, Is.EqualTo(expectedChildCreations));
-        Assert.That(parentCreations, Is.EqualTo(parentLifetime == LifeTime.Transient ? 0 : 1));
+        Assert.That(parentCreations, Is.EqualTo(parentLifetime == Lifetime.Transient ? 0 : 1));
 
         var childResource = child.Resolve(key);
         var grandchildResource = grandchild.Resolve(key);
 
-        Assert.That(grandchildResource, childLifetime == LifeTime.Singleton ? Is.SameAs(childResource) : Is.Not.SameAs(childResource));
-        Assert.That(childCreations, Is.EqualTo(childLifetime == LifeTime.Transient ? 2 : expectedChildCreations));
-        Assert.That(parentCreations, Is.EqualTo(parentLifetime == LifeTime.Transient ? 0 : 1));
+        Assert.That(grandchildResource, childLifetime == Lifetime.Singleton ? Is.SameAs(childResource) : Is.Not.SameAs(childResource));
+        Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 2 : expectedChildCreations));
+        Assert.That(parentCreations, Is.EqualTo(parentLifetime == Lifetime.Transient ? 0 : 1));
     }
 
     [Test]

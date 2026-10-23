@@ -24,7 +24,7 @@ public class DependencyContainerBuildFailureTests
     [Test]
     public void NullSharedFactoryResult_ShouldFailBuild_CleanCollector_AndRejectServiceOwnership(
         [Values] bool createChild,
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime,
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values] bool useDefaultKey
     )
     {
@@ -71,7 +71,7 @@ public class DependencyContainerBuildFailureTests
                 return null!;
             };
 
-            if (lifeTime == LifeTime.Scoped)
+            if (lifetime == Lifetime.Scoped)
             {
                 registrar.RegisterScoped(key, factory, _ => serviceCleanups++);
             }
@@ -85,7 +85,7 @@ public class DependencyContainerBuildFailureTests
     [Test]
     public void CycleThroughTransientDependency_ShouldFailBuild_WithResolutionPath(
         [Values] bool createChild,
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         using var parent = DependencyContainerFactory.Create(_ => { });
@@ -122,7 +122,7 @@ public class DependencyContainerBuildFailureTests
                 container.Resolve(secondKey);
 
                 return new CycleA();
-            }, lifeTime);
+            }, lifetime);
             registrar.RegisterTransient(secondKey, factory: (container, ref _) =>
             {
                 container.Resolve(firstKey);
@@ -278,7 +278,7 @@ public class DependencyContainerBuildFailureTests
     [Test]
     public void Rollback_ShouldKeepCleanupEntriesForSameReference_WithoutRecordingParentCacheReturns(
         [Values] bool createChild,
-        [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var parentKey = new Key<Resource>("parent");
@@ -320,7 +320,7 @@ public class DependencyContainerBuildFailureTests
 
                     return sharedResource;
                 },
-                lifeTime,
+                lifetime,
                 cleanup: resource =>
                 {
                     cleanupOrder.Add("first");
@@ -335,7 +335,7 @@ public class DependencyContainerBuildFailureTests
 
                     return sharedResource;
                 },
-                lifeTime,
+                lifetime,
                 cleanup: _ => cleanupOrder.Add("second")
             );
             registrar.RegisterSingleton<Service>(

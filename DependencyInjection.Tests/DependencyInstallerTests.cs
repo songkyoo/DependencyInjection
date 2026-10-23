@@ -192,7 +192,7 @@ public class DependencyInstallerTests
     }
 
     [Test]
-    public void ServiceCreation_ShouldRejectScopeBeforeInstallerRuns([Values] LifeTime lifeTime)
+    public void ServiceCreation_ShouldRejectScopeBeforeInstallerRuns([Values] Lifetime lifetime)
     {
         var installer = new Installer(_ => { });
         var attemptScopeCreation = true;
@@ -207,7 +207,7 @@ public class DependencyInstallerTests
                 }
 
                 return new Resource();
-            }, lifeTime);
+            }, lifetime);
         });
         container.Resolve<Resource>();
         attemptScopeCreation = false;
