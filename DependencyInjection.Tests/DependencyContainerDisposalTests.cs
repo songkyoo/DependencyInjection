@@ -29,15 +29,14 @@ public class DependencyContainerDisposalTests
     public void ScopedDisposable_ShouldBeDisposed_WhenContainerDisposed()
     {
         var disposed = false;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(
-            key: Key.Of<Foo>(),
-            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
-            lifeTime: LifeTime.Scoped
-        );
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(
+                key: Key.Of<Foo>(),
+                factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+                lifeTime: LifeTime.Scoped
+            );
+        });
 
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
@@ -52,16 +51,14 @@ public class DependencyContainerDisposalTests
         var disposedInChild = false;
 
         var key = Key.Of<Foo>();
-        var rootBuilder = new DependencyContainerBuilder();
-
-        rootBuilder.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
-
-        var childBuilder = new DependencyContainerBuilder();
-
-        childBuilder.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
-
-        var root = rootBuilder.Build();
-        var child = childBuilder.Build(root);
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), LifeTime.Scoped);
+        });
+        var child = root.CreateScope(registrar =>
+        {
+            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), LifeTime.Scoped);
+        });
 
         root.Resolve(key);
         child.Resolve(key);
@@ -80,15 +77,14 @@ public class DependencyContainerDisposalTests
     public void TransientDisposable_ShouldBeDisposed_WhenContainerDisposed()
     {
         var disposed = false;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(
-            key: Key.Of<Foo>(),
-            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
-            lifeTime: LifeTime.Transient
-        );
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(
+                key: Key.Of<Foo>(),
+                factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+                lifeTime: LifeTime.Transient
+            );
+        });
 
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
@@ -100,15 +96,14 @@ public class DependencyContainerDisposalTests
     public void SingletonDisposable_ShouldBeDisposed_WhenRootContainerDisposed()
     {
         var disposed = false;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(
-            key: Key.Of<Foo>(),
-            factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
-            lifeTime: LifeTime.Singleton
-        );
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(
+                key: Key.Of<Foo>(),
+                factory: (_, ref _) => new Foo(onDispose: () => disposed = true),
+                lifeTime: LifeTime.Singleton
+            );
+        });
 
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
@@ -119,11 +114,10 @@ public class DependencyContainerDisposalTests
     [Test]
     public void Resolve_AfterDisposal_ShouldThrow()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<string>(), factory: (_, ref _) => "Hello", LifeTime.Singleton);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<string>(), factory: (_, ref _) => "Hello", LifeTime.Singleton);
+        });
 
         container.Dispose();
 
@@ -133,7 +127,7 @@ public class DependencyContainerDisposalTests
     [Test]
     public void CreateScope_AfterDisposal_ShouldThrow_BeforeConfiguration()
     {
-        var container = new DependencyContainerBuilder().Build();
+        var container = DependencyContainerFactory.Create();
 
         container.Dispose();
 
@@ -150,7 +144,7 @@ public class DependencyContainerDisposalTests
     [Test]
     public void Contains_AfterDisposal_ShouldThrow()
     {
-        var container = new DependencyContainerBuilder().Build();
+        var container = DependencyContainerFactory.Create();
 
         container.Dispose();
 
@@ -163,11 +157,10 @@ public class DependencyContainerDisposalTests
         var isDisposed = false;
         var foo = new Foo(onDispose: () => isDisposed = true);
 
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(foo, cleanup: _ => { });
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton(foo, cleanup: _ => { });
+        });
 
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
@@ -180,14 +173,13 @@ public class DependencyContainerDisposalTests
     {
         var isDisposed = false;
 
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(
-            factory: (_, ref _) => new Foo(onDispose: () => isDisposed = true),
-            cleanup: _ => { }
-        );
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton(
+                factory: (_, ref _) => new Foo(onDispose: () => isDisposed = true),
+                cleanup: _ => { }
+            );
+        });
 
         container.Resolve(Key.Of<Foo>());
         container.Dispose();
@@ -198,11 +190,10 @@ public class DependencyContainerDisposalTests
     [Test]
     public void RegisterSingletonImplementationWithEmptyCleanup_ShouldNotDisposeInstance_WhenContainerDisposed()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton<IDisposable, Foo>(cleanup: _ => { });
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton<IDisposable, Foo>(cleanup: _ => { });
+        });
         var foo = (Foo)container.Resolve(Key.Of<IDisposable>());
 
         container.Dispose();

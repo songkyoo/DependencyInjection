@@ -1,4 +1,4 @@
-namespace Macaron.DependencyInjection.Internal;
+namespace Macaron.DependencyInjection;
 
 internal readonly record struct CleanupEntry(object Instance, Action<object>? Cleanup)
 {

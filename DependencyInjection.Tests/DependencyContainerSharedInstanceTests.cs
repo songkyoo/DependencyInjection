@@ -25,32 +25,31 @@ public class DependencyContainerSharedInstanceTests
     {
         var resource = new Resource();
         var calls = new List<string>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(factory: (_, ref collector) =>
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            if (firstUsesDefault)
+            registrar.RegisterSingleton(factory: (_, ref collector) =>
             {
-                collector.Add(resource);
-            }
-            else
-            {
-                collector.Add(resource, _ => calls.Add("first"));
-            }
+                if (firstUsesDefault)
+                {
+                    collector.Add(resource);
+                }
+                else
+                {
+                    collector.Add(resource, _ => calls.Add("first"));
+                }
 
-            if (secondUsesDefault)
-            {
-                collector.Add(resource);
-            }
-            else
-            {
-                collector.Add(resource, _ => calls.Add("second"));
-            }
+                if (secondUsesDefault)
+                {
+                    collector.Add(resource);
+                }
+                else
+                {
+                    collector.Add(resource, _ => calls.Add("second"));
+                }
 
-            return new object();
+                return new object();
+            });
         });
-
-        using var container = builder.Build();
 
         container.Resolve<object>();
 
@@ -83,19 +82,18 @@ public class DependencyContainerSharedInstanceTests
     {
         var instance = boxedValue ? 42 : new object();
         var cleanedInstances = new List<object>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(factory: (_, ref collector) =>
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            collector.Add(instance, cleanedInstances.Add);
-            collector.Add(instance, cleanup: null);
-            collector.Add(instance, _ => { });
-            collector.Add(instance, cleanedInstances.Add);
+            registrar.RegisterSingleton(factory: (_, ref collector) =>
+            {
+                collector.Add(instance, cleanedInstances.Add);
+                collector.Add(instance, cleanup: null);
+                collector.Add(instance, _ => { });
+                collector.Add(instance, cleanedInstances.Add);
 
-            return new object();
+                return new object();
+            });
         });
-
-        using var container = builder.Build();
 
         container.Resolve<object>();
         container.Dispose();
@@ -111,15 +109,14 @@ public class DependencyContainerSharedInstanceTests
     )
     {
         var resource = new Resource();
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(factory: (_, ref collector) =>
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            collector.Add(resource);
-            return resource;
-        }, lifeTime);
-
-        using var container = builder.Build();
+            registrar.Register(factory: (_, ref collector) =>
+            {
+                collector.Add(resource);
+                return resource;
+            }, lifeTime);
+        });
 
         container.Resolve<Resource>();
 
@@ -137,13 +134,12 @@ public class DependencyContainerSharedInstanceTests
     {
         var resource = new Resource();
         var customCleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton(tag: "owner", instance: resource);
-        builder.Register<object>(tag: "other", factory: () => resource, lifeTime,
-            cleanup: _ => customCleanupCount++);
-
-        using var container = builder.Build();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton(tag: "owner", instance: resource);
+            registrar.Register<object>(tag: "other", factory: () => resource, lifeTime,
+                cleanup: _ => customCleanupCount++);
+        });
 
         Assert.That(container.Resolve<Resource>("owner"), Is.SameAs(resource));
         Assert.That(container.Resolve<object>("other"), Is.SameAs(resource));
@@ -161,11 +157,10 @@ public class DependencyContainerSharedInstanceTests
     {
         var resource = new Resource();
         var cleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterTransient(factory: () => resource, cleanup: customCleanup ? _ => cleanupCount++ : null);
-
-        using var container = builder.Build();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient(factory: () => resource, cleanup: customCleanup ? _ => cleanupCount++ : null);
+        });
 
         Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
         Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
@@ -184,21 +179,20 @@ public class DependencyContainerSharedInstanceTests
     )
     {
         var customCleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Resource>(lifeTime);
-        builder.Register<IFirst>(
-            factory: (resolver, ref _) => resolver.Resolve<Resource>(),
-            lifeTime,
-            cleanup: _ => customCleanupCount++
-        );
-        builder.Register<ISecond>(
-            factory: (resolver, ref _) => resolver.Resolve<Resource>(),
-            lifeTime,
-            cleanup: _ => { }
-        );
-
-        using var container = builder.Build();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Resource>(lifeTime);
+            registrar.Register<IFirst>(
+                factory: (resolver, ref _) => resolver.Resolve<Resource>(),
+                lifeTime,
+                cleanup: _ => customCleanupCount++
+            );
+            registrar.Register<ISecond>(
+                factory: (resolver, ref _) => resolver.Resolve<Resource>(),
+                lifeTime,
+                cleanup: _ => { }
+            );
+        });
         var first = container.Resolve<IFirst>();
         var second = container.Resolve<ISecond>();
         var resource = container.Resolve<Resource>();

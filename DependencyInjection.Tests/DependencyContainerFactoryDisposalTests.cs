@@ -21,34 +21,33 @@ public class DependencyContainerFactoryDisposalTests
         var dependencyCleanups = 0;
         var serviceCleanups = 0;
         var collectedCleanups = 0;
-        var builder = new DependencyContainerBuilder();
+        using (var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
+            registrar.Register<Service>(
+                factory: (container, ref collector) =>
+                {
+                    factoryCalls++;
 
-        builder.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
-        builder.Register<Service>(
-            factory: (container, ref collector) =>
-            {
-                factoryCalls++;
+                    var dependency = container.Resolve<Dependency>();
+                    var exception = Assert.Throws<InvalidOperationException>(container.Dispose);
 
-                var dependency = container.Resolve<Dependency>();
-                var exception = Assert.Throws<InvalidOperationException>(container.Dispose);
+                    Assert.That(exception!.Message, Does.Contain("Dispose"));
+                    Assert.That(container.Contains<Service>(), Is.True);
+                    Assert.That(container.Contains<Dependency>(), Is.True);
+                    Assert.That(container.Resolve<Dependency>(), Is.SameAs(dependency));
+                    Assert.That(dependencyCleanups, Is.Zero);
+                    Assert.That(serviceCleanups, Is.Zero);
+                    Assert.That(collectedCleanups, Is.Zero);
 
-                Assert.That(exception!.Message, Does.Contain("Dispose"));
-                Assert.That(container.Contains<Service>(), Is.True);
-                Assert.That(container.Contains<Dependency>(), Is.True);
-                Assert.That(container.Resolve<Dependency>(), Is.SameAs(dependency));
-                Assert.That(dependencyCleanups, Is.Zero);
-                Assert.That(serviceCleanups, Is.Zero);
-                Assert.That(collectedCleanups, Is.Zero);
+                    collector.Add(new object(), _ => collectedCleanups++);
 
-                collector.Add(new object(), _ => collectedCleanups++);
-
-                return new Service(dependency);
-            },
-            lifeTime,
-            cleanup: _ => serviceCleanups++
-        );
-
-        using (var root = builder.Build())
+                    return new Service(dependency);
+                },
+                lifeTime,
+                cleanup: _ => serviceCleanups++
+            );
+        }))
         {
             using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : root;
@@ -80,44 +79,43 @@ public class DependencyContainerFactoryDisposalTests
     {
         var failDependency = dependencyFails;
         var dependencyFailure = new ArgumentException("Dependency creation failed.");
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Dependency>(
-            factory: (container, ref _) =>
-            {
-                Assert.That(container.Dispose, Throws.InvalidOperationException);
-
-                if (failDependency)
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Dependency>(
+                factory: (container, ref _) =>
                 {
-                    failDependency = false;
-                    throw dependencyFailure;
-                }
-
-                return new Dependency();
-            },
-            lifeTime
-        );
-        builder.Register<Service>(
-            factory: (container, ref _) =>
-            {
-                if (dependencyFails)
-                {
-                    var exception = Assert.Throws<ArgumentException>(() => container.Resolve<Dependency>());
-
-                    Assert.That(exception, Is.SameAs(dependencyFailure));
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
-                }
 
-                var dependency = container.Resolve<Dependency>();
+                    if (failDependency)
+                    {
+                        failDependency = false;
+                        throw dependencyFailure;
+                    }
 
-                Assert.That(container.Dispose, Throws.InvalidOperationException);
+                    return new Dependency();
+                },
+                lifeTime
+            );
+            registrar.Register<Service>(
+                factory: (container, ref _) =>
+                {
+                    if (dependencyFails)
+                    {
+                        var exception = Assert.Throws<ArgumentException>(() => container.Resolve<Dependency>());
 
-                return new Service(dependency);
-            },
-            lifeTime
-        );
+                        Assert.That(exception, Is.SameAs(dependencyFailure));
+                        Assert.That(container.Dispose, Throws.InvalidOperationException);
+                    }
 
-        using var container = builder.Build();
+                    var dependency = container.Resolve<Dependency>();
+
+                    Assert.That(container.Dispose, Throws.InvalidOperationException);
+
+                    return new Service(dependency);
+                },
+                lifeTime
+            );
+        });
         var service = container.Resolve<Service>();
 
         Assert.That(service.Dependency, Is.Not.Null);
@@ -143,40 +141,39 @@ public class DependencyContainerFactoryDisposalTests
         var cleanupFailure = new ArgumentException("Collected cleanup failed.");
         Dependency? resolvedDependency = null;
         IDependencyContainer? factoryContainer = null;
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
-        builder.Register<Service>(
-            factory: (container, ref collector) =>
-            {
-                factoryCalls++;
-                factoryContainer = container;
-                resolvedDependency = container.Resolve<Dependency>();
-
-                if (attemptDisposal)
+        using (var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
+            registrar.Register<Service>(
+                factory: (container, ref collector) =>
                 {
-                    collector.Add(new object(), _ =>
+                    factoryCalls++;
+                    factoryContainer = container;
+                    resolvedDependency = container.Resolve<Dependency>();
+
+                    if (attemptDisposal)
                     {
-                        collectedCleanups++;
-
-                        Assert.That(container.Dispose, Throws.InvalidOperationException);
-
-                        if (cleanupFails)
+                        collector.Add(new object(), _ =>
                         {
-                            throw cleanupFailure;
-                        }
-                    });
+                            collectedCleanups++;
 
-                    container.Dispose();
-                }
+                            Assert.That(container.Dispose, Throws.InvalidOperationException);
 
-                return new Service(resolvedDependency);
-            },
-            lifeTime,
-            cleanup: _ => serviceCleanups++
-        );
+                            if (cleanupFails)
+                            {
+                                throw cleanupFailure;
+                            }
+                        });
 
-        using (var root = builder.Build())
+                        container.Dispose();
+                    }
+
+                    return new Service(resolvedDependency);
+                },
+                lifeTime,
+                cleanup: _ => serviceCleanups++
+            );
+        }))
         {
             using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : root;

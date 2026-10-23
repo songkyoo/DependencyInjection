@@ -1,4 +1,4 @@
-﻿namespace Macaron.DependencyInjection.Internal;
+﻿namespace Macaron.DependencyInjection;
 
 internal static class Extensions
 {

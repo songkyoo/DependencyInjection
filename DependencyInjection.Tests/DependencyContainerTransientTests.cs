@@ -31,11 +31,10 @@ public class DependencyContainerTransientTests
     [Test]
     public void InheritedTransient_ShouldBeDisposedByRequestingContainer_OnlyOnce()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterTransient<Resource>();
-
-        using var root = builder.Build();
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>();
+        });
         using var child = root.CreateScope();
         using var grandchild = child.CreateScope();
         var rootResource = root.Resolve<Resource>();
@@ -72,19 +71,18 @@ public class DependencyContainerTransientTests
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterTransient<Resource>();
-        builder.RegisterTransient(
-            factory: (resolver, ref _) => new Dependency(resolver.Resolve<Resource>()),
-            cleanup: dependency => dependency.CleanupCount++
-        );
-        builder.Register(
-            factory: (resolver, ref _) => new Service(resolver.Resolve<Dependency>()), lifeTime,
-            cleanup: service => service.CleanupCount++
-        );
-
-        using var root = builder.Build();
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>();
+            registrar.RegisterTransient(
+                factory: (resolver, ref _) => new Dependency(resolver.Resolve<Resource>()),
+                cleanup: dependency => dependency.CleanupCount++
+            );
+            registrar.Register(
+                factory: (resolver, ref _) => new Service(resolver.Resolve<Dependency>()), lifeTime,
+                cleanup: service => service.CleanupCount++
+            );
+        });
         using var child = root.CreateScope();
         using var sibling = root.CreateScope();
         var service = child.Resolve<Service>();
@@ -124,18 +122,17 @@ public class DependencyContainerTransientTests
     public void AllLifetimesAndCollectedDisposable_ShouldBeDisposedByContainer()
     {
         var collected = new Resource();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterTransient(tag: "transient",
-            factory: (_, ref collector) =>
-            {
-                collector.Add(collected);
-                return new Resource();
-            });
-        builder.RegisterScoped<Resource>(tag: "scoped");
-        builder.RegisterSingleton<Resource>(tag: "singleton");
-
-        using var container = builder.Build();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient(tag: "transient",
+                factory: (_, ref collector) =>
+                {
+                    collector.Add(collected);
+                    return new Resource();
+                });
+            registrar.RegisterScoped<Resource>(tag: "scoped");
+            registrar.RegisterSingleton<Resource>(tag: "singleton");
+        });
         var transient = container.Resolve<Resource>("transient");
         var scoped = container.Resolve<Resource>("scoped");
         var singleton = container.Resolve<Resource>("singleton");
@@ -153,17 +150,15 @@ public class DependencyContainerTransientTests
     {
         var resource = new Resource();
         var cleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-        IDependencyRegistrar registrar = builder;
-
-        registrar.RegisterTransient(
-            type: typeof(Service),
-            tag: null,
-            factory: (_, ref _) => returnsWrongType ? resource : null!,
-            cleanup: _ => cleanupCount++
-        );
-
-        using var container = builder.Build();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient(
+                type: typeof(Service),
+                tag: null,
+                factory: (_, ref _) => returnsWrongType ? resource : null!,
+                cleanup: _ => cleanupCount++
+            );
+        });
 
         Assert.That(container.Resolve<Service>, Throws.InvalidOperationException);
 

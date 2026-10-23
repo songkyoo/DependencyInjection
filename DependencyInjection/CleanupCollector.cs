@@ -1,5 +1,3 @@
-using Macaron.DependencyInjection.Internal;
-
 namespace Macaron.DependencyInjection;
 
 public struct CleanupCollector

@@ -27,11 +27,10 @@ public class DependencyContainerCleanupTests
         [Values(LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(factory: () => new Resource(), lifeTime);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(factory: () => new Resource(), lifeTime);
+        });
         var resource = container.Resolve<Resource>();
 
         Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
@@ -49,11 +48,10 @@ public class DependencyContainerCleanupTests
     )
     {
         var cleanedInstances = new List<Resource>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(factory: (_, ref _) => new Resource(), lifeTime, cleanup: cleanedInstances.Add);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(factory: (_, ref _) => new Resource(), lifeTime, cleanup: cleanedInstances.Add);
+        });
         var resource = container.Resolve<Resource>();
 
         Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
@@ -71,11 +69,10 @@ public class DependencyContainerCleanupTests
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Resource>(lifeTime, cleanup: _ => { });
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Resource>(lifeTime, cleanup: _ => { });
+        });
         var resource = container.Resolve<Resource>();
 
         container.Dispose();
@@ -94,15 +91,14 @@ public class DependencyContainerCleanupTests
     )
     {
         var key = Key.Of<IService>("service");
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<IService, Service>(
-            key,
-            lifeTime,
-            cleanup: customCleanup ? service => service.CleanupCount++ : null
-        );
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<IService, Service>(
+                key,
+                lifeTime,
+                cleanup: customCleanup ? service => service.CleanupCount++ : null
+            );
+        });
         var service = container.Resolve(key);
 
         container.Dispose();
@@ -115,11 +111,10 @@ public class DependencyContainerCleanupTests
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
-
-        var root = builder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Service>(lifeTime, cleanup: service => service.CleanupCount++);
+        });
         var child = root.CreateScope();
         var rootService = root.Resolve<Service>();
         var childService = child.Resolve<Service>();
@@ -150,24 +145,24 @@ public class DependencyContainerCleanupTests
         [Values(false, true)] bool customCleanup
     )
     {
-        IDependencyRegistrar registrar = new DependencyContainerBuilder();
         var cleanupCount = 0;
         Action<object>? cleanup = customCleanup ? _ => cleanupCount++ : null;
 
-        switch (lifeTime)
+        var container = DependencyContainerFactory.Create(registrar =>
         {
-            case LifeTime.Transient:
-                registrar.RegisterTransient(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
-                break;
-            case LifeTime.Scoped:
-                registrar.RegisterScoped(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
-                break;
-            case LifeTime.Singleton:
-                registrar.RegisterSingleton(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
-                break;
-        }
-
-        var container = ((DependencyContainerBuilder)registrar).Build();
+            switch (lifeTime)
+            {
+                case LifeTime.Transient:
+                    registrar.RegisterTransient(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
+                    break;
+                case LifeTime.Scoped:
+                    registrar.RegisterScoped(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
+                    break;
+                case LifeTime.Singleton:
+                    registrar.RegisterSingleton(typeof(Resource), tag: "resource", (_, ref _) => new Resource(), cleanup);
+                    break;
+            }
+        });
         var resource = container.Resolve<Resource>("resource");
 
         container.Dispose();
@@ -180,11 +175,10 @@ public class DependencyContainerCleanupTests
     public void TransientCustomCleanup_ShouldReplaceDispose_AndReceiveEachInstanceOnce()
     {
         var cleanedInstances = new List<Resource>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterTransient<Resource>(cleanup: cleanedInstances.Add);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>(cleanup: cleanedInstances.Add);
+        });
         var first = container.Resolve<Resource>();
         var second = container.Resolve<Resource>();
 
@@ -205,11 +199,10 @@ public class DependencyContainerCleanupTests
         Key<IService> key
     )
     {
-        var builder = new DependencyContainerBuilder();
-
-        register(builder, service => service.CleanupCount++);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            register(registrar, service => service.CleanupCount++);
+        });
         var service = container.Resolve(key);
 
         container.Dispose();

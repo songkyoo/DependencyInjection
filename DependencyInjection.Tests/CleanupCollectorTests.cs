@@ -23,23 +23,23 @@ public class CleanupCollectorTests
     public void CollectedEntries_ShouldSurviveArrayGrowth_AndRunBeforeService(int count)
     {
         var calls = new List<int>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton<object>(
-            factory: (_, ref collector) =>
-            {
-                for (var index = 0; index < count; index++)
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton<object>(
+                factory: (_, ref collector) =>
                 {
-                    collector.Add(index, instance => calls.Add((int)instance));
+                    for (var index = 0; index < count; index++)
+                    {
+                        collector.Add(index, instance => calls.Add((int)instance));
+                    }
+                    return new object();
+                },
+                cleanup: _ =>
+                {
+                    calls.Add(-1);
                 }
-                return new object();
-            }, cleanup: _ =>
-            {
-                calls.Add(-1);
-            }
-        );
-
-        using var container = builder.Build();
+            );
+        });
 
         container.Resolve<object>();
         container.Resolve<object>();
@@ -61,34 +61,33 @@ public class CleanupCollectorTests
         var cleanupFailure = new ArgumentException("Collected cleanup failed.");
         var failCreation = true;
         var calls = new List<string>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<object>(
-            factory: (_, ref collector) =>
-            {
-                collector.Add(new Resource(() => calls.Add("first")));
-                collector.Add(new object(), _ =>
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<object>(
+                factory: (_, ref collector) =>
                 {
-                    calls.Add("second");
-
-                    if (cleanupFails)
+                    collector.Add(new Resource(() => calls.Add("first")));
+                    collector.Add(new object(), _ =>
                     {
-                        throw cleanupFailure;
+                        calls.Add("second");
+
+                        if (cleanupFails)
+                        {
+                            throw cleanupFailure;
+                        }
+                    });
+
+                    if (failCreation)
+                    {
+                        throw factoryFailure;
                     }
-                });
 
-                if (failCreation)
-                {
-                    throw factoryFailure;
-                }
-
-                return new object();
-            },
-            lifeTime,
-            cleanup: _ => calls.Add("service")
-        );
-
-        using var container = builder.Build();
+                    return new object();
+                },
+                lifeTime,
+                cleanup: _ => calls.Add("service")
+            );
+        });
 
         if (cleanupFails)
         {
@@ -134,8 +133,6 @@ public class CleanupCollectorTests
     {
         var resource = new Resource();
         var serviceCleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-        IDependencyRegistrar registrar = builder;
         DependencyFactory<object> factory = (_, ref collector) =>
         {
             collector.Add(resource);
@@ -143,20 +140,21 @@ public class CleanupCollectorTests
             return wrongType ? "invalid" : null!;
         };
 
-        switch (lifeTime)
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            case LifeTime.Transient:
-                registrar.RegisterTransient(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                break;
-            case LifeTime.Scoped:
-                registrar.RegisterScoped(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                break;
-            case LifeTime.Singleton:
-                registrar.RegisterSingleton(typeof(Resource), null, factory, _ => serviceCleanupCount++);
-                break;
-        }
-
-        using var container = builder.Build();
+            switch (lifeTime)
+            {
+                case LifeTime.Transient:
+                    registrar.RegisterTransient(typeof(Resource), null, factory, _ => serviceCleanupCount++);
+                    break;
+                case LifeTime.Scoped:
+                    registrar.RegisterScoped(typeof(Resource), null, factory, _ => serviceCleanupCount++);
+                    break;
+                case LifeTime.Singleton:
+                    registrar.RegisterSingleton(typeof(Resource), null, factory, _ => serviceCleanupCount++);
+                    break;
+            }
+        });
 
         Assert.That(container.Resolve<Resource>, Throws.InvalidOperationException);
         Assert.That(resource.DisposeCount, Is.EqualTo(1));
@@ -173,16 +171,18 @@ public class CleanupCollectorTests
     )
     {
         var cleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<object>(
+                factory: (_, ref collector) =>
+                {
+                    collector.Add(new object(), _ => cleanupCount++);
 
-        builder.Register<object>(
-            factory: (_, ref collector) =>
-            {
-                collector.Add(new object(), _ => cleanupCount++);
-                return new object();
-            }, lifeTime);
-
-        using var root = builder.Build();
+                    return new object();
+                },
+                lifeTime
+            );
+        });
         using var child = root.CreateScope();
         using var sibling = root.CreateScope();
 
@@ -206,18 +206,17 @@ public class CleanupCollectorTests
     {
         var dependency = new Resource();
         var collected = new Resource();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterScoped(factory: () => dependency);
-        builder.RegisterSingleton<object>(factory: (resolver, ref collector) =>
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            collector.Add(collected);
-            resolver.Resolve<Resource>();
+            registrar.RegisterScoped(factory: () => dependency);
+            registrar.RegisterSingleton<object>(factory: (resolver, ref collector) =>
+            {
+                collector.Add(collected);
+                resolver.Resolve<Resource>();
 
-            throw new InvalidOperationException("Factory failed.");
+                throw new InvalidOperationException("Factory failed.");
+            });
         });
-
-        using var container = builder.Build();
 
         Assert.That(container.Resolve<object>, Throws.InvalidOperationException);
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
@@ -235,17 +234,16 @@ public class CleanupCollectorTests
     {
         var resource = new Resource();
         var cleanupCount = 0;
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton<object>(factory: (_, ref collector) =>
+        using var container = DependencyContainerFactory.Create(registrar =>
         {
-            collector.Add(resource, _ => cleanupCount++);
-            collector.Add(resource, _ => { });
+            registrar.RegisterSingleton<object>(factory: (_, ref collector) =>
+            {
+                collector.Add(resource, _ => cleanupCount++);
+                collector.Add(resource, _ => { });
 
-            return new object();
+                return new object();
+            });
         });
-
-        using var container = builder.Build();
 
         container.Resolve<object>();
         container.Dispose();

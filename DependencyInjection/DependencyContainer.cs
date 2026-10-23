@@ -1,9 +1,8 @@
 ﻿using System.Collections.Immutable;
-using Macaron.DependencyInjection.Internal;
 
 namespace Macaron.DependencyInjection;
 
-public sealed class DependencyContainer(
+internal sealed class DependencyContainer(
     DependencyContainer? parent,
     ImmutableDictionary<(Type, object?), TypeRegistration> registry
 ) : IDependencyContainer
@@ -149,14 +148,6 @@ public sealed class DependencyContainer(
         }
     }
 
-    private void ThrowIfDisposed()
-    {
-        if (_isDisposed)
-        {
-            throw new ObjectDisposedException(objectName: nameof(DependencyContainer));
-        }
-    }
-
     private object GetOrAdd(
         Dictionary<Key, object> instances,
         Key key,
@@ -237,6 +228,14 @@ public sealed class DependencyContainer(
             }
         }
         #endregion
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_isDisposed)
+        {
+            throw new ObjectDisposedException(objectName: nameof(DependencyContainer));
+        }
     }
     #endregion
 }

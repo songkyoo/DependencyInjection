@@ -11,11 +11,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Transient_ShouldCreateNewInstanceEachTime()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(key: Key.Of<IFoo>(), factory: (_, ref _) => new Foo(), LifeTime.Transient);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(key: Key.Of<IFoo>(), factory: (_, ref _) => new Foo(), LifeTime.Transient);
+        });
         var foo1 = container.Resolve(Key.Of<IFoo>());
         var foo2 = container.Resolve(Key.Of<IFoo>());
 
@@ -25,11 +24,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Scoped_ShouldReuseInstanceInSameContainer()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
+        });
         var foo1 = container.Resolve(Key.Of<Foo>());
         var foo2 = container.Resolve(Key.Of<Foo>());
 
@@ -39,11 +37,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Singleton_ShouldReuseInstanceAcrossContainers()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var root = builder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
         var child = root.CreateScope();
         var rootFoo = root.Resolve(Key.Of<Foo>());
         var childFoo = child.Resolve(Key.Of<Foo>());
@@ -54,11 +51,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Resolve_WithObjectTag_ShouldUseTagValueEquality()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
 
         Assert.That(container.Resolve(Key.Of<Foo>(new NamedTag("primary"))), Is.InstanceOf<Foo>());
         Assert.That(container.Contains(Key.Of<Foo>(new NamedTag("primary"))), Is.True);
@@ -67,11 +63,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Resolve_WithDifferentObjectTag_ShouldNotMatch()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(new NamedTag("primary")), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
 
         Assert.That(container.Contains(Key.Of<Foo>(new NamedTag("secondary"))), Is.False);
     }
@@ -79,11 +74,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void Resolve_TypeBasedUntaggedExtensions_ShouldUseNullTag()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
 
         Assert.That(container.Contains(typeof(Foo)), Is.True);
         Assert.That(container.Resolve(typeof(Foo)), Is.InstanceOf<Foo>());
@@ -96,11 +90,10 @@ public class DependencyContainerResolveTests
     [Test]
     public void ResolveOrNull_ValueTypeWithTag_ShouldReturnRegisteredValue()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<int>("answer"), factory: (_, ref _) => 42, LifeTime.Singleton);
-
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<int>("answer"), factory: (_, ref _) => 42, LifeTime.Singleton);
+        });
 
         Assert.That(container.ResolveOrNull<int>("answer"), Is.EqualTo(42));
         Assert.That(container.ResolveOrNull<int>("missing"), Is.Null);
@@ -109,8 +102,7 @@ public class DependencyContainerResolveTests
     [Test]
     public void UnregisteredKey_ShouldThrow()
     {
-        var builder = new DependencyContainerBuilder();
-        var container = builder.Build();
+        var container = DependencyContainerFactory.Create();
 
         Assert.That(() => container.Resolve(Key.Of<Foo>()), Throws.InvalidOperationException);
     }

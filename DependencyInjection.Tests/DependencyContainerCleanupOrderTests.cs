@@ -26,43 +26,42 @@ public class DependencyContainerCleanupOrderTests
     )
     {
         var calls = new List<string>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Resource>(
-            factory: (_, ref collector) =>
-            {
-                var resource = new Resource(() => calls.Add("dependency"));
-
-                collector.Add(new object(), _ =>
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Resource>(
+                factory: (_, ref collector) =>
                 {
-                    Assert.That(resource.IsDisposed, Is.False);
-                    calls.Add("dependency-subscription");
-                });
+                    var resource = new Resource(() => calls.Add("dependency"));
 
-                return resource;
-            },
-            lifeTime
-        );
-        builder.Register<Service>(
-            factory: (resolver, ref collector) =>
-            {
-                collector.Add(new Resource(() => calls.Add("first")));
+                    collector.Add(new object(), _ =>
+                    {
+                        Assert.That(resource.IsDisposed, Is.False);
+                        calls.Add("dependency-subscription");
+                    });
 
-                var service = new Service(resolver.Resolve<Resource>());
+                    return resource;
+                },
+                lifeTime
+            );
+            registrar.Register<Service>(
+                factory: (resolver, ref collector) =>
+                {
+                    collector.Add(new Resource(() => calls.Add("first")));
 
-                collector.Add(new object(), _ => calls.Add("second"));
+                    var service = new Service(resolver.Resolve<Resource>());
 
-                return service;
-            },
-            lifeTime,
-            cleanup: service =>
-            {
-                Assert.That(service.Resource.IsDisposed, Is.False);
-                calls.Add("service");
-            }
-        );
+                    collector.Add(new object(), _ => calls.Add("second"));
 
-        var container = builder.Build();
+                    return service;
+                },
+                lifeTime,
+                cleanup: service =>
+                {
+                    Assert.That(service.Resource.IsDisposed, Is.False);
+                    calls.Add("service");
+                }
+            );
+        });
 
         container.Resolve<Service>();
         container.Dispose();
@@ -80,33 +79,32 @@ public class DependencyContainerCleanupOrderTests
         var calls = new List<string>();
         var firstFailure = new InvalidOperationException("Default Dispose failed.");
         var lastFailure = new AggregateException(new ArgumentException("Custom cleanup failed."));
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton<object>(
-            factory: (_, ref collector) =>
-            {
-                collector.Add(new Resource(() => calls.Add("middle")));
-                collector.Add(new Resource(() =>
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton<object>(
+                factory: (_, ref collector) =>
                 {
-                    calls.Add("default");
-                    throw firstFailure;
-                }));
-                collector.Add(new Resource(() => calls.Add("newest")));
+                    collector.Add(new Resource(() => calls.Add("middle")));
+                    collector.Add(new Resource(() =>
+                    {
+                        calls.Add("default");
+                        throw firstFailure;
+                    }));
+                    collector.Add(new Resource(() => calls.Add("newest")));
 
-                return new object();
-            },
-            cleanup: _ =>
-            {
-                calls.Add("service");
-
-                if (multipleFailures)
+                    return new object();
+                },
+                cleanup: _ =>
                 {
-                    throw lastFailure;
+                    calls.Add("service");
+
+                    if (multipleFailures)
+                    {
+                        throw lastFailure;
+                    }
                 }
-            }
-        );
-
-        var container = builder.Build();
+            );
+        });
 
         container.Resolve<object>();
 
@@ -129,23 +127,22 @@ public class DependencyContainerCleanupOrderTests
     public void DisposeDuringCleanup_ShouldNotRepeatCallbacks()
     {
         var calls = new List<string>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.RegisterSingleton<object>(
-            factory: (container, ref collector) =>
-            {
-                collector.Add(new Resource(() =>
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton<object>(
+                factory: (container, ref collector) =>
                 {
-                    calls.Add("reentrant");
-                    container.Dispose();
-                }));
+                    collector.Add(new Resource(() =>
+                    {
+                        calls.Add("reentrant");
+                        container.Dispose();
+                    }));
 
-                return new object();
-            },
-            cleanup: _ => calls.Add("service")
-        );
-
-        var container = builder.Build();
+                    return new object();
+                },
+                cleanup: _ => calls.Add("service")
+            );
+        });
 
         container.Resolve<object>();
         container.Dispose();
@@ -171,24 +168,23 @@ public class DependencyContainerCleanupOrderTests
 
         #region Local Functions
         [MethodImpl(MethodImplOptions.NoInlining)]
-        static (DependencyContainer, WeakReference, WeakReference) CreateDisposedContainer(LifeTime lifeTime)
+        static (IDependencyContainer, WeakReference, WeakReference) CreateDisposedContainer(LifeTime lifeTime)
         {
-            var builder = new DependencyContainerBuilder();
+            var container = DependencyContainerFactory.Create(registrar =>
+            {
+                registrar.Register<Service>(
+                    factory: (_, ref collector) =>
+                    {
+                        var resource = new Resource(static () => { });
 
-            builder.Register<Service>(
-                factory: (_, ref collector) =>
-                {
-                    var resource = new Resource(static () => { });
+                        collector.Add(resource);
+                        collector.Add(new Resource(static () => throw new InvalidOperationException("Cleanup failed.")));
 
-                    collector.Add(resource);
-                    collector.Add(new Resource(static () => throw new InvalidOperationException("Cleanup failed.")));
-
-                    return new Service(resource);
-                },
-                lifeTime
-            );
-
-            var container = builder.Build();
+                        return new Service(resource);
+                    },
+                    lifeTime
+                );
+            });
             var service = container.Resolve<Service>();
             var serviceReference = new WeakReference(service);
             var resourceReference = new WeakReference(service.Resource);

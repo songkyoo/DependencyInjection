@@ -7,11 +7,10 @@ public class DependencyContainerScopeTests
     [Test]
     public void Scoped_ShouldCreateDifferentInstancesInChildContainer()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
-
-        var root = builder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Scoped);
+        });
         var child = root.CreateScope();
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
@@ -22,11 +21,10 @@ public class DependencyContainerScopeTests
     [Test]
     public void Singleton_ShouldBeSharedBetweenParentAndChild()
     {
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var root = builder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(Key.Of<Foo>(), factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
         var child = root.CreateScope();
         var foo1 = root.Resolve(Key.Of<Foo>());
         var foo2 = child.Resolve(Key.Of<Foo>());
@@ -38,17 +36,15 @@ public class DependencyContainerScopeTests
     public void ChildCanOverrideParentRegistration()
     {
         var key = Key.Of<Foo>();
-        var rootBuilder = new DependencyContainerBuilder();
-
-        rootBuilder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Singleton);
-
-        var root = rootBuilder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Singleton);
+        });
         var overridden = new Foo();
-        var childBuilder = new DependencyContainerBuilder();
-
-        childBuilder.Register(key, factory: (_, ref _) => overridden, LifeTime.Scoped);
-
-        var child = childBuilder.Build(root);
+        var child = root.CreateScope(registrar =>
+        {
+            registrar.Register(key, factory: (_, ref _) => overridden, LifeTime.Scoped);
+        });
         var resolved = child.Resolve(key);
 
         Assert.That(resolved, Is.SameAs(overridden));
@@ -58,11 +54,10 @@ public class DependencyContainerScopeTests
     public void ParentCanBeResolvedFromChild()
     {
         var key = Key.Of<Foo>();
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Transient);
-
-        var root = builder.Build();
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(key, factory: (_, ref _) => new Foo(), LifeTime.Transient);
+        });
         var child = root.CreateScope();
 
         Assert.That(child.Resolve(key), Is.InstanceOf<Foo>());

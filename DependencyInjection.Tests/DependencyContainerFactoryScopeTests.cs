@@ -22,37 +22,36 @@ public class DependencyContainerFactoryScopeTests
         var serviceCleanups = 0;
         var collectedCleanups = 0;
         IDependencyContainer? factoryContainer = null;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Dependency>(
-            factory: (container, ref collector) =>
-            {
-                factoryCalls++;
-                factoryContainer = container;
-
-                Assert.That(container.Contains<Dependency>(), Is.True);
-
-                var exception = Assert.Throws<InvalidOperationException>(() =>
+        using (var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Dependency>(
+                factory: (container, ref collector) =>
                 {
-                    using var scope = configureScope
-                        ? container.CreateScope(_ => configurationCalled = true)
-                        : container.CreateScope();
-                });
+                    factoryCalls++;
+                    factoryContainer = container;
 
-                Assert.That(exception!.Message, Does.Contain("CreateScope"));
-                Assert.That(configurationCalled, Is.False);
-                Assert.That(serviceCleanups, Is.Zero);
-                Assert.That(collectedCleanups, Is.Zero);
+                    Assert.That(container.Contains<Dependency>(), Is.True);
 
-                collector.Add(new object(), _ => collectedCleanups++);
+                    var exception = Assert.Throws<InvalidOperationException>(() =>
+                    {
+                        using var scope = configureScope
+                            ? container.CreateScope(_ => configurationCalled = true)
+                            : container.CreateScope();
+                    });
 
-                return new Dependency();
-            },
-            lifeTime,
-            cleanup: _ => serviceCleanups++
-        );
+                    Assert.That(exception!.Message, Does.Contain("CreateScope"));
+                    Assert.That(configurationCalled, Is.False);
+                    Assert.That(serviceCleanups, Is.Zero);
+                    Assert.That(collectedCleanups, Is.Zero);
 
-        using (var root = builder.Build())
+                    collector.Add(new object(), _ => collectedCleanups++);
+
+                    return new Dependency();
+                },
+                lifeTime,
+                cleanup: _ => serviceCleanups++
+            );
+        }))
         {
             using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : (IDependencyContainer)root;
@@ -80,32 +79,31 @@ public class DependencyContainerFactoryScopeTests
         [Values(LifeTime.Transient, LifeTime.Scoped, LifeTime.Singleton)] LifeTime lifeTime
     )
     {
-        var builder = new DependencyContainerBuilder();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Dependency>(
+                factory: (container, ref _) =>
+                {
+                    Assert.That(container.CreateScope, Throws.InvalidOperationException);
 
-        builder.Register<Dependency>(
-            factory: (container, ref _) =>
-            {
-                Assert.That(container.CreateScope, Throws.InvalidOperationException);
+                    return new Dependency();
+                },
+                lifeTime
+            );
+            registrar.Register<Service>(
+                factory: (container, ref _) =>
+                {
+                    Assert.That(container.Contains<Dependency>(), Is.True);
 
-                return new Dependency();
-            },
-            lifeTime
-        );
-        builder.Register<Service>(
-            factory: (container, ref _) =>
-            {
-                Assert.That(container.Contains<Dependency>(), Is.True);
+                    var dependency = container.Resolve<Dependency>();
 
-                var dependency = container.Resolve<Dependency>();
+                    Assert.That(container.CreateScope, Throws.InvalidOperationException);
 
-                Assert.That(container.CreateScope, Throws.InvalidOperationException);
-
-                return new Service(dependency);
-            },
-            lifeTime
-        );
-
-        using var container = builder.Build();
+                    return new Service(dependency);
+                },
+                lifeTime
+            );
+        });
         var service = container.Resolve<Service>();
 
         Assert.That(service.Dependency, Is.Not.Null);
@@ -129,38 +127,37 @@ public class DependencyContainerFactoryScopeTests
         var collectedCleanups = 0;
         var cleanupFailure = new ArgumentException("Collected cleanup failed.");
         IDependencyContainer? factoryContainer = null;
-        var builder = new DependencyContainerBuilder();
-
-        builder.Register<Dependency>(
-            factory: (container, ref collector) =>
-            {
-                factoryCalls++;
-                factoryContainer = container;
-
-                if (attemptScopeCreation)
+        using (var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<Dependency>(
+                factory: (container, ref collector) =>
                 {
-                    collector.Add(new object(), _ =>
+                    factoryCalls++;
+                    factoryContainer = container;
+
+                    if (attemptScopeCreation)
                     {
-                        collectedCleanups++;
-
-                        Assert.That(container.CreateScope, Throws.InvalidOperationException);
-
-                        if (cleanupFails)
+                        collector.Add(new object(), _ =>
                         {
-                            throw cleanupFailure;
-                        }
-                    });
+                            collectedCleanups++;
 
-                    using var scope = container.CreateScope(_ => configurationCalled = true);
-                }
+                            Assert.That(container.CreateScope, Throws.InvalidOperationException);
 
-                return new Dependency();
-            },
-            lifeTime,
-            cleanup: _ => serviceCleanups++
-        );
+                            if (cleanupFails)
+                            {
+                                throw cleanupFailure;
+                            }
+                        });
 
-        using (var root = builder.Build())
+                        using var scope = container.CreateScope(_ => configurationCalled = true);
+                    }
+
+                    return new Dependency();
+                },
+                lifeTime,
+                cleanup: _ => serviceCleanups++
+            );
+        }))
         {
             using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : (IDependencyContainer)root;

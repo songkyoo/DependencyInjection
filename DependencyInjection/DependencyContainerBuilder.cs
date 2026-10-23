@@ -2,7 +2,7 @@
 
 namespace Macaron.DependencyInjection;
 
-public sealed class DependencyContainerBuilder : IDependencyRegistrar
+internal sealed class DependencyContainerBuilder : IDependencyRegistrar
 {
     #region Fields
     private readonly ImmutableDictionary<(Type, object?), TypeRegistration>.Builder _typeRegistrations =
