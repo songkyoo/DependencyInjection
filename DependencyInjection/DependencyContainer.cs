@@ -103,7 +103,9 @@ internal sealed class DependencyContainer(
     {
         ThrowIfDisposed();
 
-        return _registry.ContainsKey(key) || (_parent as IDependencyResolver)?.Contains(key) is true;
+        return ReferenceEquals(key, Key<IDependencyResolver>.Default)
+            || _registry.ContainsKey(key)
+            || (_parent as IDependencyResolver)?.Contains(key) is true;
     }
 
     public IDependencyContainer CreateScope()
@@ -256,6 +258,11 @@ internal sealed class DependencyContainer(
     )
     {
         ThrowIfDisposed();
+
+        if (ReferenceEquals(key, Key<IDependencyResolver>.Default))
+        {
+            return resolver;
+        }
 
         foreach (var resolvingKey in _resolutionStack)
         {

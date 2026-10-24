@@ -59,6 +59,11 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
     #region Methods
     private void AddRegistration(object key, TypeRegistration registration)
     {
+        if (ReferenceEquals(key, Key<IDependencyResolver>.Default))
+        {
+            throw new ArgumentException($"Key is reserved for the current dependency resolver: {key}", nameof(key));
+        }
+
         if (!_typeRegistrations.TryAdd(key, registration))
         {
             throw new ArgumentException($"Key already registered: {key}", nameof(key));
