@@ -41,42 +41,23 @@ public class DependencyContainerDisposalTests
     }
 
     [Test]
-    public void Resolve_AfterDisposal_ShouldThrow()
+    public void DisposedContainer_ShouldRejectResolutionAndScopeCreation_BeforeConfiguration()
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(Key<string>.Default, factory: (_, ref _) => "Hello", Lifetime.Singleton);
+            registrar.RegisterSingleton(factory: () => new Foo(() => { }));
         });
+        var configurationCalls = 0;
+        var installer = new ActionDependencyInstaller(_ => configurationCalls++);
 
         container.Dispose();
 
-        Assert.That(() => container.Resolve(Key<string>.Default), Throws.TypeOf<ObjectDisposedException>());
-    }
-
-    [Test]
-    public void CreateScope_AfterDisposal_ShouldThrow_BeforeConfiguration()
-    {
-        var container = DependencyContainerFactory.Create(_ => { });
-
-        container.Dispose();
-
-        var configurationCalled = false;
-
-        Assert.That(
-            () => container.CreateScope(_ => configurationCalled = true),
-            Throws.TypeOf<ObjectDisposedException>()
-        );
-        Assert.That(configurationCalled, Is.False);
-        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
-    }
-
-    [Test]
-    public void Contains_AfterDisposal_ShouldThrow()
-    {
-        var container = DependencyContainerFactory.Create(_ => { });
-
-        container.Dispose();
-
+        Assert.That(container.Resolve<Foo>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(container.Contains<Foo>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateScope(_ => configurationCalls++), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateScope(installer), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateTransientScope, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(configurationCalls, Is.Zero);
     }
 }

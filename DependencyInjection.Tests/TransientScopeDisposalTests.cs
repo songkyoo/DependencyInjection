@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+// ReSharper disable DisposeOnUsingVariable
+// ReSharper disable AccessToModifiedClosure
 
 namespace Macaron.DependencyInjection.Tests;
 
@@ -55,29 +57,32 @@ public class TransientScopeDisposalTests
         var scopes = new List<TransientScope>();
         var resources = new List<Resource>();
 
-        for (var index = 0; index < 12; index++)
+        for (var i = 0; i < 12; i++)
         {
             var scope = container.CreateTransientScope();
+
             scopes.Add(scope);
             resources.Add(scope.Resolve(Key<Resource>.Default));
         }
 
-        for (var index = 0; index < 12; index += 2)
+        for (var i = 0; i < 12; i += 2)
         {
-            scopes[index].Dispose();
+            scopes[i].Dispose();
         }
 
-        for (var index = 0; index < 6; index++)
+        for (var i = 0; i < 6; i++)
         {
             var scope = container.CreateTransientScope();
+
             scopes.Add(scope);
             resources.Add(scope.Resolve(Key<Resource>.Default));
         }
 
-        for (var index = 0; index < 12; index += 2)
+        for (var i = 0; i < 12; i += 2)
         {
-            scopes[index].Dispose();
-            Assert.That(() => scopes[index].Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
+            scopes[i].Dispose();
+
+            Assert.That(() => scopes[i].Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
         }
 
         Assert.That(resources.Skip(12).All(resource => resource.DisposeCount == 0), Is.True);
@@ -124,6 +129,7 @@ public class TransientScopeDisposalTests
             });
         });
         var scope = container.CreateTransientScope();
+
         scope.Resolve(Key<object>.Default);
 
         var exception = Assert.Throws<AggregateException>(scope.Dispose);
@@ -137,6 +143,7 @@ public class TransientScopeDisposalTests
         Assert.That(() => scope.Contains(Key<object>.Default), Throws.TypeOf<ObjectDisposedException>());
 
         using var replacement = container.CreateTransientScope();
+
         Assert.That(replacement.Contains(Key<object>.Default), Is.True);
     }
 
@@ -176,6 +183,7 @@ public class TransientScopeDisposalTests
         });
         var first = container.CreateTransientScope();
         var second = container.CreateTransientScope();
+
         first.Resolve(Key<Service>.Default);
         second.Resolve(Key<Service>.Default);
 
@@ -221,6 +229,7 @@ public class TransientScopeDisposalTests
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient(() => resource));
         var first = container.CreateTransientScope();
         var second = container.CreateTransientScope();
+
         first.Resolve(Key<Resource>.Default);
         first.Resolve(Key<Resource>.Default);
         second.Resolve(Key<Resource>.Default);
@@ -246,34 +255,41 @@ public class TransientScopeDisposalTests
         var cleanupFailure = new InvalidOperationException("Collector cleanup failed.");
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () =>
-            {
-                var resource = new Resource();
-                dependencies.Add(resource);
-
-                return resource;
-            });
-            registrar.RegisterTransient<Service>(factory: (resolver, ref collector) =>
-            {
-                var dependency = resolver.Resolve<Resource>();
-                var failedAttempt = fail;
-                collector.Add(new object(), _ =>
+            registrar.RegisterTransient(
+                factory: () =>
                 {
-                    events.Add(failedAttempt ? "failed-collected" : "successful-collected");
+                    var resource = new Resource();
 
-                    if (failedAttempt && cleanupFails)
-                    {
-                        throw cleanupFailure;
-                    }
-                });
+                    dependencies.Add(resource);
 
-                if (fail)
-                {
-                    return nullResult ? null! : throw factoryFailure;
+                    return resource;
                 }
+            );
+            registrar.RegisterTransient<Service>(
+                factory: (resolver, ref collector) =>
+                {
+                    var dependency = resolver.Resolve<Resource>();
+                    var failedAttempt = fail;
 
-                return new Service(dependency);
-            }, cleanup: _ => events.Add("service"));
+                    collector.Add(new object(), _ =>
+                    {
+                        events.Add(failedAttempt ? "failed-collected" : "successful-collected");
+
+                        if (failedAttempt && cleanupFails)
+                        {
+                            throw cleanupFailure;
+                        }
+                    });
+
+                    if (fail)
+                    {
+                        return nullResult ? null! : throw factoryFailure;
+                    }
+
+                    return new Service(dependency);
+                },
+                cleanup: _ => events.Add("service")
+            );
         });
         var scope = container.CreateTransientScope();
         var exception = Assert.Catch(() => scope.Resolve(Key<Service>.Default));
@@ -281,9 +297,12 @@ public class TransientScopeDisposalTests
         if (cleanupFails)
         {
             Assert.That(exception, Is.TypeOf<AggregateException>());
+
             var errors = ((AggregateException)exception!).InnerExceptions;
+
             Assert.That(errors, Has.Count.EqualTo(2));
             Assert.That(errors[1], Is.SameAs(cleanupFailure));
+
             exception = errors[0];
         }
 
@@ -292,6 +311,7 @@ public class TransientScopeDisposalTests
         Assert.That(dependencies[0].DisposeCount, Is.Zero);
 
         fail = false;
+
         scope.Resolve(Key<Service>.Default);
         scope.Dispose();
 
@@ -318,51 +338,53 @@ public class TransientScopeDisposalTests
 
         GC.KeepAlive(scope);
         GC.KeepAlive(resolver);
-    }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static (TransientScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
-        bool disposeContainerFirst,
-        bool cleanupFails
-    )
-    {
-        IDependencyResolver? resolver = null;
-        Resource? collected = null;
-        var container = DependencyContainerFactory.Create(registrar =>
+        #region Local Functions
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static (TransientScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
+            bool disposeContainerFirst,
+            bool cleanupFails
+        )
         {
-            registrar.RegisterTransient<Resource>(factory: (currentResolver, ref collector) =>
+            IDependencyResolver? resolver = null;
+            Resource? collected = null;
+            var container = DependencyContainerFactory.Create(registrar =>
             {
-                resolver = currentResolver;
-                collected = new Resource();
-                collector.Add(collected);
-                collector.Add(new object(), _ =>
+                registrar.RegisterTransient<Resource>(factory: (currentResolver, ref collector) =>
                 {
-                    if (cleanupFails)
+                    resolver = currentResolver;
+                    collected = new Resource();
+                    collector.Add(collected);
+                    collector.Add(new object(), _ =>
                     {
-                        throw new InvalidOperationException("Cleanup failed.");
-                    }
+                        if (cleanupFails)
+                        {
+                            throw new InvalidOperationException("Cleanup failed.");
+                        }
+                    });
+
+                    return new Resource();
                 });
-
-                return new Resource();
             });
-        });
-        var scope = container.CreateTransientScope();
-        var resource = scope.Resolve(Key<Resource>.Default);
-        var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
+            var scope = container.CreateTransientScope();
+            var resource = scope.Resolve(Key<Resource>.Default);
+            var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
 
-        if (cleanupFails)
-        {
-            Assert.Throws<AggregateException>(disposeContainerFirst ? container.Dispose : scope.Dispose);
-        }
-        else if (disposeContainerFirst)
-        {
-            container.Dispose();
-        }
-        else
-        {
-            scope.Dispose();
-        }
+            if (cleanupFails)
+            {
+                Assert.Throws<AggregateException>(disposeContainerFirst ? container.Dispose : scope.Dispose);
+            }
+            else if (disposeContainerFirst)
+            {
+                container.Dispose();
+            }
+            else
+            {
+                scope.Dispose();
+            }
 
-        return (scope, resolver!, references);
+            return (scope, resolver!, references);
+        }
+        #endregion
     }
 }

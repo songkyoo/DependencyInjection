@@ -85,12 +85,14 @@ public class DependencyContainerTransientTests
         });
         using var child = root.CreateScope();
         using var sibling = root.CreateScope();
+        var rootService = root.Resolve<Service>();
         var service = child.Resolve<Service>();
         var siblingService = sibling.Resolve<Service>();
         var dependency = service.Dependency;
         var resource = dependency.Resource;
 
         Assert.That(siblingService, lifetime == Lifetime.Singleton ? Is.SameAs(service) : Is.Not.SameAs(service));
+        Assert.That(service, lifetime == Lifetime.Singleton ? Is.SameAs(rootService) : Is.Not.SameAs(rootService));
         Assert.That(dependency.CleanupCount, Is.Zero);
         Assert.That(resource.DisposeCount, Is.Zero);
 
@@ -107,6 +109,9 @@ public class DependencyContainerTransientTests
         Assert.That(service.CleanupCount, Is.EqualTo(cleanedByChild));
         Assert.That(dependency.CleanupCount, Is.EqualTo(cleanedByChild));
         Assert.That(resource.DisposeCount, Is.EqualTo(cleanedByChild));
+        Assert.That(rootService.CleanupCount, Is.Zero);
+        Assert.That(rootService.Dependency.CleanupCount, Is.Zero);
+        Assert.That(rootService.Dependency.Resource.DisposeCount, Is.Zero);
 
         root.Dispose();
 
@@ -116,5 +121,8 @@ public class DependencyContainerTransientTests
         Assert.That(siblingService.CleanupCount, Is.EqualTo(1));
         Assert.That(siblingService.Dependency.CleanupCount, Is.EqualTo(1));
         Assert.That(siblingService.Dependency.Resource.DisposeCount, Is.EqualTo(1));
+        Assert.That(rootService.CleanupCount, Is.EqualTo(1));
+        Assert.That(rootService.Dependency.CleanupCount, Is.EqualTo(1));
+        Assert.That(rootService.Dependency.Resource.DisposeCount, Is.EqualTo(1));
     }
 }

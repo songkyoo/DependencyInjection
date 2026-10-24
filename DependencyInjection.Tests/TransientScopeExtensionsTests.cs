@@ -1,3 +1,4 @@
+// ReSharper disable DisposeOnUsingVariable
 namespace Macaron.DependencyInjection.Tests;
 
 public class TransientScopeExtensionsTests
@@ -18,7 +19,7 @@ public class TransientScopeExtensionsTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterScoped<Resource>();
-            registrar.RegisterScoped<Resource>(namedKey);
+            registrar.RegisterScoped(namedKey);
         });
         using var scope = container.CreateTransientScope();
         var expected = container.Resolve<Resource>();
@@ -101,18 +102,24 @@ public class TransientScopeExtensionsTests
         Assert.That(scope.Resolve<Resource>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(scope.ResolveOrNull<Resource>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(scope.ResolveOrNull<int>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => scope.ResolveOrElse<Resource>(_ =>
-        {
-            fallbackCalls++;
+        Assert.That(
+            () => scope.ResolveOrElse<Resource>(_ =>
+            {
+                fallbackCalls++;
 
-            return new Resource();
-        }), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => scope.ResolveOrElse(() =>
-        {
-            fallbackCalls++;
+                return new Resource();
+            }),
+            Throws.TypeOf<ObjectDisposedException>()
+        );
+        Assert.That(
+            () => scope.ResolveOrElse(() =>
+            {
+                fallbackCalls++;
 
-            return new Resource();
-        }), Throws.TypeOf<ObjectDisposedException>());
+                return new Resource();
+            }),
+            Throws.TypeOf<ObjectDisposedException>()
+        );
         Assert.That(() => scope.ResolveOrElse(new Resource()), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(fallbackCalls, Is.Zero);
     }

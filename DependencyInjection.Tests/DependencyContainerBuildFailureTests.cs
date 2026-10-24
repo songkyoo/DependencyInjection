@@ -116,13 +116,17 @@ public class DependencyContainerBuildFailureTests
 
         void Configure(IDependencyRegistrar registrar)
         {
-            registrar.Register(firstKey, factory: (container, ref _) =>
-            {
-                failedContainer = (IDependencyContainer)container;
-                container.Resolve(secondKey);
+            registrar.Register(
+                firstKey,
+                factory: (container, ref _) =>
+                {
+                    failedContainer = (IDependencyContainer)container;
+                    container.Resolve(secondKey);
 
-                return new CycleA();
-            }, lifetime);
+                    return new CycleA();
+                },
+                lifetime
+            );
             registrar.RegisterTransient(secondKey, factory: (container, ref _) =>
             {
                 container.Resolve(firstKey);
@@ -145,14 +149,17 @@ public class DependencyContainerBuildFailureTests
         var scopedInstances = new Dictionary<IDependencyResolver, Resource>();
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Resource>(parentScopedKey, factory: (container, ref _) =>
-            {
-                var resource = new Resource();
+            registrar.RegisterScoped<Resource>(
+                parentScopedKey,
+                factory: (container, ref _) =>
+                {
+                    var resource = new Resource();
 
-                scopedInstances.Add(container, resource);
+                    scopedInstances.Add(container, resource);
 
-                return resource;
-            });
+                    return resource;
+                }
+            );
             registrar.RegisterSingleton(parentSingletonKey, factory: () => new Resource());
         });
         using var sibling = parent.CreateScope();
@@ -327,7 +334,7 @@ public class DependencyContainerBuildFailureTests
                     resource.Dispose();
                 }
             );
-            registrar.Register<object>(
+            registrar.Register(
                 key: secondKey,
                 factory: () =>
                 {

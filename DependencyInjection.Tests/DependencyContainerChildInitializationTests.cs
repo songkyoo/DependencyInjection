@@ -148,6 +148,7 @@ public class DependencyContainerChildInitializationTests
         Assert.That(singleton.IsDisposed, Is.False);
 
         failInitialization = false;
+
         using var retry = parent.CreateScope();
 
         Assert.That(retry.Resolve<Service>().Resource, Is.SameAs(scopedResources[retry]));
@@ -167,21 +168,29 @@ public class DependencyContainerChildInitializationTests
         var key = useDefaultKey ? Key<Resource>.Default : new Key<Resource>("service");
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, factory: () =>
-            {
-                parentCreations++;
+            registrar.Register(
+                key,
+                factory: () =>
+                {
+                    parentCreations++;
 
-                return new Resource();
-            }, parentLifetime);
+                    return new Resource();
+                },
+                parentLifetime
+            );
         });
         using var child = root.CreateScope(registrar =>
         {
-            registrar.Register(key, factory: () =>
-            {
-                childCreations++;
+            registrar.Register(
+                key,
+                factory: () =>
+                {
+                    childCreations++;
 
-                return new Resource();
-            }, childLifetime);
+                    return new Resource();
+                },
+                childLifetime
+            );
         });
 
         Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 0 : 1));
@@ -225,7 +234,10 @@ public class DependencyContainerChildInitializationTests
 
                 return resource;
             });
-            registrar.RegisterSingleton<Consumer>(factory: (container, ref _) => new Consumer(container.Resolve<Service>()));
+            registrar.RegisterSingleton<Consumer>(factory: (container, ref _) =>
+            {
+                return new Consumer(container.Resolve<Service>());
+            });
         });
 
         Assert.That(transientResources, Has.Count.EqualTo(1));

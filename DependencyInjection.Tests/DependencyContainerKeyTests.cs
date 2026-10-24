@@ -27,6 +27,7 @@ public class DependencyContainerKeyTests
         Service CreateService()
         {
             factoryCalls++;
+
             return new Service();
         }
     }
@@ -34,11 +35,14 @@ public class DependencyContainerKeyTests
     [Test]
     public void DefaultRegistration_ShouldConflictWithExplicitDefaultKey([Values] Lifetime lifetime)
     {
-        Assert.That(() => DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register<Service>(lifetime);
-            registrar.Register(Key<Service>.Default, lifetime);
-        }), Throws.ArgumentException);
+        Assert.That(
+            () => DependencyContainerFactory.Create(registrar =>
+            {
+                registrar.Register<Service>(lifetime);
+                registrar.Register(Key<Service>.Default, lifetime);
+            }),
+            Throws.ArgumentException
+        );
     }
 
     [Test]
@@ -87,7 +91,8 @@ public class DependencyContainerKeyTests
         Assert.That(child.Resolve(parentKey), Is.Not.SameAs(child.Resolve(childKey)));
         Assert.That(child.Resolve(parentKey), parentLifetime == Lifetime.Singleton
             ? Is.SameAs(root.Resolve(parentKey))
-            : Is.Not.SameAs(root.Resolve(parentKey)));
+            : Is.Not.SameAs(root.Resolve(parentKey))
+        );
         Assert.That(child.Contains(new Key<Service>("service")), Is.False);
     }
 
@@ -102,11 +107,13 @@ public class DependencyContainerKeyTests
             registrar.RegisterTransient(firstKey, factory: (resolver, ref _) =>
             {
                 resolver.Resolve(secondKey);
+
                 return new Service();
             });
             registrar.RegisterTransient(secondKey, factory: () =>
             {
                 secondCreations++;
+
                 return new Service();
             });
         });
@@ -130,15 +137,5 @@ public class DependencyContainerKeyTests
 
         Assert.That(error!.Message, Does.Contain("Cyclic dependency detected"));
         Assert.That(error.Message, Does.Contain(firstKey.ToString()));
-    }
-
-    [Test]
-    public void SharedKeyAcrossIndependentContainers_ShouldNotShareInstances()
-    {
-        var key = new Key<Service>("service");
-        using var first = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(key));
-        using var second = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(key));
-
-        Assert.That(first.Resolve(key), Is.Not.SameAs(second.Resolve(key)));
     }
 }

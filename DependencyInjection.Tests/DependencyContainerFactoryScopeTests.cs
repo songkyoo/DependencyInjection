@@ -5,13 +5,8 @@ public class DependencyContainerFactoryScopeTests
 {
     private sealed class Dependency;
 
-    private sealed class Service(Dependency dependency)
-    {
-        public Dependency Dependency { get; } = dependency;
-    }
-
     [Test]
-    public void CreateScopeDuringFactory_ShouldThrowBeforeConfiguration_WithoutChangingOwnership(
+    public void ScopeCreationDuringFactory_ShouldThrowBeforeConfiguration_WithoutChangingOwnership(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values] bool resolveFromChild,
         [Values] bool useActionOverload
@@ -28,12 +23,13 @@ public class DependencyContainerFactoryScopeTests
                 factory: (resolver, ref collector) =>
                 {
                     var container = (IDependencyContainer)resolver;
+                    var previousConfigurationCalls = configurationCalls;
 
                     factoryCalls++;
-                    var previousConfigurationCalls = configurationCalls;
 
                     Assert.That(container.Contains<Dependency>(), Is.True);
                     Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
 
                     var exception = Assert.Throws<InvalidOperationException>(() =>
                     {
@@ -66,9 +62,11 @@ public class DependencyContainerFactoryScopeTests
             var second = requestingContainer.Resolve<Dependency>();
 
             Assert.That(second, lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
+
             var expectedCreations = lifetime == Lifetime.Singleton ? 1 : 2;
 
             Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
+
             var owningContainer = lifetime == Lifetime.Singleton ? root : requestingContainer;
 
             Assert.That(factoryContainers[first], Is.SameAs(owningContainer));
@@ -78,55 +76,14 @@ public class DependencyContainerFactoryScopeTests
             Assert.That(collectedCleanups, Is.Zero);
 
             using var scope = owningContainer.CreateScope(_ => configurationCalls++);
+            using var transientScope = owningContainer.CreateTransientScope();
 
             Assert.That(configurationCalls, Is.EqualTo(1));
+            Assert.That(transientScope.Contains<Dependency>(), Is.True);
         }
 
         Assert.That(serviceCleanups, Is.EqualTo(factoryCalls));
         Assert.That(collectedCleanups, Is.EqualTo(factoryCalls));
-    }
-
-    [Test]
-    public void CreateScopeAfterNestedResolve_ShouldRemainBlockedUntilOuterFactoryReturns(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
-    )
-    {
-        using var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register<Dependency>(
-                factory: (resolver, ref _) =>
-                {
-                    var container = (IDependencyContainer)resolver;
-
-                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-
-                    return new Dependency();
-                },
-                lifetime
-            );
-            registrar.Register<Service>(
-                factory: (resolver, ref _) =>
-                {
-                    var container = (IDependencyContainer)resolver;
-
-                    Assert.That(container.Contains<Dependency>(), Is.True);
-
-                    var dependency = container.Resolve<Dependency>();
-
-                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-
-                    return new Service(dependency);
-                },
-                lifetime
-            );
-        });
-        var service = container.Resolve<Service>();
-
-        Assert.That(service.Dependency, Is.Not.Null);
-
-        using var scope = container.CreateScope();
-
-        Assert.That(scope.Contains<Service>(), Is.True);
     }
 
     [Test]
@@ -171,7 +128,7 @@ public class DependencyContainerFactoryScopeTests
 
                     return new Dependency();
                 },
-                Lifetime.Transient,
+                lifetime: Lifetime.Transient,
                 cleanup: _ => serviceCleanups++
             );
         }))

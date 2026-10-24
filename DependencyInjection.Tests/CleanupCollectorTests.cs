@@ -125,26 +125,43 @@ public class CleanupCollectorTests
     }
 
     [Test]
-    public void NullTransientFactoryResult_ShouldCleanCollector_WithoutOwningService()
+    public void NullTransientFactoryResult_ShouldCleanCollector_ReportKey_AndAllowRetry([Values] bool useDefaultKey)
     {
+        var key = useDefaultKey ? Key<string>.Default : new Key<string>("service");
+        var returnNull = true;
         var collected = new Resource();
         var serviceCleanupCount = 0;
-        using var container = DependencyContainerFactory.Create(registrar =>
+        using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<string>( factory: (_, ref collector) =>
+            registrar.RegisterTransient(key, factory: (_, ref collector) =>
             {
-                collector.Add(collected);
+                if (returnNull)
+                {
+                    collector.Add(collected);
+                    return null!;
+                }
 
-                return null!;
+                return "Hello";
             }, cleanup: _ => serviceCleanupCount++);
         });
+        using var child = root.CreateScope();
 
-        Assert.That(container.Resolve<string>, Throws.InvalidOperationException);
+        var error = Assert.Throws<InvalidOperationException>(() => child.Resolve(key));
 
-        container.Dispose();
-
+        Assert.That(error!.Message, Does.Contain("Factory returned null"));
+        Assert.That(error.Message, Does.Contain(key.ToString()));
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
         Assert.That(serviceCleanupCount, Is.Zero);
+
+        returnNull = false;
+
+        Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
+
+        child.Dispose();
+        root.Dispose();
+
+        Assert.That(collected.DisposeCount, Is.EqualTo(1));
+        Assert.That(serviceCleanupCount, Is.EqualTo(1));
     }
 
     [Test]

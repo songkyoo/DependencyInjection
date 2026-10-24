@@ -23,48 +23,6 @@ public class DependencyContainerCleanupTests
     }
 
     [Test]
-    public void OmittedCleanup_ShouldDisposeCachedInstanceOnce(
-        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
-    )
-    {
-        var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register(factory: () => new Resource(), lifetime);
-        });
-        var resource = container.Resolve<Resource>();
-
-        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
-        Assert.That(resource.DisposeCount, Is.Zero);
-
-        container.Dispose();
-        container.Dispose();
-
-        Assert.That(resource.DisposeCount, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void CustomCleanup_ShouldReplaceDispose_AndReceiveCachedInstanceOnce(
-        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
-    )
-    {
-        var cleanedInstances = new List<Resource>();
-        var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register(factory: (_, ref _) => new Resource(), lifetime, cleanup: cleanedInstances.Add);
-        });
-        var resource = container.Resolve<Resource>();
-
-        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
-        Assert.That(cleanedInstances, Is.Empty);
-
-        container.Dispose();
-        container.Dispose();
-
-        Assert.That(cleanedInstances, Is.EqualTo(new[] { resource }));
-        Assert.That(resource.DisposeCount, Is.Zero);
-    }
-
-    [Test]
     public void EmptyCleanup_ShouldLeaveDisposalToCaller(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
@@ -107,47 +65,14 @@ public class DependencyContainerCleanupTests
     }
 
     [Test]
-    public void InheritedService_ShouldRunCleanupInItsOwningContainer(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
-    )
-    {
-        var root = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register<Service>(lifetime, cleanup: service => service.CleanupCount++);
-        });
-        var child = root.CreateScope();
-        var rootService = root.Resolve<Service>();
-        var childService = child.Resolve<Service>();
-
-        child.Dispose();
-
-        if (lifetime != Lifetime.Singleton)
-        {
-            Assert.That(childService, Is.Not.SameAs(rootService));
-            Assert.That(childService.CleanupCount, Is.EqualTo(1));
-        }
-        else
-        {
-            Assert.That(childService, Is.SameAs(rootService));
-        }
-
-        Assert.That(rootService.CleanupCount, Is.Zero);
-
-        root.Dispose();
-
-        Assert.That(rootService.CleanupCount, Is.EqualTo(1));
-        Assert.That(childService.CleanupCount, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void CoreRegistration_ShouldApplyCleanupPolicy(
+    public void CoreRegistration_ShouldApplyCleanupPolicyToEachCreatedInstance(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values(false, true)] bool customCleanup
     )
     {
         var key = new Key<Resource>("resource");
-        var cleanupCount = 0;
-        Action<Resource>? cleanup = customCleanup ? _ => cleanupCount++ : null;
+        var cleanedInstances = new List<Resource>();
+        Action<Resource>? cleanup = customCleanup ? cleanedInstances.Add : null;
 
         var container = DependencyContainerFactory.Create(registrar =>
         {
@@ -164,34 +89,25 @@ public class DependencyContainerCleanupTests
                     break;
             }
         });
-        var resource = container.Resolve(key);
+        var first = container.Resolve(key);
+        var second = container.Resolve(key);
 
-        container.Dispose();
-
-        Assert.That(cleanupCount, Is.EqualTo(customCleanup ? 1 : 0));
-        Assert.That(resource.DisposeCount, Is.EqualTo(customCleanup ? 0 : 1));
-    }
-
-    [Test]
-    public void TransientCustomCleanup_ShouldReplaceDispose_AndReceiveEachInstanceOnce()
-    {
-        var cleanedInstances = new List<Resource>();
-        var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.RegisterTransient<Resource>(cleanup: cleanedInstances.Add);
-        });
-        var first = container.Resolve<Resource>();
-        var second = container.Resolve<Resource>();
-
-        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(second, lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
         Assert.That(cleanedInstances, Is.Empty);
-
-        container.Dispose();
-        container.Dispose();
-
-        Assert.That(cleanedInstances, Is.EquivalentTo(new[] { first, second }));
         Assert.That(first.DisposeCount, Is.Zero);
         Assert.That(second.DisposeCount, Is.Zero);
+
+        container.Dispose();
+        container.Dispose();
+
+        var createdInstances = lifetime == Lifetime.Transient ? new[] { first, second } : new[] { first };
+
+        Assert.That(cleanedInstances, Is.EquivalentTo(customCleanup ? createdInstances : Array.Empty<Resource>()));
+
+        foreach (var instance in createdInstances)
+        {
+            Assert.That(instance.DisposeCount, Is.EqualTo(customCleanup ? 0 : 1));
+        }
     }
 
     [TestCaseSource(nameof(CustomCleanupRegistrations))]

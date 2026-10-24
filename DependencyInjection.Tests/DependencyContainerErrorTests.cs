@@ -12,29 +12,6 @@ public class DependencyContainerErrorTests
     #pragma warning restore CS9113
 
     [Test]
-    public void NullFactoryResultDuringResolve_ShouldThrow_WithRegistrationKey_AndAllowRetry(
-        [Values] bool useDefaultKey
-    )
-    {
-        var key = useDefaultKey ? Key<string>.Default : new Key<string>("service");
-        var returnNull = true;
-        using var root = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.RegisterTransient(key, factory: (_, ref _) => returnNull ? null! : "Hello");
-        });
-        using var child = root.CreateScope();
-
-        var ex = Assert.Throws<InvalidOperationException>(() => child.Resolve(key));
-
-        Assert.That(ex!.Message, Does.Contain("Factory returned null"));
-        Assert.That(ex.Message, Does.Contain(key.ToString()));
-
-        returnNull = false;
-
-        Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
-    }
-
-    [Test]
     public void InheritedScopedNullFactoryResult_ShouldFailChildCreation_AndPreserveParent(
         [Values] bool useDefaultKey
     )
@@ -56,9 +33,7 @@ public class DependencyContainerErrorTests
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
         Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions[0].Message, Does.Contain(typeof(string).ToString()));
-
         Assert.That(exception.InnerExceptions[0].Message, Does.Contain(key.ToString()));
-
         Assert.That(root.Resolve(key), Is.EqualTo("Hello"));
 
         failCreation = false;

@@ -1,3 +1,5 @@
+// ReSharper disable DisposeOnUsingVariable
+// ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class TransientScopeResolveTests
@@ -41,12 +43,14 @@ public class TransientScopeResolveTests
         Assert.That(expectedScoped.DisposeCount, Is.Zero);
         Assert.That(expectedSingleton.DisposeCount, Is.Zero);
 
+        #region Local Functions
         Resource CreateResource()
         {
             creations++;
 
             return new Resource();
         }
+        #endregion
     }
 
     [Test]
@@ -98,30 +102,40 @@ public class TransientScopeResolveTests
         var serviceId = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Resource>(sharedKey);
-            registrar.RegisterTransient<Resource>(factory: (resolver, ref collector) =>
-            {
-                resolvers.Add(resolver);
-                var id = ++dependencyId;
-                collector.Add(new object(), _ => cleanups.Add($"dependency-collected-{id}"));
+            registrar.RegisterScoped(sharedKey);
+            registrar.RegisterTransient<Resource>(
+                factory: (resolver, ref collector) =>
+                {
+                    resolvers.Add(resolver);
 
-                return new Resource();
-            }, cleanup: resource => resource.Dispose());
-            registrar.RegisterTransient<Service>(factory: (resolver, ref collector) =>
-            {
-                resolvers.Add(resolver);
-                var id = ++serviceId;
-                var dependency = resolver.Resolve(dependencyKey);
-                var shared = resolver.Resolve(sharedKey);
-                collector.Add(new object(), _ => cleanups.Add($"service-collected-{id}"));
+                    var id = ++dependencyId;
 
-                return new Service(dependency, shared);
-            }, cleanup: service =>
-            {
-                Assert.That(service.Dependency.DisposeCount, Is.Zero);
-                Assert.That(service.Shared.DisposeCount, Is.Zero);
-                cleanups.Add("service");
-            });
+                    collector.Add(new object(), _ => cleanups.Add($"dependency-collected-{id}"));
+
+                    return new Resource();
+                },
+                cleanup: resource => resource.Dispose()
+            );
+            registrar.RegisterTransient<Service>(
+                factory: (resolver, ref collector) =>
+                {
+                    resolvers.Add(resolver);
+
+                    var id = ++serviceId;
+                    var dependency = resolver.Resolve(dependencyKey);
+                    var shared = resolver.Resolve(sharedKey);
+
+                    collector.Add(new object(), _ => cleanups.Add($"service-collected-{id}"));
+
+                    return new Service(dependency, shared);
+                },
+                cleanup: service =>
+                {
+                    Assert.That(service.Dependency.DisposeCount, Is.Zero);
+                    Assert.That(service.Shared.DisposeCount, Is.Zero);
+                    cleanups.Add("service");
+                }
+            );
         });
         using var child = root.CreateScope();
         var container = useChild ? child : root;
@@ -174,6 +188,7 @@ public class TransientScopeResolveTests
         using var scope = container.CreateTransientScope();
 
         Assert.That(() => scope.Resolve(Key<Resource>.Default), Throws.InvalidOperationException);
+
         var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve(key));
 
         Assert.That(exception!.Message, Does.Contain("Cyclic dependency detected"));

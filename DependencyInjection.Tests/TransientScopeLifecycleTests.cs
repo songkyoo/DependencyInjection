@@ -1,3 +1,4 @@
+// ReSharper disable AccessToModifiedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class TransientScopeLifecycleTests
@@ -5,38 +6,6 @@ public class TransientScopeLifecycleTests
     private sealed class Resource;
 
     private sealed record Service(Resource Resource);
-
-    [Test]
-    public void SharedAndTransientFactories_ShouldRejectTransientScopeCreation(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
-        [Values] bool useChild
-    )
-    {
-        var factoryCalls = 0;
-        using var root = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register<Resource>(factory: (resolver, ref _) =>
-            {
-                var container = (IDependencyContainer)resolver;
-                factoryCalls++;
-
-                Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
-                Assert.That(resolver.Contains<Resource>(), Is.True);
-
-                return new Resource();
-            }, lifetime);
-        });
-        using var child = root.CreateScope();
-        var container = useChild ? child : root;
-        container.Resolve<Resource>();
-
-        var expectedCreations = lifetime == Lifetime.Scoped ? 2 : 1;
-
-        Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
-
-        using var scope = container.CreateTransientScope();
-        Assert.That(scope.Contains(Key<Resource>.Default), Is.True);
-    }
 
     [Test]
     public void NestedFactoryAndFailedCollectorCleanup_ShouldRejectLifecycleChanges_WithoutInvalidatingScopes()
@@ -48,6 +17,7 @@ public class TransientScopeLifecycleTests
         IDependencyContainer? container = null;
         TransientScope active = null!;
         TransientScope sibling = null!;
+
         container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterTransient<Resource>(factory: (_, ref collector) =>
@@ -76,8 +46,10 @@ public class TransientScopeLifecycleTests
                     collector.Add(new object(), _ =>
                     {
                         cleanupCalls++;
+
                         AssertChangesRejected();
                     });
+
                     var exception = Assert.Throws<ArgumentException>(() => resolver.Resolve<Resource>());
 
                     Assert.That(exception, Is.SameAs(failure));
@@ -85,15 +57,18 @@ public class TransientScopeLifecycleTests
                 }
 
                 var resource = resolver.Resolve<Resource>();
+
                 AssertChangesRejected();
 
                 return new Service(resource);
             });
         });
+
         using (container)
         {
             active = container.CreateTransientScope();
             sibling = container.CreateTransientScope();
+
             var exception = Assert.Throws<ArgumentException>(() => active.Resolve(Key<Service>.Default));
 
             Assert.That(exception, Is.SameAs(failure));
@@ -103,16 +78,19 @@ public class TransientScopeLifecycleTests
             Assert.That(sibling.Contains(Key<Service>.Default), Is.True);
 
             fail = false;
+
             Assert.That(active.Resolve(Key<Service>.Default).Resource, Is.Not.Null);
 
             active.Dispose();
             sibling.Dispose();
+
             using var replacement = container.CreateTransientScope();
             using var child = container.CreateScope(_ => installerCalls++);
 
             Assert.That(installerCalls, Is.EqualTo(1));
         }
 
+        #region Local Functions
         void AssertChangesRejected()
         {
             Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
@@ -123,6 +101,7 @@ public class TransientScopeLifecycleTests
             Assert.That(sibling.Dispose, Throws.InvalidOperationException);
             Assert.That(active.Contains(Key<Service>.Default), Is.True);
         }
+        #endregion
     }
 
     [Test]
@@ -135,6 +114,7 @@ public class TransientScopeLifecycleTests
         var cleanupCalls = 0;
         var installerCalls = 0;
         var failure = new ArgumentException("Cleanup failed.");
+
         container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterSingleton<Resource>();
@@ -158,6 +138,7 @@ public class TransientScopeLifecycleTests
                 }
             });
         });
+
         using (container)
         {
             active = container.CreateTransientScope();
@@ -182,6 +163,7 @@ public class TransientScopeLifecycleTests
             Assert.That(active.Dispose, Throws.Nothing);
 
             sibling.Dispose();
+
             using var replacement = container.CreateTransientScope();
             using var child = container.CreateScope(_ => installerCalls++);
 

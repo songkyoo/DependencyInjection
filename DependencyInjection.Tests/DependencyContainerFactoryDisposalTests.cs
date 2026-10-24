@@ -61,6 +61,7 @@ public class DependencyContainerFactoryDisposalTests
             Assert.That(first.Dependency, Is.SameAs(dependency));
             Assert.That(second.Dependency, Is.SameAs(dependency));
             Assert.That(second, lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
+
             var expectedCreations = lifetime == Lifetime.Singleton ? 1 : 2;
 
             Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
@@ -76,7 +77,7 @@ public class DependencyContainerFactoryDisposalTests
     }
 
     [Test]
-    public void DisposeAfterNestedResolve_ShouldRemainBlockedUntilOuterFactoryReturns(
+    public void NestedResolve_ShouldKeepScopeCreationAndDisposalBlockedUntilOuterFactoryReturns(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values] bool dependencyFails
     )
@@ -91,6 +92,8 @@ public class DependencyContainerFactoryDisposalTests
                     var container = (IDependencyContainer)resolver;
 
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
 
                     if (failDependency)
                     {
@@ -115,11 +118,15 @@ public class DependencyContainerFactoryDisposalTests
 
                         Assert.That(exception, Is.SameAs(dependencyFailure));
                         Assert.That(container.Dispose, Throws.InvalidOperationException);
+                        Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
+                        Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
                     }
 
                     var dependency = container.Resolve<Dependency>();
 
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
 
                     return new Service(dependency);
                 },
@@ -181,7 +188,7 @@ public class DependencyContainerFactoryDisposalTests
 
                     return new Service(resolvedDependency);
                 },
-                Lifetime.Transient,
+                lifetime: Lifetime.Transient,
                 cleanup: _ => serviceCleanups++
             );
         }))

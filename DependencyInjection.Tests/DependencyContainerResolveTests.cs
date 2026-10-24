@@ -1,24 +1,9 @@
+// ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerResolveTests
 {
-    private interface IFoo;
-
-    private sealed class Foo : IFoo;
-
-    [Test]
-    public void Transient_ShouldCreateNewInstanceEachTime()
-    {
-        using var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register(key: Key<IFoo>.Default, factory: (_, ref _) => new Foo(), Lifetime.Transient);
-        });
-
-        var first = container.Resolve(Key<IFoo>.Default);
-        var second = container.Resolve(Key<IFoo>.Default);
-
-        Assert.That(first, Is.Not.SameAs(second));
-    }
+    private sealed class Foo;
 
     [Test]
     public void DefaultKeyExtensions_ShouldUseDefaultKey([Values] bool registerExplicitKey)
@@ -62,17 +47,26 @@ public class DependencyContainerResolveTests
         Assert.That(() => container.Resolve(missingKey), Throws.InvalidOperationException);
         Assert.That(container.ResolveOrNull(missingKey), Is.Null);
         Assert.That(container.ResolveOrElse(missingKey, fallback), Is.SameAs(fallback));
-        Assert.That(container.ResolveOrElse(missingKey, () =>
-        {
-            factoryCalls++;
-            return fallback;
-        }), Is.SameAs(fallback));
-        Assert.That(container.ResolveOrElse(missingKey, resolver =>
-        {
-            Assert.That(resolver, Is.SameAs(container));
-            factoryCalls++;
-            return fallback;
-        }), Is.SameAs(fallback));
+        Assert.That(
+            container.ResolveOrElse(missingKey, () =>
+            {
+                factoryCalls++;
+
+                return fallback;
+            }),
+            Is.SameAs(fallback)
+        );
+        Assert.That(
+            container.ResolveOrElse(missingKey, resolver =>
+            {
+                Assert.That(resolver, Is.SameAs(container));
+
+                factoryCalls++;
+
+                return fallback;
+            }),
+            Is.SameAs(fallback)
+        );
         Assert.That(factoryCalls, Is.EqualTo(2));
     }
 
