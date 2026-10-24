@@ -15,15 +15,15 @@ public class TransientScopeExtensionsTests
     [Test]
     public void ExistingExtensions_ShouldResolveRegisteredService_WithoutCallingFallback()
     {
-        var namedKey = new Key<Resource>("named");
+        var namedTag = "named";
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterScoped<Resource>();
-            registrar.RegisterScoped(namedKey);
+            registrar.RegisterScoped<Resource>(tag: namedTag);
         });
         using var scope = container.CreateTransientScope();
         var expected = container.Resolve<Resource>();
-        var expectedNamed = container.Resolve(namedKey);
+        var expectedNamed = container.Resolve<Resource>(namedTag);
 
         Assert.That(scope.Contains<Resource>(), Is.True);
         Assert.That(scope.Resolve<Resource>(), Is.SameAs(expected));
@@ -31,14 +31,14 @@ public class TransientScopeExtensionsTests
         Assert.That(scope.ResolveOrElse<Resource>(_ => throw new InvalidOperationException()), Is.SameAs(expected));
         Assert.That(scope.ResolveOrElse<Resource>(() => throw new InvalidOperationException()), Is.SameAs(expected));
         Assert.That(scope.ResolveOrElse(defaultValue: new Resource()), Is.SameAs(expected));
-        Assert.That(scope.ResolveOrNull(namedKey), Is.SameAs(expectedNamed));
-        Assert.That(scope.ResolveOrElse(namedKey, _ => throw new InvalidOperationException()), Is.SameAs(expectedNamed));
-        Assert.That(scope.ResolveOrElse(namedKey, () => throw new InvalidOperationException()), Is.SameAs(expectedNamed));
-        Assert.That(scope.ResolveOrElse(namedKey, defaultValue: new Resource()), Is.SameAs(expectedNamed));
+        Assert.That(scope.ResolveOrNull<Resource>(namedTag), Is.SameAs(expectedNamed));
+        Assert.That(scope.ResolveOrElse<Resource>(_ => throw new InvalidOperationException(), tag: namedTag), Is.SameAs(expectedNamed));
+        Assert.That(scope.ResolveOrElse<Resource>(() => throw new InvalidOperationException(), tag: namedTag), Is.SameAs(expectedNamed));
+        Assert.That(scope.ResolveOrElse<Resource>(defaultValue: new Resource(), tag: namedTag), Is.SameAs(expectedNamed));
     }
 
     [Test]
-    public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedKey)
+    public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedTag)
     {
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>());
         var scope = container.CreateTransientScope();
@@ -50,8 +50,8 @@ public class TransientScopeExtensionsTests
             return new Service(resolver.Resolve<Resource>());
         };
 
-        var service = useNamedKey
-            ? scope.ResolveOrElse(new Key<Service>("missing"), factory)
+        var service = useNamedTag
+            ? scope.ResolveOrElse<Service>(factory, tag: "missing")
             : scope.ResolveOrElse(factory);
 
         Assert.That(capturedResolver, Is.SameAs(scope));
@@ -62,23 +62,23 @@ public class TransientScopeExtensionsTests
         scope.Dispose();
 
         Assert.That(service.Resource.DisposeCount, Is.EqualTo(1));
-        Assert.That(capturedResolver!.Resolve<Resource>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => capturedResolver!.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
-    public void ResolveOrNullValueTypes_ShouldUseExactKeyAndDefaultKey()
+    public void ResolveOrNullValueTypes_ShouldUseExactTagAndDefaultTag()
     {
-        var namedKey = new Key<int>("answer");
+        var namedTag = "answer";
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterSingleton(instance: 7);
-            registrar.RegisterSingleton(namedKey, instance: 42);
+            registrar.RegisterSingleton<int>(instance: 42, tag: namedTag);
         });
         using var scope = container.CreateTransientScope();
 
         Assert.That(scope.ResolveOrNull<int>(), Is.EqualTo(7));
-        Assert.That(scope.ResolveOrNull(namedKey), Is.EqualTo(42));
-        Assert.That(scope.ResolveOrNull(new Key<int>("answer")), Is.Null);
+        Assert.That(scope.ResolveOrNull<int>(namedTag), Is.EqualTo(42));
+        Assert.That(scope.ResolveOrNull<int>("missing"), Is.Null);
         Assert.That(scope.ResolveOrNull<long>(), Is.Null);
     }
 
@@ -98,10 +98,10 @@ public class TransientScopeExtensionsTests
             scope.Dispose();
         }
 
-        Assert.That(scope.Contains<Resource>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(scope.Resolve<Resource>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(scope.ResolveOrNull<Resource>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(scope.ResolveOrNull<int>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.ResolveOrNull<Resource>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.ResolveOrNull<int>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(
             () => scope.ResolveOrElse<Resource>(_ =>
             {

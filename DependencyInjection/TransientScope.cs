@@ -22,14 +22,14 @@ public sealed class TransientScope : IDependencyResolver, IDisposable
     #endregion
 
     #region IDependencyResolver Interface
-    public T Resolve<T>(Key<T> key)
+    public T Resolve<T>(object? tag = null)
     {
-        return Container.Resolve(key, transientScope: this);
+        return Container.Resolve<T>(tag, transientScope: this);
     }
 
-    public bool Contains<T>(Key<T> key)
+    public bool Contains<T>(object? tag = null)
     {
-        return Container.Contains(key, transientScope: this);
+        return Container.Contains<T>(tag, transientScope: this);
     }
     #endregion
 

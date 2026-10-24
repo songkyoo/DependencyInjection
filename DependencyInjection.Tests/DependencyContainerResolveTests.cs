@@ -6,20 +6,20 @@ public class DependencyContainerResolveTests
     private sealed class Foo;
 
     [Test]
-    public void DefaultKeyExtensions_ShouldUseDefaultKey([Values] bool registerExplicitKey)
+    public void DefaultTagExtensions_ShouldUseDefaultTag([Values] bool registerExplicitTag)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            if (registerExplicitKey)
+            if (registerExplicitTag)
             {
-                registrar.RegisterSingleton(Key<Foo>.Default, factory: () => new Foo());
+                registrar.RegisterSingleton<Foo>(factory: () => new Foo(), tag: null);
             }
             else
             {
                 registrar.RegisterSingleton(factory: () => new Foo());
             }
         });
-        var service = container.Resolve(Key<Foo>.Default);
+        var service = container.Resolve<Foo>(null);
 
         Assert.That(container.Contains<Foo>(), Is.True);
         Assert.That(container.Resolve<Foo>(), Is.SameAs(service));
@@ -31,40 +31,40 @@ public class DependencyContainerResolveTests
 
     [TestCase("")]
     [TestCase("service")]
-    public void MissingKey_ShouldNotMatchDefaultOrSameName(string name)
+    public void MissingTag_ShouldNotFallBackToDefaultOrAnotherTag(string name)
     {
-        var registeredKey = new Key<Foo>(name);
-        var missingKey = new Key<Foo>(name);
+        var registeredTag = name;
+        var missingTag = "missing";
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterSingleton<Foo>();
-            registrar.RegisterSingleton<Foo>(registeredKey);
+            registrar.RegisterSingleton<Foo>(tag: registeredTag);
         });
         var fallback = new Foo();
         var factoryCalls = 0;
 
-        Assert.That(container.Contains(missingKey), Is.False);
-        Assert.That(() => container.Resolve(missingKey), Throws.InvalidOperationException);
-        Assert.That(container.ResolveOrNull(missingKey), Is.Null);
-        Assert.That(container.ResolveOrElse(missingKey, fallback), Is.SameAs(fallback));
+        Assert.That(container.Contains<Foo>(missingTag), Is.False);
+        Assert.That(() => container.Resolve<Foo>(missingTag), Throws.InvalidOperationException);
+        Assert.That(container.ResolveOrNull<Foo>(missingTag), Is.Null);
+        Assert.That(container.ResolveOrElse<Foo>(fallback, tag: missingTag), Is.SameAs(fallback));
         Assert.That(
-            container.ResolveOrElse(missingKey, () =>
+            container.ResolveOrElse<Foo>(() =>
             {
                 factoryCalls++;
 
                 return fallback;
-            }),
+            }, tag: missingTag),
             Is.SameAs(fallback)
         );
         Assert.That(
-            container.ResolveOrElse(missingKey, resolver =>
+            container.ResolveOrElse<Foo>(resolver =>
             {
                 Assert.That(resolver, Is.SameAs(container));
 
                 factoryCalls++;
 
                 return fallback;
-            }),
+            }, tag: missingTag),
             Is.SameAs(fallback)
         );
         Assert.That(factoryCalls, Is.EqualTo(2));
@@ -73,12 +73,12 @@ public class DependencyContainerResolveTests
     [Test]
     public void NamedRegistration_ShouldNotProvideDefaultService()
     {
-        var key = new Key<Foo>();
-        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton<Foo>(key));
+        var tag = "";
+        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton<Foo>(tag: tag));
         var fallback = new Foo();
 
         Assert.That(container.Contains<Foo>(), Is.False);
-        Assert.That(container.Resolve<Foo>, Throws.InvalidOperationException);
+        Assert.That(() => container.Resolve<Foo>(), Throws.InvalidOperationException);
         Assert.That(container.ResolveOrNull<Foo>(), Is.Null);
         Assert.That(container.ResolveOrElse(fallback), Is.SameAs(fallback));
         Assert.That(container.ResolveOrElse(() => fallback), Is.SameAs(fallback));
@@ -86,29 +86,30 @@ public class DependencyContainerResolveTests
     }
 
     [Test]
-    public void ResolveOrNull_ValueType_ShouldUseExactKeyAndDefaultKey()
+    public void ResolveOrNull_ValueType_ShouldUseExactTagAndDefaultTag()
     {
-        var key = new Key<int>("answer");
+        var tag = "answer";
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(key, instance: 42);
+            registrar.RegisterSingleton<int>(instance: 42, tag: tag);
             registrar.RegisterSingleton(instance: 7);
         });
 
-        Assert.That(container.ResolveOrNull(key), Is.EqualTo(42));
-        Assert.That(container.ResolveOrNull(new Key<int>("answer")), Is.Null);
+        Assert.That(container.ResolveOrNull<int>(tag), Is.EqualTo(42));
+        Assert.That(container.ResolveOrNull<int>("missing"), Is.Null);
         Assert.That(container.ResolveOrNull<int>(), Is.EqualTo(7));
         Assert.That(container.ResolveOrNull<long>(), Is.Null);
     }
 
     [Test]
-    public void UnregisteredKey_ShouldThrowWithTypeAndName()
+    public void UnregisteredTag_ShouldThrowWithTypeAndTag()
     {
-        var key = new Key<Foo>("missing");
+        var tag = "missing";
         using var container = DependencyContainerFactory.Create(_ => { });
 
-        var error = Assert.Throws<InvalidOperationException>(() => container.Resolve(key));
+        var error = Assert.Throws<InvalidOperationException>(() => container.Resolve<Foo>(tag));
 
-        Assert.That(error!.Message, Does.Contain(key.ToString()));
+        Assert.That(error!.Message, Does.Contain(typeof(Foo).ToString()));
+        Assert.That(error.Message, Does.Contain(tag));
     }
 }

@@ -12,12 +12,12 @@ public class DependencyContainerFactoryTests
     [Test]
     public void Register_DefaultConstructor_ShouldResolveInstance()
     {
-        var key = Key<FooWithDefaultCtor>.Default;
+        object? tag = null;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, Lifetime.Singleton);
+            registrar.Register<FooWithDefaultCtor>(Lifetime.Singleton, tag: tag);
         });
-        var instance = container.Resolve(key);
+        var instance = container.Resolve<FooWithDefaultCtor>(tag);
 
         Assert.That(instance.Name, Is.EqualTo("Default"));
     }

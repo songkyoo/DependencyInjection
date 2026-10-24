@@ -21,8 +21,8 @@ public class DependencyContainerChildInitializationTests
     [Test]
     public void ChildAndGrandchild_ShouldPrepareScopedInstances_AndShareInheritedSingletons()
     {
-        var rootKey = new Key<object>("root");
-        var childKey = new Key<object>("child");
+        var rootTag = "root";
+        var childTag = "child";
         var scopedInstances = new Dictionary<IDependencyResolver, Resource>();
         var rootSingletonCreations = 0;
         var childSingletonCreations = 0;
@@ -36,21 +36,21 @@ public class DependencyContainerChildInitializationTests
 
                 return resource;
             });
-            registrar.RegisterSingleton(rootKey, factory: () =>
+            registrar.RegisterSingleton<object>(factory: () =>
             {
                 rootSingletonCreations++;
 
                 return new object();
-            });
+            }, tag: rootTag);
         });
         using var child = root.CreateScope(registrar =>
         {
-            registrar.RegisterSingleton(childKey, factory: () =>
+            registrar.RegisterSingleton<object>(factory: () =>
             {
                 childSingletonCreations++;
 
                 return new object();
-            });
+            }, tag: childTag);
         });
 
         Assert.That(scopedInstances, Has.Count.EqualTo(2));
@@ -67,11 +67,11 @@ public class DependencyContainerChildInitializationTests
         foreach (var container in new[] { root, child, sibling, grandchild })
         {
             Assert.That(container.Resolve<Resource>(), Is.SameAs(scopedInstances[container]));
-            Assert.That(container.Resolve(rootKey), Is.SameAs(root.Resolve(rootKey)));
+            Assert.That(container.Resolve<object>(rootTag), Is.SameAs(root.Resolve<object>(rootTag)));
         }
 
-        Assert.That(grandchild.Resolve(childKey), Is.SameAs(child.Resolve(childKey)));
-        Assert.That(sibling.Contains(childKey), Is.False);
+        Assert.That(grandchild.Resolve<object>(childTag), Is.SameAs(child.Resolve<object>(childTag)));
+        Assert.That(sibling.Contains<object>(childTag), Is.False);
     }
 
     [Test]
@@ -83,12 +83,12 @@ public class DependencyContainerChildInitializationTests
         var failInitialization = false;
         var creationFailure = new ArgumentException("Scoped creation failed.");
         var cleanupFailure = new ArgumentException("Scoped cleanup failed.");
-        var singletonKey = new Key<Resource>("singleton");
+        var singletonTag = "singleton";
         var scopedResources = new Dictionary<IDependencyResolver, Resource>();
         IDependencyContainer? failedChild = null;
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(singletonKey, factory: () => new Resource());
+            registrar.RegisterSingleton<Resource>(factory: () => new Resource(), tag: singletonTag);
             registrar.RegisterScoped<Resource>(factory: (resolver, ref _) =>
             {
                 var resource = new Resource(() =>
@@ -118,7 +118,7 @@ public class DependencyContainerChildInitializationTests
         using var sibling = parent.CreateScope();
         var parentService = parent.Resolve<Service>();
         var siblingService = sibling.Resolve<Service>();
-        var singleton = parent.Resolve(singletonKey);
+        var singleton = parent.Resolve<Resource>(singletonTag);
         failInitialization = true;
 
         var error = Assert.Throws<AggregateException>(() =>
@@ -138,7 +138,7 @@ public class DependencyContainerChildInitializationTests
         }
 
         Assert.That(scopedResources[failedChild!].IsDisposed, Is.True);
-        Assert.That(failedChild!.Contains<Service>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => failedChild!.Contains<Service>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => failedChild!.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedChild!.Dispose, Throws.Nothing);
         Assert.That(parent.Resolve<Service>(), Is.SameAs(parentService));
@@ -153,44 +153,36 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(retry.Resolve<Service>().Resource, Is.SameAs(scopedResources[retry]));
         Assert.That(retry.Resolve<Service>(), Is.Not.SameAs(parentService));
-        Assert.That(retry.Resolve(singletonKey), Is.SameAs(singleton));
+        Assert.That(retry.Resolve<Resource>(singletonTag), Is.SameAs(singleton));
     }
 
     [Test]
     public void NearestRegistration_ShouldControlInitialization_EvenWhenTransientMasksSharedParent(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime parentLifetime,
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime childLifetime,
-        [Values] bool useDefaultKey
+        [Values] bool useDefaultTag
     )
     {
         var parentCreations = 0;
         var childCreations = 0;
-        var key = useDefaultKey ? Key<Resource>.Default : new Key<Resource>("service");
+        var tag = useDefaultTag ? null : "service";
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(
-                key,
-                factory: () =>
+            registrar.Register<Resource>(factory: () =>
                 {
                     parentCreations++;
 
                     return new Resource();
-                },
-                parentLifetime
-            );
+                }, parentLifetime, tag: tag);
         });
         using var child = root.CreateScope(registrar =>
         {
-            registrar.Register(
-                key,
-                factory: () =>
+            registrar.Register<Resource>(factory: () =>
                 {
                     childCreations++;
 
                     return new Resource();
-                },
-                childLifetime
-            );
+                }, childLifetime, tag: tag);
         });
 
         Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 0 : 1));
@@ -207,8 +199,8 @@ public class DependencyContainerChildInitializationTests
         Assert.That(childCreations, Is.EqualTo(expectedChildCreations));
         Assert.That(parentCreations, Is.EqualTo(parentLifetime == Lifetime.Transient ? 0 : 1));
 
-        var childResource = child.Resolve(key);
-        var grandchildResource = grandchild.Resolve(key);
+        var childResource = child.Resolve<Resource>(tag);
+        var grandchildResource = grandchild.Resolve<Resource>(tag);
 
         Assert.That(grandchildResource, childLifetime == Lifetime.Singleton ? Is.SameAs(childResource) : Is.Not.SameAs(childResource));
         Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 2 : expectedChildCreations));

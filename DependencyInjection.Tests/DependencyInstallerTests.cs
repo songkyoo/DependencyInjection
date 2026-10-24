@@ -108,35 +108,35 @@ public class DependencyInstallerTests
     }
 
     [Test]
-    public void ReusedInstallerAndKey_ShouldCreateIndependentContainersWithoutTakingInstallerOwnership(
+    public void ReusedInstallerAndTag_ShouldCreateIndependentContainersWithoutTakingInstallerOwnership(
         [Values] bool createChild,
         [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
-        var key = new Key<Resource>("shared");
+        var tag = "shared";
         var registrars = new List<IDependencyRegistrar>();
         var installer = new Installer(registrar =>
         {
             registrars.Add(registrar);
-            registrar.Register(key, lifetime);
+            registrar.Register<Resource>(lifetime, tag: tag);
         });
         using var parent = DependencyContainerFactory.Create(_ => { });
         var first = createChild ? parent.CreateScope(installer) : DependencyContainerFactory.Create(installer);
         var second = createChild ? parent.CreateScope(installer) : DependencyContainerFactory.Create(installer);
-        var firstResource = first.Resolve(key);
-        var secondResource = second.Resolve(key);
+        var firstResource = first.Resolve<Resource>(tag);
+        var secondResource = second.Resolve<Resource>(tag);
 
         Assert.That(installer.InstallCount, Is.EqualTo(2));
         Assert.That(registrars, Has.Count.EqualTo(2));
         Assert.That(registrars[0], Is.Not.SameAs(registrars[1]));
         Assert.That(firstResource, Is.Not.SameAs(secondResource));
-        Assert.That(first.Resolve(key), Is.SameAs(firstResource));
+        Assert.That(first.Resolve<Resource>(tag), Is.SameAs(firstResource));
 
         first.Dispose();
 
         Assert.That(firstResource.DisposeCount, Is.EqualTo(1));
         Assert.That(secondResource.DisposeCount, Is.Zero);
-        Assert.That(second.Resolve(key), Is.SameAs(secondResource));
+        Assert.That(second.Resolve<Resource>(tag), Is.SameAs(secondResource));
 
         second.Dispose();
 

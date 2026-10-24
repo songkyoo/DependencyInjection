@@ -5,19 +5,19 @@ namespace Macaron.DependencyInjection;
 internal sealed class DependencyContainerBuilder : IDependencyRegistrar
 {
     #region Fields
-    private readonly ImmutableDictionary<object, TypeRegistration>.Builder _typeRegistrations =
-        ImmutableDictionary.CreateBuilder<object, TypeRegistration>(KeyReferenceComparer.Instance);
+    private readonly ImmutableDictionary<RegistrationKey, TypeRegistration>.Builder _typeRegistrations =
+        ImmutableDictionary.CreateBuilder<RegistrationKey, TypeRegistration>();
     #endregion
 
     #region IDependencyRegistrar Inteface
     void IDependencyRegistrar.RegisterTransient<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag,
         Action<T>? cleanup
     )
     {
         AddRegistration(
-            key,
+            new RegistrationKey(typeof(T), tag),
             registration: new TypeRegistration.Transient(
                 Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
@@ -26,13 +26,13 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
     }
 
     void IDependencyRegistrar.RegisterScoped<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag,
         Action<T>? cleanup
     )
     {
         AddRegistration(
-            key,
+            new RegistrationKey(typeof(T), tag),
             registration: new TypeRegistration.Scoped(
                 Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
@@ -41,13 +41,13 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
     }
 
     void IDependencyRegistrar.RegisterSingleton<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag,
         Action<T>? cleanup
     )
     {
         AddRegistration(
-            key,
+            new RegistrationKey(typeof(T), tag),
             registration: new TypeRegistration.Singleton(
                 Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
@@ -57,16 +57,16 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
     #endregion
 
     #region Methods
-    private void AddRegistration(object key, TypeRegistration registration)
+    private void AddRegistration(RegistrationKey key, TypeRegistration registration)
     {
-        if (ReferenceEquals(key, Key<IDependencyResolver>.Default))
+        if (key.IsResolver)
         {
-            throw new ArgumentException($"Key is reserved for the current dependency resolver: {key}", nameof(key));
+            throw new ArgumentException($"Key is reserved for the current dependency resolver: {key}", paramName: nameof(key));
         }
 
         if (!_typeRegistrations.TryAdd(key, registration))
         {
-            throw new ArgumentException($"Key already registered: {key}", nameof(key));
+            throw new ArgumentException($"Key already registered: {key}", paramName: nameof(key));
         }
     }
 

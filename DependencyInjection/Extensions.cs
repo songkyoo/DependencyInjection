@@ -5,7 +5,7 @@ internal static class Extensions
     internal static object Invoke<T>(
         this DependencyFactory<T> factory,
         IDependencyResolver dependencyResolver,
-        object key,
+        RegistrationKey key,
         ref CleanupCollector cleanupCollector
     ) where T : notnull
     {

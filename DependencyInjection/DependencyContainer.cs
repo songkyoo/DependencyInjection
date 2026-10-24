@@ -4,7 +4,7 @@ namespace Macaron.DependencyInjection;
 
 internal sealed class DependencyContainer(
     DependencyContainer? parent,
-    ImmutableDictionary<object, TypeRegistration> registry
+    ImmutableDictionary<RegistrationKey, TypeRegistration> registry
 ) : IDependencyContainer
 {
     #region Types
@@ -22,12 +22,12 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Static
-    private static readonly ImmutableDictionary<object, TypeRegistration> EmptyRegistry =
-        ImmutableDictionary.Create<object, TypeRegistration>(KeyReferenceComparer.Instance);
+    private static readonly ImmutableDictionary<RegistrationKey, TypeRegistration> EmptyRegistry =
+        ImmutableDictionary.Create<RegistrationKey, TypeRegistration>();
 
     internal static DependencyContainer Create(
         DependencyContainer? parent,
-        ImmutableDictionary<object, TypeRegistration> registry
+        ImmutableDictionary<RegistrationKey, TypeRegistration> registry
     )
     {
         var container = new DependencyContainer(parent, registry);
@@ -73,9 +73,9 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Fields
-    private readonly Dictionary<object, object> _instances = new(KeyReferenceComparer.Instance);
+    private readonly Dictionary<RegistrationKey, object> _instances = new();
     private readonly List<CleanupEntry> _cleanups = [];
-    private readonly Stack<object> _resolutionStack = new();
+    private readonly Stack<RegistrationKey> _resolutionStack = new();
     private int _creationDepth;
     private bool _isDisposed;
     private bool _isCleaningTransientScope;
@@ -85,27 +85,29 @@ internal sealed class DependencyContainer(
     private int _freeTransientScopeSlotCount;
 
     private DependencyContainer? _parent = parent;
-    private ImmutableDictionary<object, TypeRegistration> _registry = registry;
+    private ImmutableDictionary<RegistrationKey, TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
-    public T Resolve<T>(Key<T> key)
+    public T Resolve<T>(object? tag = null)
     {
         return (T)ResolveRecursively(
-            key,
+            new RegistrationKey(typeof(T), tag),
             scopedInstances: _instances,
             dependencyContainer: this,
             resolver: this
         );
     }
 
-    public bool Contains<T>(Key<T> key)
+    public bool Contains<T>(object? tag = null)
     {
         ThrowIfDisposed();
 
-        return ReferenceEquals(key, Key<IDependencyResolver>.Default)
+        var key = new RegistrationKey(typeof(T), tag);
+
+        return key.IsResolver
             || _registry.ContainsKey(key)
-            || (_parent as IDependencyResolver)?.Contains(key) is true;
+            || (_parent as IDependencyResolver)?.Contains<T>(tag) is true;
     }
 
     public IDependencyContainer CreateScope()
@@ -193,10 +195,10 @@ internal sealed class DependencyContainer(
     {
         ThrowIfDisposed();
 
-        var visitedKeys = new HashSet<object>(KeyReferenceComparer.Instance);
+        var visitedKeys = new HashSet<RegistrationKey>();
 
         for (
-            DependencyContainer? registrationContainer = this;
+            var registrationContainer = this;
             registrationContainer is not null;
             registrationContainer = registrationContainer._parent
         )
@@ -228,18 +230,18 @@ internal sealed class DependencyContainer(
         }
     }
 
-    internal T Resolve<T>(Key<T> key, TransientScope transientScope)
+    internal T Resolve<T>(object? tag, TransientScope transientScope)
     {
         ThrowIfTransientScopeInvalid(transientScope);
 
-        return (T)ResolveRecursively(key, _instances, dependencyContainer: this, transientScope);
+        return (T)ResolveRecursively(new RegistrationKey(typeof(T), tag), _instances, dependencyContainer: this, transientScope);
     }
 
-    internal bool Contains<T>(Key<T> key, TransientScope transientScope)
+    internal bool Contains<T>(object? tag, TransientScope transientScope)
     {
         ThrowIfTransientScopeInvalid(transientScope);
 
-        return Contains(key);
+        return Contains<T>(tag);
     }
 
     internal void DisposeTransientScope(TransientScope transientScope)
@@ -251,22 +253,22 @@ internal sealed class DependencyContainer(
     }
 
     private object ResolveRecursively(
-        object key,
-        Dictionary<object, object> scopedInstances,
+        RegistrationKey key,
+        Dictionary<RegistrationKey, object> scopedInstances,
         DependencyContainer dependencyContainer,
         IDependencyResolver resolver
     )
     {
         ThrowIfDisposed();
 
-        if (ReferenceEquals(key, Key<IDependencyResolver>.Default))
+        if (key.IsResolver)
         {
             return resolver;
         }
 
         foreach (var resolvingKey in _resolutionStack)
         {
-            if (ReferenceEquals(resolvingKey, key))
+            if (resolvingKey == key)
             {
                 throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Reverse().Append(key))}");
             }
@@ -308,7 +310,7 @@ internal sealed class DependencyContainer(
 
             if (_parent == null)
             {
-                throw new InvalidOperationException($"Key not found: {key}");
+                throw new InvalidOperationException($"Service not found: {key}");
             }
 
             return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver);
@@ -320,8 +322,8 @@ internal sealed class DependencyContainer(
     }
 
     private object GetOrAdd(
-        Dictionary<object, object> instances,
-        object key,
+        Dictionary<RegistrationKey, object> instances,
+        RegistrationKey key,
         DependencyFactory<object> factory,
         Action<object>? cleanup
     )
@@ -339,7 +341,7 @@ internal sealed class DependencyContainer(
     }
 
     private object CreateInstance(
-        object key,
+        RegistrationKey key,
         DependencyFactory<object> factory,
         Action<object>? cleanup,
         IDependencyResolver resolver,

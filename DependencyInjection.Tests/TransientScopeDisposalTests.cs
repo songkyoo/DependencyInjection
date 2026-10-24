@@ -30,7 +30,7 @@ public class TransientScopeDisposalTests
         });
         var first = container.CreateTransientScope();
         var alias = first;
-        var firstResource = first.Resolve(Key<Resource>.Default);
+        var firstResource = first.Resolve<Resource>(null);
         var oldResolver = capturedResolver!;
 
         Assert.That(oldResolver, Is.SameAs(first));
@@ -38,16 +38,16 @@ public class TransientScopeDisposalTests
         first.Dispose();
 
         using var second = container.CreateTransientScope();
-        var secondResource = second.Resolve(Key<Resource>.Default);
+        var secondResource = second.Resolve<Resource>(null);
 
         Assert.That(alias.Dispose, Throws.Nothing);
-        Assert.That(() => alias.Resolve(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => alias.Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(oldResolver.Resolve<Resource>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(oldResolver.Contains<Resource>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => alias.Resolve<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => alias.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => oldResolver.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => oldResolver.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(firstResource.DisposeCount, Is.EqualTo(1));
         Assert.That(secondResource.DisposeCount, Is.Zero);
-        Assert.That(second.Contains(Key<Resource>.Default), Is.True);
+        Assert.That(second.Contains<Resource>(null), Is.True);
     }
 
     [Test]
@@ -62,7 +62,7 @@ public class TransientScopeDisposalTests
             var scope = container.CreateTransientScope();
 
             scopes.Add(scope);
-            resources.Add(scope.Resolve(Key<Resource>.Default));
+            resources.Add(scope.Resolve<Resource>(null));
         }
 
         for (var i = 0; i < 12; i += 2)
@@ -75,14 +75,14 @@ public class TransientScopeDisposalTests
             var scope = container.CreateTransientScope();
 
             scopes.Add(scope);
-            resources.Add(scope.Resolve(Key<Resource>.Default));
+            resources.Add(scope.Resolve<Resource>(null));
         }
 
         for (var i = 0; i < 12; i += 2)
         {
             scopes[i].Dispose();
 
-            Assert.That(() => scopes[i].Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => scopes[i].Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
         }
 
         Assert.That(resources.Skip(12).All(resource => resource.DisposeCount == 0), Is.True);
@@ -94,7 +94,7 @@ public class TransientScopeDisposalTests
         foreach (var scope in scopes)
         {
             Assert.That(scope.Dispose, Throws.Nothing);
-            Assert.That(() => scope.Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => scope.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
         }
     }
 
@@ -130,7 +130,7 @@ public class TransientScopeDisposalTests
         });
         var scope = container.CreateTransientScope();
 
-        scope.Resolve(Key<object>.Default);
+        scope.Resolve<object>(null);
 
         var exception = Assert.Throws<AggregateException>(scope.Dispose);
 
@@ -139,12 +139,12 @@ public class TransientScopeDisposalTests
             ? new Exception[] { collectedFailure, serviceFailure }
             : new Exception[] { collectedFailure }));
         Assert.That(scope.Dispose, Throws.Nothing);
-        Assert.That(capturedResolver!.Resolve<object>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => scope.Contains(Key<object>.Default), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => capturedResolver!.Resolve<object>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.Contains<object>(null), Throws.TypeOf<ObjectDisposedException>());
 
         using var replacement = container.CreateTransientScope();
 
-        Assert.That(replacement.Contains(Key<object>.Default), Is.True);
+        Assert.That(replacement.Contains<object>(null), Is.True);
     }
 
     [Test]
@@ -184,8 +184,8 @@ public class TransientScopeDisposalTests
         var first = container.CreateTransientScope();
         var second = container.CreateTransientScope();
 
-        first.Resolve(Key<Service>.Default);
-        second.Resolve(Key<Service>.Default);
+        first.Resolve<Service>(null);
+        second.Resolve<Service>(null);
 
         if (scopeCleanupFails || containerCleanupFails)
         {
@@ -217,8 +217,8 @@ public class TransientScopeDisposalTests
         Assert.That(first.Dispose, Throws.Nothing);
         Assert.That(second.Dispose, Throws.Nothing);
         Assert.That(container.Dispose, Throws.Nothing);
-        Assert.That(() => first.Resolve(Key<Service>.Default), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => second.Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => first.Resolve<Service>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => second.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(container.CreateTransientScope, Throws.TypeOf<ObjectDisposedException>());
     }
 
@@ -230,9 +230,9 @@ public class TransientScopeDisposalTests
         var first = container.CreateTransientScope();
         var second = container.CreateTransientScope();
 
-        first.Resolve(Key<Resource>.Default);
-        first.Resolve(Key<Resource>.Default);
-        second.Resolve(Key<Resource>.Default);
+        first.Resolve<Resource>(null);
+        first.Resolve<Resource>(null);
+        second.Resolve<Resource>(null);
 
         first.Dispose();
         Assert.That(resource.DisposeCount, Is.EqualTo(2));
@@ -292,7 +292,7 @@ public class TransientScopeDisposalTests
             );
         });
         var scope = container.CreateTransientScope();
-        var exception = Assert.Catch(() => scope.Resolve(Key<Service>.Default));
+        var exception = Assert.Catch(() => scope.Resolve<Service>(null));
 
         if (cleanupFails)
         {
@@ -312,7 +312,7 @@ public class TransientScopeDisposalTests
 
         fail = false;
 
-        scope.Resolve(Key<Service>.Default);
+        scope.Resolve<Service>(null);
         scope.Dispose();
 
         Assert.That(dependencies.All(resource => resource.DisposeCount == 1), Is.True);
@@ -367,7 +367,7 @@ public class TransientScopeDisposalTests
                 });
             });
             var scope = container.CreateTransientScope();
-            var resource = scope.Resolve(Key<Resource>.Default);
+            var resource = scope.Resolve<Resource>(null);
             var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
 
             if (cleanupFails)

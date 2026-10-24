@@ -1,5 +1,6 @@
 // ReSharper disable DisposeOnUsingVariable
 // ReSharper disable AccessToModifiedClosure
+// ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
 public class CleanupCollectorTests
@@ -125,37 +126,41 @@ public class CleanupCollectorTests
     }
 
     [Test]
-    public void NullTransientFactoryResult_ShouldCleanCollector_ReportKey_AndAllowRetry([Values] bool useDefaultKey)
+    public void NullTransientFactoryResult_ShouldCleanCollector_ReportTag_AndAllowRetry([Values] bool useDefaultTag)
     {
-        var key = useDefaultKey ? Key<string>.Default : new Key<string>("service");
+        var tag = useDefaultTag ? null : "service";
         var returnNull = true;
         var collected = new Resource();
         var serviceCleanupCount = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient(key, factory: (_, ref collector) =>
-            {
-                if (returnNull)
+            registrar.RegisterTransient<string>(
+                factory: (_, ref collector) =>
                 {
-                    collector.Add(collected);
-                    return null!;
-                }
+                    if (returnNull)
+                    {
+                        collector.Add(collected);
+                        return null!;
+                    }
 
-                return "Hello";
-            }, cleanup: _ => serviceCleanupCount++);
+                    return "Hello";
+                },
+                tag,
+                cleanup: _ => serviceCleanupCount++
+            );
         });
         using var child = root.CreateScope();
 
-        var error = Assert.Throws<InvalidOperationException>(() => child.Resolve(key));
+        var error = Assert.Throws<InvalidOperationException>(() => child.Resolve<string>(tag));
 
         Assert.That(error!.Message, Does.Contain("Factory returned null"));
-        Assert.That(error.Message, Does.Contain(key.ToString()));
+        Assert.That(error.Message, Does.Contain(tag ?? "null"));
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
         Assert.That(serviceCleanupCount, Is.Zero);
 
         returnNull = false;
 
-        Assert.That(child.Resolve(key), Is.EqualTo("Hello"));
+        Assert.That(child.Resolve<string>(tag), Is.EqualTo("Hello"));
 
         child.Dispose();
         root.Dispose();
@@ -224,7 +229,7 @@ public class CleanupCollectorTests
             });
         });
 
-        Assert.That(container.Resolve<object>, Throws.InvalidOperationException);
+        Assert.That(() => container.Resolve<object>(), Throws.InvalidOperationException);
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
         Assert.That(dependency.DisposeCount, Is.Zero);
         Assert.That(container.Resolve<Resource>(), Is.SameAs(dependency));

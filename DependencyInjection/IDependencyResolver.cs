@@ -2,7 +2,7 @@
 
 public interface IDependencyResolver
 {
-    T Resolve<T>(Key<T> key);
+    T Resolve<T>(object? tag = null);
 
-    bool Contains<T>(Key<T> key);
+    bool Contains<T>(object? tag = null);
 }

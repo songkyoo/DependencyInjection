@@ -69,17 +69,17 @@ public class TransientScopeLifecycleTests
             active = container.CreateTransientScope();
             sibling = container.CreateTransientScope();
 
-            var exception = Assert.Throws<ArgumentException>(() => active.Resolve(Key<Service>.Default));
+            var exception = Assert.Throws<ArgumentException>(() => active.Resolve<Service>(null));
 
             Assert.That(exception, Is.SameAs(failure));
             Assert.That(cleanupCalls, Is.EqualTo(3));
             Assert.That(installerCalls, Is.Zero);
-            Assert.That(active.Contains(Key<Service>.Default), Is.True);
-            Assert.That(sibling.Contains(Key<Service>.Default), Is.True);
+            Assert.That(active.Contains<Service>(null), Is.True);
+            Assert.That(sibling.Contains<Service>(null), Is.True);
 
             fail = false;
 
-            Assert.That(active.Resolve(Key<Service>.Default).Resource, Is.Not.Null);
+            Assert.That(active.Resolve<Service>(null).Resource, Is.Not.Null);
 
             active.Dispose();
             sibling.Dispose();
@@ -99,7 +99,7 @@ public class TransientScopeLifecycleTests
             Assert.That(container.Dispose, Throws.InvalidOperationException);
             Assert.That(active.Dispose, Throws.InvalidOperationException);
             Assert.That(sibling.Dispose, Throws.InvalidOperationException);
-            Assert.That(active.Contains(Key<Service>.Default), Is.True);
+            Assert.That(active.Contains<Service>(null), Is.True);
         }
         #endregion
     }
@@ -124,13 +124,13 @@ public class TransientScopeLifecycleTests
 
                 Assert.That(active.Dispose, Throws.Nothing);
                 Assert.That(ended.Dispose, Throws.Nothing);
-                Assert.That(() => active.Contains(Key<object>.Default), Throws.TypeOf<ObjectDisposedException>());
+                Assert.That(() => active.Contains<object>(null), Throws.TypeOf<ObjectDisposedException>());
                 Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
                 Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
                 Assert.That(() => container.CreateScope(_ => installerCalls++), Throws.InvalidOperationException);
                 Assert.That(container.Dispose, Throws.InvalidOperationException);
                 Assert.That(sibling.Dispose, Throws.InvalidOperationException);
-                Assert.That(sibling.Resolve(Key<Resource>.Default), Is.SameAs(container.Resolve<Resource>()));
+                Assert.That(sibling.Resolve<Resource>(null), Is.SameAs(container.Resolve<Resource>()));
 
                 if (cleanupFails)
                 {
@@ -145,7 +145,7 @@ public class TransientScopeLifecycleTests
             sibling = container.CreateTransientScope();
             ended = container.CreateTransientScope();
             ended.Dispose();
-            active.Resolve(Key<object>.Default);
+            active.Resolve<object>(null);
 
             if (cleanupFails)
             {
@@ -159,7 +159,7 @@ public class TransientScopeLifecycleTests
 
             Assert.That(cleanupCalls, Is.EqualTo(1));
             Assert.That(installerCalls, Is.Zero);
-            Assert.That(sibling.Contains(Key<object>.Default), Is.True);
+            Assert.That(sibling.Contains<object>(null), Is.True);
             Assert.That(active.Dispose, Throws.Nothing);
 
             sibling.Dispose();

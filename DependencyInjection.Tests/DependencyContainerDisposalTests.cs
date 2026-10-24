@@ -17,18 +17,18 @@ public class DependencyContainerDisposalTests
         var disposedInRoot = false;
         var disposedInChild = false;
 
-        var key = Key<Foo>.Default;
+        object? tag = null;
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInRoot = true), Lifetime.Scoped);
+            registrar.Register<Foo>((_, ref _) => new Foo(onDispose: () => disposedInRoot = true), Lifetime.Scoped, tag: tag);
         });
         var child = root.CreateScope(registrar =>
         {
-            registrar.Register(key, (_, ref _) => new Foo(onDispose: () => disposedInChild = true), Lifetime.Scoped);
+            registrar.Register<Foo>((_, ref _) => new Foo(onDispose: () => disposedInChild = true), Lifetime.Scoped, tag: tag);
         });
 
-        root.Resolve(key);
-        child.Resolve(key);
+        root.Resolve<Foo>(tag);
+        child.Resolve<Foo>(tag);
 
         child.Dispose();
 
@@ -52,8 +52,8 @@ public class DependencyContainerDisposalTests
 
         container.Dispose();
 
-        Assert.That(container.Resolve<Foo>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(container.Contains<Foo>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.Resolve<Foo>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.Contains<Foo>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateScope(_ => configurationCalls++), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateScope(installer), Throws.TypeOf<ObjectDisposedException>());

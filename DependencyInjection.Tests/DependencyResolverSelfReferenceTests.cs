@@ -16,7 +16,7 @@ public class DependencyResolverSelfReferenceTests
     }
 
     [Test]
-    public void DefaultKeyAndLookupExtensions_ShouldReturnEachRequestingResolver()
+    public void DefaultTagAndLookupExtensions_ShouldReturnEachRequestingResolver()
     {
         using var root = DependencyContainerFactory.Create(_ => { });
         using var child = root.CreateScope();
@@ -24,7 +24,7 @@ public class DependencyResolverSelfReferenceTests
         using var rootScope = root.CreateTransientScope();
         using var childScope = child.CreateTransientScope();
         using var siblingScope = child.CreateTransientScope();
-        var key = Key<IDependencyResolver>.Default;
+        object? tag = null;
         var fallbackCalls = 0;
         Func<IDependencyResolver> fallback = () =>
         {
@@ -41,17 +41,17 @@ public class DependencyResolverSelfReferenceTests
 
         foreach (var resolver in new IDependencyResolver[] { root, child, grandchild, rootScope, childScope, siblingScope })
         {
-            Assert.That(resolver.Contains(key), Is.True);
+            Assert.That(resolver.Contains<IDependencyResolver>(tag), Is.True);
             Assert.That(resolver.Contains<IDependencyResolver>(), Is.True);
-            Assert.That(resolver.Resolve(key), Is.SameAs(resolver));
+            Assert.That(resolver.Resolve<IDependencyResolver>(tag), Is.SameAs(resolver));
             Assert.That(resolver.Resolve<IDependencyResolver>(), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrNull(key), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrNull<IDependencyResolver>(tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrNull<IDependencyResolver>(), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrElse(key, fallback), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrElse<IDependencyResolver>(fallback, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse(fallback), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrElse(key, resolverFallback), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrElse<IDependencyResolver>(resolverFallback, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse(resolverFallback), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrElse(key, root), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrElse<IDependencyResolver>(root, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse((IDependencyResolver)root), Is.SameAs(resolver));
         }
 
@@ -59,9 +59,9 @@ public class DependencyResolverSelfReferenceTests
     }
 
     [Test]
-    public void DefaultKeyRegistration_ShouldFailBeforeFactoriesRun(
+    public void DefaultTagRegistration_ShouldFailBeforeFactoriesRun(
         [Values] Lifetime lifetime,
-        [Values] bool useExplicitKey,
+        [Values] bool useExplicitTag,
         [Values] bool registerInChild
     )
     {
@@ -82,15 +82,15 @@ public class DependencyResolverSelfReferenceTests
         });
 
         Assert.That(error!.ParamName, Is.EqualTo("key"));
-        Assert.That(error.Message, Does.Contain(Key<IDependencyResolver>.Default.ToString()));
+        Assert.That(error.Message, Does.Contain(typeof(IDependencyResolver).ToString()));
         Assert.That(factoryCalls, Is.Zero);
         Assert.That(root.Resolve<IDependencyResolver>(), Is.SameAs(root));
 
         void RegisterResolver(IDependencyRegistrar registrar)
         {
-            if (useExplicitKey)
+            if (useExplicitTag)
             {
-                registrar.Register(Key<IDependencyResolver>.Default, factory, lifetime);
+                registrar.Register<IDependencyResolver>(factory, lifetime, tag: null);
             }
             else
             {
@@ -100,34 +100,34 @@ public class DependencyResolverSelfReferenceTests
     }
 
     [Test]
-    public void CustomResolverKeys_ShouldFollowRegistrationAndCleanupRules(
+    public void CustomResolverTags_ShouldFollowRegistrationAndCleanupRules(
         [Values] Lifetime lifetime,
         [Values("", "resolver")] string name
     )
     {
-        var key = new Key<IDependencyResolver>(name);
-        var missingKey = new Key<IDependencyResolver>(name);
+        var tag = name;
+        var missingTag = "missing";
         var cleanupCalls = 0;
         using var parentResolver = DependencyContainerFactory.Create(_ => { });
         using var childResolver = DependencyContainerFactory.Create(_ => { });
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(key, () => parentResolver, lifetime, _ => cleanupCalls++);
+            registrar.Register<IDependencyResolver>(() => parentResolver, lifetime, cleanup: _ => cleanupCalls++, tag: tag);
         });
         using var child = root.CreateScope(registrar =>
         {
-            registrar.Register(key, () => childResolver, lifetime, _ => cleanupCalls++);
+            registrar.Register<IDependencyResolver>(() => childResolver, lifetime, cleanup: _ => cleanupCalls++, tag: tag);
         });
         using var scope = child.CreateTransientScope();
 
-        Assert.That(root.Resolve(key), Is.SameAs(parentResolver));
-        Assert.That(child.Resolve(key), Is.SameAs(childResolver));
-        Assert.That(scope.Resolve(key), Is.SameAs(childResolver));
-        Assert.That(scope.Contains(key), Is.True);
-        Assert.That(scope.Contains(missingKey), Is.False);
-        Assert.That(() => scope.Resolve(missingKey), Throws.InvalidOperationException);
-        Assert.That(scope.ResolveOrNull(missingKey), Is.Null);
-        Assert.That(scope.ResolveOrElse(missingKey, parentResolver), Is.SameAs(parentResolver));
+        Assert.That(root.Resolve<IDependencyResolver>(tag), Is.SameAs(parentResolver));
+        Assert.That(child.Resolve<IDependencyResolver>(tag), Is.SameAs(childResolver));
+        Assert.That(scope.Resolve<IDependencyResolver>(tag), Is.SameAs(childResolver));
+        Assert.That(scope.Contains<IDependencyResolver>(tag), Is.True);
+        Assert.That(scope.Contains<IDependencyResolver>(missingTag), Is.False);
+        Assert.That(() => scope.Resolve<IDependencyResolver>(missingTag), Throws.InvalidOperationException);
+        Assert.That(scope.ResolveOrNull<IDependencyResolver>(missingTag), Is.Null);
+        Assert.That(scope.ResolveOrElse<IDependencyResolver>(parentResolver, tag: missingTag), Is.SameAs(parentResolver));
         Assert.That(scope.Resolve<IDependencyResolver>(), Is.SameAs(scope));
 
         scope.Dispose();
@@ -188,7 +188,7 @@ public class DependencyResolverSelfReferenceTests
 
         Consumer CreateConsumer(IDependencyResolver resolver, ref CleanupCollector _)
         {
-            var self = resolver.Resolve(Key<IDependencyResolver>.Default);
+            var self = resolver.Resolve<IDependencyResolver>(null);
 
             Assert.That(self, Is.SameAs(resolver));
 
@@ -242,7 +242,7 @@ public class DependencyResolverSelfReferenceTests
         using var child = root.CreateScope();
         using var scope = child.CreateTransientScope();
         var capturedResolver = scope.Resolve<IDependencyResolver>();
-        var key = Key<IDependencyResolver>.Default;
+        object? tag = null;
         var fallbackCalls = 0;
 
         if (disposeContainerFirst)
@@ -258,11 +258,11 @@ public class DependencyResolverSelfReferenceTests
 
         foreach (var resolver in disposedResolvers)
         {
-            Assert.That(() => resolver.Resolve(key), Throws.TypeOf<ObjectDisposedException>());
-            Assert.That(resolver.Resolve<IDependencyResolver>, Throws.TypeOf<ObjectDisposedException>());
-            Assert.That(() => resolver.Contains(key), Throws.TypeOf<ObjectDisposedException>());
-            Assert.That(resolver.Contains<IDependencyResolver>, Throws.TypeOf<ObjectDisposedException>());
-            Assert.That(resolver.ResolveOrNull<IDependencyResolver>, Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => resolver.Resolve<IDependencyResolver>(tag), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => resolver.Resolve<IDependencyResolver>(), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => resolver.Contains<IDependencyResolver>(tag), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => resolver.Contains<IDependencyResolver>(), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => resolver.ResolveOrNull<IDependencyResolver>(), Throws.TypeOf<ObjectDisposedException>());
             Assert.That(
                 () => resolver.ResolveOrElse<IDependencyResolver>(() =>
                 {
@@ -277,7 +277,7 @@ public class DependencyResolverSelfReferenceTests
         using var replacement = (disposeContainerFirst ? root : child).CreateTransientScope();
 
         Assert.That(replacement.Resolve<IDependencyResolver>(), Is.SameAs(replacement));
-        Assert.That(capturedResolver.Resolve<IDependencyResolver>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => capturedResolver.Resolve<IDependencyResolver>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(root.Resolve<IDependencyResolver>(), Is.SameAs(root));
         Assert.That(fallbackCalls, Is.Zero);
     }

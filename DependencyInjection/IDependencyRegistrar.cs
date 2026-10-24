@@ -3,20 +3,20 @@
 public interface IDependencyRegistrar
 {
     void RegisterTransient<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag = null,
         Action<T>? cleanup = null
     ) where T : notnull;
 
     void RegisterScoped<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag = null,
         Action<T>? cleanup = null
     ) where T : notnull;
 
     void RegisterSingleton<T>(
-        Key<T> key,
         DependencyFactory<T> factory,
+        object? tag = null,
         Action<T>? cleanup = null
     ) where T : notnull;
 }

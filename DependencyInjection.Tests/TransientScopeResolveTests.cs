@@ -16,26 +16,26 @@ public class TransientScopeResolveTests
     [Test]
     public void SharedServices_ShouldReuseBaseContainerCaches([Values] bool useChild)
     {
-        var scopedKey = new Key<Resource>("scoped");
-        var singletonKey = new Key<Resource>("singleton");
+        var scopedTag = "scoped";
+        var singletonTag = "singleton";
         var creations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(scopedKey, CreateResource, Lifetime.Scoped);
-            registrar.Register(singletonKey, CreateResource, Lifetime.Singleton);
+            registrar.Register<Resource>(CreateResource, Lifetime.Scoped, tag: scopedTag);
+            registrar.Register<Resource>(CreateResource, Lifetime.Singleton, tag: singletonTag);
         });
         using var child = root.CreateScope();
         var container = useChild ? child : root;
-        var expectedScoped = container.Resolve(scopedKey);
-        var expectedSingleton = root.Resolve(singletonKey);
+        var expectedScoped = container.Resolve<Resource>(scopedTag);
+        var expectedSingleton = root.Resolve<Resource>(singletonTag);
         var scope = container.CreateTransientScope();
 
         Assert.That(creations, Is.EqualTo(3));
-        Assert.That(scope.Contains(scopedKey), Is.True);
-        Assert.That(scope.Contains(singletonKey), Is.True);
-        Assert.That(scope.Contains(Key<Service>.Default), Is.False);
-        Assert.That(scope.Resolve(scopedKey), Is.SameAs(expectedScoped));
-        Assert.That(scope.Resolve(singletonKey), Is.SameAs(expectedSingleton));
+        Assert.That(scope.Contains<Resource>(scopedTag), Is.True);
+        Assert.That(scope.Contains<Resource>(singletonTag), Is.True);
+        Assert.That(scope.Contains<Service>(null), Is.False);
+        Assert.That(scope.Resolve<Resource>(scopedTag), Is.SameAs(expectedScoped));
+        Assert.That(scope.Resolve<Resource>(singletonTag), Is.SameAs(expectedSingleton));
 
         scope.Dispose();
 
@@ -68,7 +68,7 @@ public class TransientScopeResolveTests
         using var child = root.CreateScope();
         var container = useChild ? child : root;
         var scope = container.CreateTransientScope();
-        var service = scope.Resolve(Key<Service>.Default);
+        var service = scope.Resolve<Service>(null);
 
         Assert.That(service, Is.SameAs(container.Resolve<Service>()));
 
@@ -93,16 +93,16 @@ public class TransientScopeResolveTests
     [Test]
     public void NestedTransientsAndCollectors_ShouldBelongOnlyToRequestingScope([Values] bool useChild)
     {
-        var sharedKey = new Key<Resource>("shared");
-        var dependencyKey = Key<Resource>.Default;
-        var serviceKey = Key<Service>.Default;
+        var sharedTag = "shared";
+        object? dependencyTag = null;
+        object? serviceTag = null;
         var resolvers = new List<IDependencyResolver>();
         var cleanups = new List<string>();
         var dependencyId = 0;
         var serviceId = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped(sharedKey);
+            registrar.RegisterScoped<Resource>(tag: sharedTag);
             registrar.RegisterTransient<Resource>(
                 factory: (resolver, ref collector) =>
                 {
@@ -122,8 +122,8 @@ public class TransientScopeResolveTests
                     resolvers.Add(resolver);
 
                     var id = ++serviceId;
-                    var dependency = resolver.Resolve(dependencyKey);
-                    var shared = resolver.Resolve(sharedKey);
+                    var dependency = resolver.Resolve<Resource>(dependencyTag);
+                    var shared = resolver.Resolve<Resource>(sharedTag);
 
                     collector.Add(new object(), _ => cleanups.Add($"service-collected-{id}"));
 
@@ -141,12 +141,12 @@ public class TransientScopeResolveTests
         var container = useChild ? child : root;
         var firstScope = container.CreateTransientScope();
         var secondScope = container.CreateTransientScope();
-        var first = firstScope.Resolve(serviceKey);
-        var second = secondScope.Resolve(serviceKey);
-        var direct = container.Resolve(serviceKey);
+        var first = firstScope.Resolve<Service>(serviceTag);
+        var second = secondScope.Resolve<Service>(serviceTag);
+        var direct = container.Resolve<Service>(serviceTag);
 
         Assert.That(first.Dependency, Is.Not.SameAs(second.Dependency));
-        Assert.That(first.Shared, Is.SameAs(container.Resolve(sharedKey)));
+        Assert.That(first.Shared, Is.SameAs(container.Resolve<Resource>(sharedTag)));
         Assert.That(second.Shared, Is.SameAs(first.Shared));
         Assert.That(resolvers[0], Is.SameAs(firstScope));
         Assert.That(resolvers[2], Is.SameAs(secondScope));
@@ -177,24 +177,24 @@ public class TransientScopeResolveTests
     public void FailedLookupAndCycle_ShouldAllowLaterResolution()
     {
         var cycle = true;
-        var key = Key<object>.Default;
+        object? tag = null;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterTransient<object>(factory: (resolver, ref _) =>
             {
-                return cycle ? resolver.Resolve(key) : new object();
+                return cycle ? resolver.Resolve<object>(tag) : new object();
             });
         });
         using var scope = container.CreateTransientScope();
 
-        Assert.That(() => scope.Resolve(Key<Resource>.Default), Throws.InvalidOperationException);
+        Assert.That(() => scope.Resolve<Resource>(null), Throws.InvalidOperationException);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve(key));
+        var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve<object>(tag));
 
         Assert.That(exception!.Message, Does.Contain("Cyclic dependency detected"));
 
         cycle = false;
 
-        Assert.That(scope.Resolve(key), Is.Not.Null);
+        Assert.That(scope.Resolve<object>(tag), Is.Not.Null);
     }
 }

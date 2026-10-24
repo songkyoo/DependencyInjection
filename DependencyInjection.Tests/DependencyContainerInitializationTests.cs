@@ -69,15 +69,15 @@ public class DependencyContainerInitializationTests
         [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime dependencyLifetime
     )
     {
-        var firstKey = new Key<Service>("first");
-        var secondKey = new Key<Service>("second");
+        var firstTag = "first";
+        var secondTag = "second";
         var events = new List<string>();
         var dependencyCreations = 0;
         var serviceCreations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register(firstKey, CreateService, serviceLifetime);
-            registrar.Register(secondKey, CreateService, serviceLifetime);
+            registrar.Register<Service>(CreateService, serviceLifetime, tag: firstTag);
+            registrar.Register<Service>(CreateService, serviceLifetime, tag: secondTag);
             registrar.Register(factory: () =>
             {
                 dependencyCreations++;
@@ -90,8 +90,8 @@ public class DependencyContainerInitializationTests
         Assert.That(dependencyCreations, Is.EqualTo(1));
         Assert.That(serviceCreations, Is.EqualTo(2));
         Assert.That(events, Is.EqualTo(new[] { "dependency", "service", "service" }));
-        Assert.That(root.Resolve(firstKey).Resource, Is.SameAs(root.Resolve<Resource>()));
-        Assert.That(root.Resolve(secondKey).Resource, Is.SameAs(root.Resolve<Resource>()));
+        Assert.That(root.Resolve<Service>(firstTag).Resource, Is.SameAs(root.Resolve<Resource>()));
+        Assert.That(root.Resolve<Service>(secondTag).Resource, Is.SameAs(root.Resolve<Resource>()));
 
         Service CreateService(IDependencyResolver resolver, ref CleanupCollector collector)
         {
@@ -167,11 +167,11 @@ public class DependencyContainerInitializationTests
         {
             foreach (var name in new[] { "first", "second", "third" })
             {
-                registrar.RegisterSingleton(new Key<object>(name), factory: () =>
+                registrar.RegisterSingleton<object>(factory: () =>
                 {
                     factoryCalls++;
                     throw failure;
-                });
+                }, tag: name);
             }
         }
     }

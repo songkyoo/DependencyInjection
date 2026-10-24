@@ -119,8 +119,8 @@ public class DependencyContainerCleanupOrderTests
         Assert.That(exception!.InnerExceptions, Is.EqualTo(expectedFailures));
         Assert.That(container.Dispose, Throws.Nothing);
         Assert.That(calls, Has.Count.EqualTo(4));
-        Assert.That(container.Resolve<object>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(container.Contains<object>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.Resolve<object>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.Contains<object>(), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
