@@ -1,0 +1,185 @@
+namespace Macaron.DependencyInjection.Tests;
+
+public class LifetimeScopeResolveTests
+{
+    private sealed class Resource : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose() => DisposeCount++;
+    }
+
+    private sealed record Service(Resource Dependency, Resource Shared);
+
+    [Test]
+    public void SharedServices_ShouldReuseBaseContainerCaches([Values] bool useChild)
+    {
+        var scopedKey = new Key<Resource>("scoped");
+        var singletonKey = new Key<Resource>("singleton");
+        var creations = 0;
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register(scopedKey, CreateResource, Lifetime.Scoped);
+            registrar.Register(singletonKey, CreateResource, Lifetime.Singleton);
+        });
+        using var child = root.CreateScope(_ => { });
+        var container = useChild ? child : root;
+        var expectedScoped = container.Resolve(scopedKey);
+        var expectedSingleton = root.Resolve(singletonKey);
+        var scope = container.CreateLifetimeScope();
+
+        Assert.That(creations, Is.EqualTo(3));
+        Assert.That(scope.Contains(scopedKey), Is.True);
+        Assert.That(scope.Contains(singletonKey), Is.True);
+        Assert.That(scope.Contains(Key<Service>.Default), Is.False);
+        Assert.That(scope.Resolve(scopedKey), Is.SameAs(expectedScoped));
+        Assert.That(scope.Resolve(singletonKey), Is.SameAs(expectedSingleton));
+
+        scope.Dispose();
+
+        Assert.That(creations, Is.EqualTo(3));
+        Assert.That(expectedScoped.DisposeCount, Is.Zero);
+        Assert.That(expectedSingleton.DisposeCount, Is.Zero);
+
+        Resource CreateResource()
+        {
+            creations++;
+
+            return new Resource();
+        }
+    }
+
+    [Test]
+    public void SharedServiceTransientDependencies_ShouldRemainOwnedByContainer(
+        [Values(Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
+        [Values] bool useChild
+    )
+    {
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>();
+            registrar.Register<Service>(factory: (resolver, ref _) =>
+                new Service(resolver.Resolve<Resource>(), resolver.Resolve<Resource>()), lifetime);
+        });
+        using var child = root.CreateScope(_ => { });
+        var container = useChild ? child : root;
+        var scope = container.CreateLifetimeScope();
+        var service = scope.Resolve(Key<Service>.Default);
+
+        Assert.That(service, Is.SameAs(container.Resolve<Service>()));
+
+        scope.Dispose();
+
+        Assert.That(service.Dependency.DisposeCount, Is.Zero);
+        Assert.That(service.Shared.DisposeCount, Is.Zero);
+
+        child.Dispose();
+
+        var cleanedByChild = useChild && lifetime == Lifetime.Scoped ? 1 : 0;
+
+        Assert.That(service.Dependency.DisposeCount, Is.EqualTo(cleanedByChild));
+        Assert.That(service.Shared.DisposeCount, Is.EqualTo(cleanedByChild));
+
+        root.Dispose();
+
+        Assert.That(service.Dependency.DisposeCount, Is.EqualTo(1));
+        Assert.That(service.Shared.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void NestedTransientsAndCollectors_ShouldBelongOnlyToRequestingScope([Values] bool useChild)
+    {
+        var sharedKey = new Key<Resource>("shared");
+        var dependencyKey = Key<Resource>.Default;
+        var serviceKey = Key<Service>.Default;
+        var resolvers = new List<IDependencyResolver>();
+        var cleanups = new List<string>();
+        var dependencyId = 0;
+        var serviceId = 0;
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<Resource>(sharedKey);
+            registrar.RegisterTransient<Resource>(factory: (resolver, ref collector) =>
+            {
+                resolvers.Add(resolver);
+                var id = ++dependencyId;
+                collector.Add(new object(), _ => cleanups.Add($"dependency-collected-{id}"));
+
+                return new Resource();
+            }, cleanup: resource => resource.Dispose());
+            registrar.RegisterTransient<Service>(factory: (resolver, ref collector) =>
+            {
+                resolvers.Add(resolver);
+                var id = ++serviceId;
+                var dependency = resolver.Resolve(dependencyKey);
+                var shared = resolver.Resolve(sharedKey);
+                collector.Add(new object(), _ => cleanups.Add($"service-collected-{id}"));
+
+                return new Service(dependency, shared);
+            }, cleanup: service =>
+            {
+                Assert.That(service.Dependency.DisposeCount, Is.Zero);
+                Assert.That(service.Shared.DisposeCount, Is.Zero);
+                cleanups.Add("service");
+            });
+        });
+        using var child = root.CreateScope(_ => { });
+        var container = useChild ? child : root;
+        var firstScope = container.CreateLifetimeScope();
+        var secondScope = container.CreateLifetimeScope();
+        var first = firstScope.Resolve(serviceKey);
+        var second = secondScope.Resolve(serviceKey);
+        var direct = container.Resolve(serviceKey);
+
+        Assert.That(first.Dependency, Is.Not.SameAs(second.Dependency));
+        Assert.That(first.Shared, Is.SameAs(container.Resolve(sharedKey)));
+        Assert.That(second.Shared, Is.SameAs(first.Shared));
+        Assert.That(resolvers[0], Is.SameAs(firstScope));
+        Assert.That(resolvers[2], Is.SameAs(secondScope));
+        Assert.That(resolvers[0], Is.SameAs(resolvers[1]));
+        Assert.That(resolvers[2], Is.SameAs(resolvers[3]));
+        Assert.That(resolvers[0], Is.Not.SameAs(resolvers[2]));
+        Assert.That(resolvers[0], Is.Not.SameAs(container));
+        Assert.That(resolvers[4], Is.SameAs(container));
+
+        firstScope.Dispose();
+
+        Assert.That(cleanups, Is.EqualTo(new[]
+        {
+            "service-collected-1", "service", "dependency-collected-1"
+        }));
+        Assert.That(first.Dependency.DisposeCount, Is.EqualTo(1));
+        Assert.That(second.Dependency.DisposeCount, Is.Zero);
+        Assert.That(direct.Dependency.DisposeCount, Is.Zero);
+
+        secondScope.Dispose();
+
+        Assert.That(second.Dependency.DisposeCount, Is.EqualTo(1));
+        Assert.That(direct.Dependency.DisposeCount, Is.Zero);
+        Assert.That(first.Shared.DisposeCount, Is.Zero);
+    }
+
+    [Test]
+    public void FailedLookupAndCycle_ShouldAllowLaterResolution()
+    {
+        var cycle = true;
+        var key = Key<object>.Default;
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<object>(factory: (resolver, ref _) =>
+            {
+                return cycle ? resolver.Resolve(key) : new object();
+            });
+        });
+        using var scope = container.CreateLifetimeScope();
+
+        Assert.That(() => scope.Resolve(Key<Resource>.Default), Throws.InvalidOperationException);
+        var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve(key));
+
+        Assert.That(exception!.Message, Does.Contain("Cyclic dependency detected"));
+
+        cycle = false;
+
+        Assert.That(scope.Resolve(key), Is.Not.Null);
+    }
+}

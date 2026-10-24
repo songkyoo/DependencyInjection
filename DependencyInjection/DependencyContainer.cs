@@ -7,30 +7,68 @@ internal sealed class DependencyContainer(
     ImmutableDictionary<object, TypeRegistration> registry
 ) : IDependencyContainer
 {
+    #region Types
+    private struct LifetimeScopeSlot
+    {
+        public LifetimeScope? Scope;
+        public List<CleanupEntry>? Cleanups;
+
+        public void Deconstruct(out LifetimeScope? scope, out List<CleanupEntry>? cleanups)
+        {
+            scope = Scope;
+            cleanups = Cleanups;
+        }
+    }
+    #endregion
+
+    #region Static
+    private static void CleanupEntries(List<CleanupEntry> cleanups, ref List<Exception>? exceptions)
+    {
+        for (var index = cleanups.Count - 1; index >= 0; index--)
+        {
+            try
+            {
+                cleanups[index].Invoke();
+            }
+            catch (Exception exception)
+            {
+                exceptions ??= [];
+                exceptions.Add(exception);
+            }
+        }
+
+        cleanups.Clear();
+    }
+    #endregion
+
     #region Fields
     private readonly Dictionary<object, object> _instances = new(KeyReferenceComparer.Instance);
     private readonly List<CleanupEntry> _cleanups = [];
     private readonly Stack<object> _resolutionStack = new();
     private int _creationDepth;
     private bool _isDisposed;
+    private bool _isCleaningLifetimeScope;
+
+    private LifetimeScopeSlot[] _lifetimeScopeSlots = [];
+    private int _lifetimeScopeSlotCount;
+    private int _freeLifetimeScopeSlotCount;
 
     private DependencyContainer? _parent = parent;
     private ImmutableDictionary<object, TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
-    T IDependencyResolver.Resolve<T>(Key<T> key)
+    public T Resolve<T>(Key<T> key)
     {
         return (T)ResolveRecursively(
             key,
             scopedInstances: _instances,
             dependencyContainer: this,
-            resolver: this,
-            cleanups: _cleanups
+            resolver: this
         );
     }
 
-    bool IDependencyResolver.Contains<T>(Key<T> key)
+    public bool Contains<T>(Key<T> key)
     {
         ThrowIfDisposed();
 
@@ -40,17 +78,26 @@ internal sealed class DependencyContainer(
     public IDependencyContainer CreateScope(IDependencyInstaller installer)
     {
         ThrowIfDisposed();
-
-        if (_creationDepth > 0)
-        {
-            throw new InvalidOperationException("Cannot call CreateScope while a service is being created.");
-        }
+        ThrowIfLifecycleChangeBlocked(nameof(CreateScope));
 
         var builder = new DependencyContainerBuilder();
 
         installer.Install(builder);
 
         return builder.Build(parent: this);
+    }
+
+    public LifetimeScope CreateLifetimeScope()
+    {
+        ThrowIfDisposed();
+        ThrowIfLifecycleChangeBlocked(nameof(CreateLifetimeScope));
+
+        var index = AllocateLifetimeScopeSlot();
+        var lifetimeScope = new LifetimeScope(this, index);
+
+        _lifetimeScopeSlots[index].Scope = lifetimeScope;
+
+        return lifetimeScope;
     }
 
     public void Dispose()
@@ -60,10 +107,7 @@ internal sealed class DependencyContainer(
             return;
         }
 
-        if (_creationDepth > 0)
-        {
-            throw new InvalidOperationException("Cannot call Dispose while a service is being created.");
-        }
+        ThrowIfLifecycleChangeBlocked(nameof(Dispose));
 
         _isDisposed = true;
         _parent = null;
@@ -71,11 +115,16 @@ internal sealed class DependencyContainer(
 
         List<Exception>? exceptions = null;
 
-        for (var index = _cleanups.Count - 1; index >= 0; index--)
+        for (var index = _lifetimeScopeSlotCount - 1; index >= 0; index--)
         {
+            if (_lifetimeScopeSlots[index].Scope is null)
+            {
+                continue;
+            }
+
             try
             {
-                _cleanups[index].Invoke();
+                DisposeLifetimeScopeSlot(index);
             }
             catch (Exception exception)
             {
@@ -84,7 +133,11 @@ internal sealed class DependencyContainer(
             }
         }
 
-        _cleanups.Clear();
+        _lifetimeScopeSlots = [];
+        _lifetimeScopeSlotCount = 0;
+        _freeLifetimeScopeSlotCount = 0;
+
+        CleanupEntries(_cleanups, ref exceptions);
         _instances.Clear();
 
         if (exceptions is not null)
@@ -128,19 +181,39 @@ internal sealed class DependencyContainer(
                     key,
                     scopedInstances: _instances,
                     dependencyContainer: this,
-                    resolver: this,
-                    cleanups: _cleanups
+                    resolver: this
                 );
             }
         }
+    }
+
+    internal T Resolve<T>(Key<T> key, LifetimeScope lifetimeScope)
+    {
+        ThrowIfLifetimeScopeInvalid(lifetimeScope);
+
+        return (T)ResolveRecursively(key, _instances, dependencyContainer: this, lifetimeScope);
+    }
+
+    internal bool Contains<T>(Key<T> key, LifetimeScope lifetimeScope)
+    {
+        ThrowIfLifetimeScopeInvalid(lifetimeScope);
+
+        return Contains(key);
+    }
+
+    internal void DisposeLifetimeScope(LifetimeScope lifetimeScope)
+    {
+        ThrowIfLifecycleChangeBlocked(nameof(Dispose));
+        ThrowIfLifetimeScopeInvalid(lifetimeScope);
+
+        DisposeLifetimeScopeSlot(lifetimeScope.Index);
     }
 
     private object ResolveRecursively(
         object key,
         Dictionary<object, object> scopedInstances,
         DependencyContainer dependencyContainer,
-        IDependencyResolver resolver,
-        List<CleanupEntry> cleanups
+        IDependencyResolver resolver
     )
     {
         ThrowIfDisposed();
@@ -162,11 +235,27 @@ internal sealed class DependencyContainer(
                 return typeRegistration switch
                 {
                     TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
-                        dependencyContainer.CreateInstance(key, factory, cleanup, resolver, cleanups),
+                        dependencyContainer.CreateInstance(
+                            key,
+                            factory,
+                            cleanup,
+                            resolver,
+                            dependencyContainer.GetTransientCleanups(resolver)
+                        ),
                     TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
-                        dependencyContainer.GetOrAdd(scopedInstances, key, factory, cleanup),
+                        dependencyContainer.GetOrAdd(
+                            scopedInstances,
+                            key,
+                            factory,
+                            cleanup
+                        ),
                     TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
-                        GetOrAdd(_instances, key, factory, cleanup),
+                        GetOrAdd(
+                            _instances,
+                            key,
+                            factory,
+                            cleanup
+                        ),
                     _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
                 };
             }
@@ -176,7 +265,7 @@ internal sealed class DependencyContainer(
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver, cleanups);
+            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver);
         }
         finally
         {
@@ -268,11 +357,117 @@ internal sealed class DependencyContainer(
         #endregion
     }
 
+    private int AllocateLifetimeScopeSlot()
+    {
+        if (_freeLifetimeScopeSlotCount > 0)
+        {
+            for (var i = 0; i < _lifetimeScopeSlotCount; i++)
+            {
+                if (_lifetimeScopeSlots[i].Scope is null)
+                {
+                    _freeLifetimeScopeSlotCount -= 1;
+
+                    return i;
+                }
+            }
+        }
+
+        if (_lifetimeScopeSlotCount == _lifetimeScopeSlots.Length)
+        {
+            var capacity = _lifetimeScopeSlots.Length == 0 ? 4 : _lifetimeScopeSlots.Length * 2;
+
+            Array.Resize(ref _lifetimeScopeSlots, capacity);
+        }
+
+        var newIndex = _lifetimeScopeSlotCount;
+
+        _lifetimeScopeSlotCount += 1;
+
+        return newIndex;
+    }
+
+    private List<CleanupEntry> GetTransientCleanups(IDependencyResolver resolver)
+    {
+        if (resolver is not LifetimeScope lifetimeScope)
+        {
+            return _cleanups;
+        }
+
+        ref var slot = ref GetLifetimeScopeSlot(lifetimeScope);
+
+        return slot.Cleanups ??= [];
+    }
+
+    private ref LifetimeScopeSlot GetLifetimeScopeSlot(LifetimeScope lifetimeScope)
+    {
+        ThrowIfLifetimeScopeInvalid(lifetimeScope);
+
+        return ref _lifetimeScopeSlots[lifetimeScope.Index];
+    }
+
+    private void DisposeLifetimeScopeSlot(int index)
+    {
+        var (scope, cleanups) = _lifetimeScopeSlots[index];
+
+        _lifetimeScopeSlots[index] = default;
+        _freeLifetimeScopeSlotCount += 1;
+
+        scope!.Invalidate();
+
+        _isCleaningLifetimeScope = true;
+
+        List<Exception>? exceptions = null;
+
+        try
+        {
+            if (cleanups is not null)
+            {
+                CleanupEntries(cleanups, ref exceptions);
+            }
+        }
+        finally
+        {
+            _isCleaningLifetimeScope = false;
+        }
+
+        if (exceptions is not null)
+        {
+            throw new AggregateException(exceptions);
+        }
+    }
+
     private void ThrowIfDisposed()
     {
         if (_isDisposed)
         {
             throw new ObjectDisposedException(objectName: nameof(DependencyContainer));
+        }
+    }
+
+    private void ThrowIfLifecycleChangeBlocked(string operation)
+    {
+        if (_creationDepth > 0)
+        {
+            throw new InvalidOperationException($"Cannot call {operation} while a service is being created.");
+        }
+
+        if (_isCleaningLifetimeScope)
+        {
+            throw new InvalidOperationException($"Cannot call {operation} while a LifetimeScope is being disposed.");
+        }
+    }
+
+    private void ThrowIfLifetimeScopeInvalid(LifetimeScope lifetimeScope)
+    {
+        ThrowIfDisposed();
+
+        var index = lifetimeScope.Index;
+
+        if ((uint)index >= (uint)_lifetimeScopeSlotCount
+            || !ReferenceEquals(_lifetimeScopeSlots[index].Scope, lifetimeScope)
+           )
+        {
+            throw new ObjectDisposedException(nameof(LifetimeScope));
         }
     }
     #endregion
