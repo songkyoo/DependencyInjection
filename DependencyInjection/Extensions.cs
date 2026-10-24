@@ -2,7 +2,7 @@
 
 internal static class Extensions
 {
-    public static object Invoke<T>(
+    internal static object Invoke<T>(
         this DependencyFactory<T> factory,
         IDependencyResolver dependencyResolver,
         object key,

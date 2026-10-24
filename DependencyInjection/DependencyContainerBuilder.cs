@@ -65,7 +65,7 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
         }
     }
 
-    public DependencyContainer Build(DependencyContainer? parent = null)
+    internal DependencyContainer Build(DependencyContainer? parent = null)
     {
         var container = new DependencyContainer(parent, registry: _typeRegistrations.ToImmutable());
 

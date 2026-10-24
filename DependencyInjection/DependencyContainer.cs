@@ -10,10 +10,10 @@ internal sealed class DependencyContainer(
     #region Types
     private struct LifetimeScopeSlot
     {
-        public LifetimeScope? Scope;
-        public List<CleanupEntry>? Cleanups;
+        internal LifetimeScope? Scope;
+        internal List<CleanupEntry>? Cleanups;
 
-        public void Deconstruct(out LifetimeScope? scope, out List<CleanupEntry>? cleanups)
+        internal void Deconstruct(out LifetimeScope? scope, out List<CleanupEntry>? cleanups)
         {
             scope = Scope;
             cleanups = Cleanups;
@@ -148,7 +148,7 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Methods
-    public void InitializeSharedInstances()
+    internal void InitializeSharedInstances()
     {
         ThrowIfDisposed();
 

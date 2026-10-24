@@ -2,7 +2,7 @@ namespace Macaron.DependencyInjection;
 
 internal readonly record struct CleanupEntry(object Instance, Action<object>? Cleanup)
 {
-    public void Invoke()
+    internal void Invoke()
     {
         if (Cleanup is { } cleanup)
         {
