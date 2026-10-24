@@ -1,13 +1,13 @@
 namespace Macaron.DependencyInjection.Tests;
 
-public class LifetimeScopeLifecycleTests
+public class TransientScopeLifecycleTests
 {
     private sealed class Resource;
 
     private sealed record Service(Resource Resource);
 
     [Test]
-    public void SharedAndTransientFactories_ShouldRejectLifetimeScopeCreation(
+    public void SharedAndTransientFactories_ShouldRejectTransientScopeCreation(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
         [Values] bool useChild
     )
@@ -20,13 +20,13 @@ public class LifetimeScopeLifecycleTests
                 var container = (IDependencyContainer)resolver;
                 factoryCalls++;
 
-                Assert.That(container.CreateLifetimeScope, Throws.InvalidOperationException);
+                Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
                 Assert.That(resolver.Contains<Resource>(), Is.True);
 
                 return new Resource();
             }, lifetime);
         });
-        using var child = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
         var container = useChild ? child : root;
         container.Resolve<Resource>();
 
@@ -34,7 +34,7 @@ public class LifetimeScopeLifecycleTests
 
         Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
 
-        using var scope = container.CreateLifetimeScope();
+        using var scope = container.CreateTransientScope();
         Assert.That(scope.Contains(Key<Resource>.Default), Is.True);
     }
 
@@ -46,8 +46,8 @@ public class LifetimeScopeLifecycleTests
         var cleanupCalls = 0;
         var installerCalls = 0;
         IDependencyContainer? container = null;
-        LifetimeScope active = null!;
-        LifetimeScope sibling = null!;
+        TransientScope active = null!;
+        TransientScope sibling = null!;
         container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterTransient<Resource>(factory: (_, ref collector) =>
@@ -92,8 +92,8 @@ public class LifetimeScopeLifecycleTests
         });
         using (container)
         {
-            active = container.CreateLifetimeScope();
-            sibling = container.CreateLifetimeScope();
+            active = container.CreateTransientScope();
+            sibling = container.CreateTransientScope();
             var exception = Assert.Throws<ArgumentException>(() => active.Resolve(Key<Service>.Default));
 
             Assert.That(exception, Is.SameAs(failure));
@@ -107,7 +107,7 @@ public class LifetimeScopeLifecycleTests
 
             active.Dispose();
             sibling.Dispose();
-            using var replacement = container.CreateLifetimeScope();
+            using var replacement = container.CreateTransientScope();
             using var child = container.CreateScope(_ => installerCalls++);
 
             Assert.That(installerCalls, Is.EqualTo(1));
@@ -115,7 +115,8 @@ public class LifetimeScopeLifecycleTests
 
         void AssertChangesRejected()
         {
-            Assert.That(container!.CreateLifetimeScope, Throws.InvalidOperationException);
+            Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
+            Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
             Assert.That(() => container.CreateScope(_ => installerCalls++), Throws.InvalidOperationException);
             Assert.That(container.Dispose, Throws.InvalidOperationException);
             Assert.That(active.Dispose, Throws.InvalidOperationException);
@@ -127,9 +128,9 @@ public class LifetimeScopeLifecycleTests
     [Test]
     public void ScopeCleanup_ShouldRejectOtherLifecycleChanges_AndAllowRepeatedOwnDisposal([Values] bool cleanupFails)
     {
-        LifetimeScope active = null!;
-        LifetimeScope sibling = null!;
-        LifetimeScope ended = null!;
+        TransientScope active = null!;
+        TransientScope sibling = null!;
+        TransientScope ended = null!;
         IDependencyContainer? container = null;
         var cleanupCalls = 0;
         var installerCalls = 0;
@@ -144,7 +145,8 @@ public class LifetimeScopeLifecycleTests
                 Assert.That(active.Dispose, Throws.Nothing);
                 Assert.That(ended.Dispose, Throws.Nothing);
                 Assert.That(() => active.Contains(Key<object>.Default), Throws.TypeOf<ObjectDisposedException>());
-                Assert.That(container!.CreateLifetimeScope, Throws.InvalidOperationException);
+                Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
+                Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
                 Assert.That(() => container.CreateScope(_ => installerCalls++), Throws.InvalidOperationException);
                 Assert.That(container.Dispose, Throws.InvalidOperationException);
                 Assert.That(sibling.Dispose, Throws.InvalidOperationException);
@@ -158,9 +160,9 @@ public class LifetimeScopeLifecycleTests
         });
         using (container)
         {
-            active = container.CreateLifetimeScope();
-            sibling = container.CreateLifetimeScope();
-            ended = container.CreateLifetimeScope();
+            active = container.CreateTransientScope();
+            sibling = container.CreateTransientScope();
+            ended = container.CreateTransientScope();
             ended.Dispose();
             active.Resolve(Key<object>.Default);
 
@@ -180,7 +182,7 @@ public class LifetimeScopeLifecycleTests
             Assert.That(active.Dispose, Throws.Nothing);
 
             sibling.Dispose();
-            using var replacement = container.CreateLifetimeScope();
+            using var replacement = container.CreateTransientScope();
             using var child = container.CreateScope(_ => installerCalls++);
 
             Assert.That(installerCalls, Is.EqualTo(1));

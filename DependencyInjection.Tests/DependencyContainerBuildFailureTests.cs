@@ -155,7 +155,7 @@ public class DependencyContainerBuildFailureTests
             });
             registrar.RegisterSingleton(parentSingletonKey, factory: () => new Resource());
         });
-        using var sibling = parent.CreateScope(_ => { });
+        using var sibling = parent.CreateScope();
         var parentResource = scopedInstances[parent];
         var siblingResource = scopedInstances[sibling];
         var sharedResource = parent.Resolve(parentSingletonKey);
@@ -203,7 +203,7 @@ public class DependencyContainerBuildFailureTests
         }));
         Assert.That(failedContainer!.Contains<Service>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedContainer!.Resolve<Service>, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => failedContainer!.CreateScope(_ => { }), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => failedContainer!.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedContainer!.Dispose, Throws.Nothing);
         Assert.That(cleanups, Has.Count.EqualTo(5));
         Assert.That(parent.Resolve(parentScopedKey), Is.SameAs(parentResource));
@@ -217,7 +217,7 @@ public class DependencyContainerBuildFailureTests
             Assert.That(scopedInstances[failedContainer!].DisposeCount, Is.EqualTo(1));
         }
 
-        using var retry = parent.CreateScope(_ => { });
+        using var retry = parent.CreateScope();
 
         Assert.That(retry.Resolve(parentSingletonKey), Is.SameAs(sharedResource));
 

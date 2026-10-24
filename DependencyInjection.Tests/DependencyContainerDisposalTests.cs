@@ -67,7 +67,7 @@ public class DependencyContainerDisposalTests
             Throws.TypeOf<ObjectDisposedException>()
         );
         Assert.That(configurationCalled, Is.False);
-        Assert.That(() => container.CreateScope(_ => { }), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]

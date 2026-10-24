@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace Macaron.DependencyInjection.Tests;
 
-public class LifetimeScopeDisposalTests
+public class TransientScopeDisposalTests
 {
     private sealed class Resource : IDisposable
     {
@@ -26,7 +26,7 @@ public class LifetimeScopeDisposalTests
                 return new Resource();
             });
         });
-        var first = container.CreateLifetimeScope();
+        var first = container.CreateTransientScope();
         var alias = first;
         var firstResource = first.Resolve(Key<Resource>.Default);
         var oldResolver = capturedResolver!;
@@ -35,7 +35,7 @@ public class LifetimeScopeDisposalTests
 
         first.Dispose();
 
-        using var second = container.CreateLifetimeScope();
+        using var second = container.CreateTransientScope();
         var secondResource = second.Resolve(Key<Resource>.Default);
 
         Assert.That(alias.Dispose, Throws.Nothing);
@@ -52,12 +52,12 @@ public class LifetimeScopeDisposalTests
     public void GrowingSlotsAndReusingHoles_ShouldKeepScopesIndependent()
     {
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>());
-        var scopes = new List<LifetimeScope>();
+        var scopes = new List<TransientScope>();
         var resources = new List<Resource>();
 
         for (var index = 0; index < 12; index++)
         {
-            var scope = container.CreateLifetimeScope();
+            var scope = container.CreateTransientScope();
             scopes.Add(scope);
             resources.Add(scope.Resolve(Key<Resource>.Default));
         }
@@ -69,7 +69,7 @@ public class LifetimeScopeDisposalTests
 
         for (var index = 0; index < 6; index++)
         {
-            var scope = container.CreateLifetimeScope();
+            var scope = container.CreateTransientScope();
             scopes.Add(scope);
             resources.Add(scope.Resolve(Key<Resource>.Default));
         }
@@ -123,7 +123,7 @@ public class LifetimeScopeDisposalTests
                 }
             });
         });
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         scope.Resolve(Key<object>.Default);
 
         var exception = Assert.Throws<AggregateException>(scope.Dispose);
@@ -136,7 +136,7 @@ public class LifetimeScopeDisposalTests
         Assert.That(capturedResolver!.Resolve<object>, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => scope.Contains(Key<object>.Default), Throws.TypeOf<ObjectDisposedException>());
 
-        using var replacement = container.CreateLifetimeScope();
+        using var replacement = container.CreateTransientScope();
         Assert.That(replacement.Contains(Key<object>.Default), Is.True);
     }
 
@@ -174,8 +174,8 @@ public class LifetimeScopeDisposalTests
                     }
                 });
         });
-        var first = container.CreateLifetimeScope();
-        var second = container.CreateLifetimeScope();
+        var first = container.CreateTransientScope();
+        var second = container.CreateTransientScope();
         first.Resolve(Key<Service>.Default);
         second.Resolve(Key<Service>.Default);
 
@@ -211,7 +211,7 @@ public class LifetimeScopeDisposalTests
         Assert.That(container.Dispose, Throws.Nothing);
         Assert.That(() => first.Resolve(Key<Service>.Default), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => second.Contains(Key<Resource>.Default), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(container.CreateLifetimeScope, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateTransientScope, Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
@@ -219,8 +219,8 @@ public class LifetimeScopeDisposalTests
     {
         var resource = new Resource();
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient(() => resource));
-        var first = container.CreateLifetimeScope();
-        var second = container.CreateLifetimeScope();
+        var first = container.CreateTransientScope();
+        var second = container.CreateTransientScope();
         first.Resolve(Key<Resource>.Default);
         first.Resolve(Key<Resource>.Default);
         second.Resolve(Key<Resource>.Default);
@@ -275,7 +275,7 @@ public class LifetimeScopeDisposalTests
                 return new Service(dependency);
             }, cleanup: _ => events.Add("service"));
         });
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         var exception = Assert.Catch(() => scope.Resolve(Key<Service>.Default));
 
         if (cleanupFails)
@@ -321,7 +321,7 @@ public class LifetimeScopeDisposalTests
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static (LifetimeScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
+    private static (TransientScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
         bool disposeContainerFirst,
         bool cleanupFails
     )
@@ -346,7 +346,7 @@ public class LifetimeScopeDisposalTests
                 return new Resource();
             });
         });
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         var resource = scope.Resolve(Key<Resource>.Default);
         var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
 

@@ -1,6 +1,6 @@
 namespace Macaron.DependencyInjection.Tests;
 
-public class LifetimeScopeResolveTests
+public class TransientScopeResolveTests
 {
     private sealed class Resource : IDisposable
     {
@@ -22,11 +22,11 @@ public class LifetimeScopeResolveTests
             registrar.Register(scopedKey, CreateResource, Lifetime.Scoped);
             registrar.Register(singletonKey, CreateResource, Lifetime.Singleton);
         });
-        using var child = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
         var container = useChild ? child : root;
         var expectedScoped = container.Resolve(scopedKey);
         var expectedSingleton = root.Resolve(singletonKey);
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
 
         Assert.That(creations, Is.EqualTo(3));
         Assert.That(scope.Contains(scopedKey), Is.True);
@@ -61,9 +61,9 @@ public class LifetimeScopeResolveTests
             registrar.Register<Service>(factory: (resolver, ref _) =>
                 new Service(resolver.Resolve<Resource>(), resolver.Resolve<Resource>()), lifetime);
         });
-        using var child = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
         var container = useChild ? child : root;
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         var service = scope.Resolve(Key<Service>.Default);
 
         Assert.That(service, Is.SameAs(container.Resolve<Service>()));
@@ -123,10 +123,10 @@ public class LifetimeScopeResolveTests
                 cleanups.Add("service");
             });
         });
-        using var child = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
         var container = useChild ? child : root;
-        var firstScope = container.CreateLifetimeScope();
-        var secondScope = container.CreateLifetimeScope();
+        var firstScope = container.CreateTransientScope();
+        var secondScope = container.CreateTransientScope();
         var first = firstScope.Resolve(serviceKey);
         var second = secondScope.Resolve(serviceKey);
         var direct = container.Resolve(serviceKey);
@@ -171,7 +171,7 @@ public class LifetimeScopeResolveTests
                 return cycle ? resolver.Resolve(key) : new object();
             });
         });
-        using var scope = container.CreateLifetimeScope();
+        using var scope = container.CreateTransientScope();
 
         Assert.That(() => scope.Resolve(Key<Resource>.Default), Throws.InvalidOperationException);
         var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve(key));

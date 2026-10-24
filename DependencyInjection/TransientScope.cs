@@ -1,6 +1,6 @@
 namespace Macaron.DependencyInjection;
 
-public sealed class LifetimeScope : IDependencyResolver, IDisposable
+public sealed class TransientScope : IDependencyResolver, IDisposable
 {
     #region Fields
     private DependencyContainer? _container;
@@ -10,11 +10,11 @@ public sealed class LifetimeScope : IDependencyResolver, IDisposable
     #region Properties
     internal int Index => _index;
 
-    private DependencyContainer Container => _container ?? throw new ObjectDisposedException(nameof(LifetimeScope));
+    private DependencyContainer Container => _container ?? throw new ObjectDisposedException(nameof(TransientScope));
     #endregion
 
     #region Constructors
-    internal LifetimeScope(DependencyContainer container, int index)
+    internal TransientScope(DependencyContainer container, int index)
     {
         _container = container;
         _index = index;
@@ -24,19 +24,19 @@ public sealed class LifetimeScope : IDependencyResolver, IDisposable
     #region IDependencyResolver Interface
     public T Resolve<T>(Key<T> key)
     {
-        return Container.Resolve(key, lifetimeScope: this);
+        return Container.Resolve(key, transientScope: this);
     }
 
     public bool Contains<T>(Key<T> key)
     {
-        return Container.Contains(key, lifetimeScope: this);
+        return Container.Contains(key, transientScope: this);
     }
     #endregion
 
     #region IDisposable Interface
     public void Dispose()
     {
-        _container?.DisposeLifetimeScope(this);
+        _container?.DisposeTransientScope(this);
     }
     #endregion
 

@@ -67,27 +67,7 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
 
     internal DependencyContainer Build(DependencyContainer? parent = null)
     {
-        var container = new DependencyContainer(parent, registry: _typeRegistrations.ToImmutable());
-
-        try
-        {
-            container.InitializeSharedInstances();
-
-            return container;
-        }
-        catch (Exception creationError)
-        {
-            try
-            {
-                container.Dispose();
-            }
-            catch (Exception disposalError)
-            {
-                throw new AggregateException(creationError, disposalError);
-            }
-
-            throw new AggregateException(creationError);
-        }
+        return DependencyContainer.Create(parent, registry: _typeRegistrations.ToImmutable());
     }
     #endregion
 }

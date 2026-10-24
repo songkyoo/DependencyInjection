@@ -1,6 +1,6 @@
 namespace Macaron.DependencyInjection.Tests;
 
-public class LifetimeScopeExtensionsTests
+public class TransientScopeExtensionsTests
 {
     private sealed class Resource : IDisposable
     {
@@ -20,7 +20,7 @@ public class LifetimeScopeExtensionsTests
             registrar.RegisterScoped<Resource>();
             registrar.RegisterScoped<Resource>(namedKey);
         });
-        using var scope = container.CreateLifetimeScope();
+        using var scope = container.CreateTransientScope();
         var expected = container.Resolve<Resource>();
         var expectedNamed = container.Resolve(namedKey);
 
@@ -40,7 +40,7 @@ public class LifetimeScopeExtensionsTests
     public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedKey)
     {
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>());
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         IDependencyResolver? capturedResolver = null;
         Func<IDependencyResolver, Service> factory = resolver =>
         {
@@ -73,7 +73,7 @@ public class LifetimeScopeExtensionsTests
             registrar.RegisterSingleton(instance: 7);
             registrar.RegisterSingleton(namedKey, instance: 42);
         });
-        using var scope = container.CreateLifetimeScope();
+        using var scope = container.CreateTransientScope();
 
         Assert.That(scope.ResolveOrNull<int>(), Is.EqualTo(7));
         Assert.That(scope.ResolveOrNull(namedKey), Is.EqualTo(42));
@@ -85,7 +85,7 @@ public class LifetimeScopeExtensionsTests
     public void DisposedScopeExtensions_ShouldRejectBeforeCallingFallback([Values] bool disposeContainerFirst)
     {
         using var container = DependencyContainerFactory.Create(_ => { });
-        var scope = container.CreateLifetimeScope();
+        var scope = container.CreateTransientScope();
         var fallbackCalls = 0;
 
         if (disposeContainerFirst)

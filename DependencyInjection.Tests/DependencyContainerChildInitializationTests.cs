@@ -56,8 +56,8 @@ public class DependencyContainerChildInitializationTests
         Assert.That(scopedInstances, Has.Count.EqualTo(2));
         Assert.That(childSingletonCreations, Is.EqualTo(1));
 
-        using var sibling = root.CreateScope(_ => { });
-        using var grandchild = child.CreateScope(_ => { });
+        using var sibling = root.CreateScope();
+        using var grandchild = child.CreateScope();
 
         Assert.That(scopedInstances, Has.Count.EqualTo(4));
         Assert.That(scopedInstances.Values.Distinct().Count(), Is.EqualTo(4));
@@ -72,6 +72,87 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(grandchild.Resolve(childKey), Is.SameAs(child.Resolve(childKey)));
         Assert.That(sibling.Contains(childKey), Is.False);
+    }
+
+    [Test]
+    public void InheritedScopedInitializationFailure_ShouldRollbackOnlyChild_AndPreserveErrorTree(
+        [Values] bool useActionOverload,
+        [Values] bool cleanupFails
+    )
+    {
+        var failInitialization = false;
+        var creationFailure = new ArgumentException("Scoped creation failed.");
+        var cleanupFailure = new ArgumentException("Scoped cleanup failed.");
+        var singletonKey = new Key<Resource>("singleton");
+        var scopedResources = new Dictionary<IDependencyResolver, Resource>();
+        IDependencyContainer? failedChild = null;
+        using var parent = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton(singletonKey, factory: () => new Resource());
+            registrar.RegisterScoped<Resource>(factory: (resolver, ref _) =>
+            {
+                var resource = new Resource(() =>
+                {
+                    if (cleanupFails && ReferenceEquals(resolver, failedChild))
+                    {
+                        throw cleanupFailure;
+                    }
+                });
+                scopedResources.Add(resolver, resource);
+
+                return resource;
+            });
+            registrar.RegisterScoped<Service>(factory: (resolver, ref _) =>
+            {
+                var resource = resolver.Resolve<Resource>();
+
+                if (failInitialization)
+                {
+                    failedChild = (IDependencyContainer)resolver;
+                    throw creationFailure;
+                }
+
+                return new Service(resource);
+            });
+        });
+        using var sibling = parent.CreateScope();
+        var parentService = parent.Resolve<Service>();
+        var siblingService = sibling.Resolve<Service>();
+        var singleton = parent.Resolve(singletonKey);
+        failInitialization = true;
+
+        var error = Assert.Throws<AggregateException>(() =>
+        {
+            using var child = useActionOverload ? parent.CreateScope(_ => { }) : parent.CreateScope();
+        });
+
+        Assert.That(error!.InnerExceptions, Has.Count.EqualTo(cleanupFails ? 2 : 1));
+        Assert.That(error.InnerExceptions[0], Is.SameAs(creationFailure));
+
+        if (cleanupFails)
+        {
+            var rollbackError = error.InnerExceptions[1] as AggregateException;
+
+            Assert.That(rollbackError, Is.Not.Null);
+            Assert.That(rollbackError!.InnerExceptions, Is.EqualTo(new[] { cleanupFailure }));
+        }
+
+        Assert.That(scopedResources[failedChild!].IsDisposed, Is.True);
+        Assert.That(failedChild!.Contains<Service>, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => failedChild!.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(failedChild!.Dispose, Throws.Nothing);
+        Assert.That(parent.Resolve<Service>(), Is.SameAs(parentService));
+        Assert.That(sibling.Resolve<Service>(), Is.SameAs(siblingService));
+        Assert.That(parentService.Resource.IsDisposed, Is.False);
+        Assert.That(siblingService.Resource.IsDisposed, Is.False);
+        Assert.That(singleton.IsDisposed, Is.False);
+
+        failInitialization = false;
+        using var retry = parent.CreateScope();
+
+        Assert.That(retry.Resolve<Service>().Resource, Is.SameAs(scopedResources[retry]));
+        Assert.That(retry.Resolve<Service>(), Is.Not.SameAs(parentService));
+        Assert.That(retry.Resolve(singletonKey), Is.SameAs(singleton));
     }
 
     [Test]
@@ -105,7 +186,7 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 0 : 1));
 
-        using var grandchild = child.CreateScope(_ => { });
+        using var grandchild = child.CreateScope();
 
         var expectedChildCreations = childLifetime switch
         {
@@ -154,7 +235,7 @@ public class DependencyContainerChildInitializationTests
         Assert.That(child.Resolve<Service>().Resource, Is.SameAs(childResource));
         Assert.That(child.Resolve<Consumer>().Service, Is.SameAs(child.Resolve<Service>()));
 
-        using var grandchild = child.CreateScope(_ => { });
+        using var grandchild = child.CreateScope();
 
         Assert.That(transientResources, Has.Count.EqualTo(2));
         Assert.That(grandchild.Resolve<Service>().Resource, Is.SameAs(transientResources[1]));

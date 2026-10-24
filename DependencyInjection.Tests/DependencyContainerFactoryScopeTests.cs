@@ -33,6 +33,7 @@ public class DependencyContainerFactoryScopeTests
                     var previousConfigurationCalls = configurationCalls;
 
                     Assert.That(container.Contains<Dependency>(), Is.True);
+                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
 
                     var exception = Assert.Throws<InvalidOperationException>(() =>
                     {
@@ -59,7 +60,7 @@ public class DependencyContainerFactoryScopeTests
             );
         }))
         {
-            using var child = root.CreateScope(_ => { });
+            using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : root;
             var first = requestingContainer.Resolve<Dependency>();
             var second = requestingContainer.Resolve<Dependency>();
@@ -97,7 +98,7 @@ public class DependencyContainerFactoryScopeTests
                 {
                     var container = (IDependencyContainer)resolver;
 
-                    Assert.That(() => container.CreateScope(_ => { }), Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
 
                     return new Dependency();
                 },
@@ -112,7 +113,7 @@ public class DependencyContainerFactoryScopeTests
 
                     var dependency = container.Resolve<Dependency>();
 
-                    Assert.That(() => container.CreateScope(_ => { }), Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
 
                     return new Service(dependency);
                 },
@@ -123,7 +124,7 @@ public class DependencyContainerFactoryScopeTests
 
         Assert.That(service.Dependency, Is.Not.Null);
 
-        using var scope = container.CreateScope(_ => { });
+        using var scope = container.CreateScope();
 
         Assert.That(scope.Contains<Service>(), Is.True);
     }
@@ -157,7 +158,7 @@ public class DependencyContainerFactoryScopeTests
                         {
                             collectedCleanups++;
 
-                            Assert.That(() => container.CreateScope(_ => { }), Throws.InvalidOperationException);
+                            Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
 
                             if (cleanupFails)
                             {
@@ -175,7 +176,7 @@ public class DependencyContainerFactoryScopeTests
             );
         }))
         {
-            using var child = root.CreateScope(_ => { });
+            using var child = root.CreateScope();
             var requestingContainer = resolveFromChild ? child : root;
 
             if (cleanupFails)
@@ -199,7 +200,7 @@ public class DependencyContainerFactoryScopeTests
             Assert.That(serviceCleanups, Is.Zero);
             Assert.That(collectedCleanups, Is.EqualTo(1));
 
-            using var scope = factoryContainer!.CreateScope(_ => { });
+            using var scope = factoryContainer!.CreateScope();
 
             attemptScopeCreation = false;
 

@@ -165,11 +165,11 @@ public class DependencyInstallerTests
     }
 
     [Test]
-    public void ExplicitEmptyScopeConfiguration_ShouldInheritParentWithoutAddingRegistrations()
+    public void EmptyScope_ShouldInheritParentWithoutAddingRegistrations([Values] bool useActionOverload)
     {
         using var parent = DependencyContainerFactory.Create(new Installer(registrar => registrar.RegisterSingleton<Resource>()));
         var resource = parent.Resolve<Resource>();
-        var child = parent.CreateScope(_ => { });
+        var child = useActionOverload ? parent.CreateScope(_ => { }) : parent.CreateScope();
 
         Assert.That(child.Resolve<Resource>(), Is.SameAs(resource));
         Assert.That(child.Contains<Service>(), Is.False);
@@ -187,6 +187,7 @@ public class DependencyInstallerTests
         var container = DependencyContainerFactory.Create(_ => { });
         container.Dispose();
 
+        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateScope(installer), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(installer.InstallCount, Is.Zero);
     }

@@ -165,8 +165,8 @@ public class CleanupCollectorTests
                 lifetime
             );
         });
-        using var child = root.CreateScope(_ => { });
-        using var sibling = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
+        using var sibling = root.CreateScope();
 
         child.Resolve<object>();
         sibling.Resolve<object>();

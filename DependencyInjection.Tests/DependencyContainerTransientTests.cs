@@ -35,8 +35,8 @@ public class DependencyContainerTransientTests
         {
             registrar.RegisterTransient<Resource>();
         });
-        using var child = root.CreateScope(_ => { });
-        using var grandchild = child.CreateScope(_ => { });
+        using var child = root.CreateScope();
+        using var grandchild = child.CreateScope();
         var rootResource = root.Resolve<Resource>();
         var childResource = child.Resolve<Resource>();
         var first = grandchild.Resolve<Resource>();
@@ -83,8 +83,8 @@ public class DependencyContainerTransientTests
                 cleanup: service => service.CleanupCount++
             );
         });
-        using var child = root.CreateScope(_ => { });
-        using var sibling = root.CreateScope(_ => { });
+        using var child = root.CreateScope();
+        using var sibling = root.CreateScope();
         var service = child.Resolve<Service>();
         var siblingService = sibling.Resolve<Service>();
         var dependency = service.Dependency;
