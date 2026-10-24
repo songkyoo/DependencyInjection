@@ -27,6 +27,15 @@ public class KeyTests
     }
 
     [Test]
+    public void Keys_WithSameTypeAndName_ShouldHaveDifferentIds()
+    {
+        var first = new Key<string>("service");
+        var second = new Key<string>("service");
+
+        Assert.That(first.Id, Is.Not.EqualTo(second.Id));
+    }
+
+    [Test]
     public void UnnamedKeys_ShouldBeDistinctFromEachOtherAndDefaultKey()
     {
         var first = new Key<string>();
@@ -39,12 +48,12 @@ public class KeyTests
 
     [TestCase("")]
     [TestCase("Application")]
-    public void ToString_ShouldDescribeServiceTypeAndOptionalName(string name)
+    public void ToString_ShouldDescribeServiceTypeOptionalNameAndId(string name)
     {
         var key = new Key<DateTime>(name);
         var expected = name.Length == 0
-            ? $"Key {{ Type = {typeof(DateTime)} }}"
-            : $"Key {{ Type = {typeof(DateTime)}, Name = {name} }}";
+            ? $"Key {{ Type = {typeof(DateTime)}, Id = {key.Id} }}"
+            : $"Key {{ Type = {typeof(DateTime)}, Name = {name}, Id = {key.Id} }}";
 
         Assert.That(key.Name, Is.EqualTo(name));
         Assert.That(key.ToString(), Is.EqualTo(expected));

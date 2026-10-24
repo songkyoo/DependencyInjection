@@ -10,12 +10,14 @@ public sealed class Key<T>(string name = "")
     public override string ToString()
     {
         return Name.Length == 0
-            ? $"Key {{ Type = {typeof(T)} }}"
-            : $"Key {{ Type = {typeof(T)}, Name = {Name} }}";
+            ? $"Key {{ Type = {typeof(T)}, Id = {Id} }}"
+            : $"Key {{ Type = {typeof(T)}, Name = {Name}, Id = {Id} }}";
     }
     #endregion
 
     #region Properties
+    public Guid Id { get; } = Guid.NewGuid();
+
     public string Name { get; } = name;
     #endregion
 }
