@@ -93,9 +93,9 @@ public class DependencyContainerInitializationTests
         Assert.That(root.Resolve(firstKey).Resource, Is.SameAs(root.Resolve<Resource>()));
         Assert.That(root.Resolve(secondKey).Resource, Is.SameAs(root.Resolve<Resource>()));
 
-        Service CreateService(IDependencyContainer container, ref CleanupCollector collector)
+        Service CreateService(IDependencyResolver resolver, ref CleanupCollector collector)
         {
-            var resource = container.Resolve<Resource>();
+            var resource = resolver.Resolve<Resource>();
 
             serviceCreations++;
             events.Add("service");

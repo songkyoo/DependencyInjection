@@ -28,7 +28,8 @@ public struct CleanupCollector
             Array.Resize(ref _entries, newSize: _entries.Length * 2);
         }
 
-        _entries[_count++] = new CleanupEntry(instance, cleanup);
+        _entries[_count] = new CleanupEntry(instance, cleanup);
+        _count += 1;
     }
     #endregion
 }

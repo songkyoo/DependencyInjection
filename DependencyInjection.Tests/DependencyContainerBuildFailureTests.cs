@@ -65,7 +65,7 @@ public class DependencyContainerBuildFailureTests
         {
             DependencyFactory<Service> factory = (container, ref collector) =>
             {
-                failedContainer = container;
+                failedContainer = (IDependencyContainer)container;
                 collector.Add(collected);
 
                 return null!;
@@ -118,7 +118,7 @@ public class DependencyContainerBuildFailureTests
         {
             registrar.Register(firstKey, factory: (container, ref _) =>
             {
-                failedContainer = container;
+                failedContainer = (IDependencyContainer)container;
                 container.Resolve(secondKey);
 
                 return new CycleA();
@@ -142,7 +142,7 @@ public class DependencyContainerBuildFailureTests
         var parentScopedKey = new Key<Resource>("parent-scoped");
         var parentSingletonKey = new Key<Resource>("parent-singleton");
         var ownedKey = new Key<Resource>("owned");
-        var scopedInstances = new Dictionary<IDependencyContainer, Resource>();
+        var scopedInstances = new Dictionary<IDependencyResolver, Resource>();
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterScoped<Resource>(parentScopedKey, factory: (container, ref _) =>
@@ -249,7 +249,7 @@ public class DependencyContainerBuildFailureTests
             });
             registrar.RegisterSingleton<Service>(factory: (container, ref collector) =>
             {
-                failedContainer = container;
+                failedContainer = (IDependencyContainer)container;
                 container.Resolve(ownedKey);
 
                 if (createChild)
@@ -437,7 +437,7 @@ public class DependencyContainerBuildFailureTests
                 });
                 registrar.RegisterSingleton<Service>(factory: (container, ref collector) =>
                 {
-                    failedContainer = container;
+                    failedContainer = (IDependencyContainer)container;
                     container.Resolve<Resource>();
 
                     var collected = new Resource();

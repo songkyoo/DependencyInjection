@@ -19,7 +19,7 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
         AddRegistration(
             key,
             registration: new TypeRegistration.Transient(
-                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
             )
         );
@@ -34,7 +34,7 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
         AddRegistration(
             key,
             registration: new TypeRegistration.Scoped(
-                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
             )
         );
@@ -49,7 +49,7 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
         AddRegistration(
             key,
             registration: new TypeRegistration.Singleton(
-                Factory: (container, ref collector) => factory.Invoke(container, ref collector),
+                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
                 Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
             )
         );

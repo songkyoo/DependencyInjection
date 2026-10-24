@@ -21,7 +21,13 @@ internal sealed class DependencyContainer(
     #region IDependencyContainer Interface
     T IDependencyResolver.Resolve<T>(Key<T> key)
     {
-        return (T)ResolveRecursively(key, scopedInstances: _instances, dependencyContainer: this);
+        return (T)ResolveRecursively(
+            key,
+            scopedInstances: _instances,
+            dependencyContainer: this,
+            resolver: this,
+            cleanups: _cleanups
+        );
     }
 
     bool IDependencyResolver.Contains<T>(Key<T> key)
@@ -118,7 +124,13 @@ internal sealed class DependencyContainer(
                     continue;
                 }
 
-                ResolveRecursively(key, scopedInstances: _instances, dependencyContainer: this);
+                ResolveRecursively(
+                    key,
+                    scopedInstances: _instances,
+                    dependencyContainer: this,
+                    resolver: this,
+                    cleanups: _cleanups
+                );
             }
         }
     }
@@ -126,7 +138,9 @@ internal sealed class DependencyContainer(
     private object ResolveRecursively(
         object key,
         Dictionary<object, object> scopedInstances,
-        DependencyContainer dependencyContainer
+        DependencyContainer dependencyContainer,
+        IDependencyResolver resolver,
+        List<CleanupEntry> cleanups
     )
     {
         ThrowIfDisposed();
@@ -148,7 +162,7 @@ internal sealed class DependencyContainer(
                 return typeRegistration switch
                 {
                     TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
-                        dependencyContainer.CreateInstance(key, factory, cleanup),
+                        dependencyContainer.CreateInstance(key, factory, cleanup, resolver, cleanups),
                     TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
                         dependencyContainer.GetOrAdd(scopedInstances, key, factory, cleanup),
                     TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
@@ -162,7 +176,7 @@ internal sealed class DependencyContainer(
                 throw new InvalidOperationException($"Key not found: {key}");
             }
 
-            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer);
+            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver, cleanups);
         }
         finally
         {
@@ -182,7 +196,7 @@ internal sealed class DependencyContainer(
             return instance;
         }
 
-        var newInstance = CreateInstance(key, factory, cleanup);
+        var newInstance = CreateInstance(key, factory, cleanup, resolver: this, cleanups: _cleanups);
 
         instances.Add(key, newInstance);
 
@@ -192,7 +206,9 @@ internal sealed class DependencyContainer(
     private object CreateInstance(
         object key,
         DependencyFactory<object> factory,
-        Action<object>? cleanup
+        Action<object>? cleanup,
+        IDependencyResolver resolver,
+        List<CleanupEntry> cleanups
     )
     {
         var cleanupCollector = new CleanupCollector();
@@ -202,7 +218,7 @@ internal sealed class DependencyContainer(
 
         try
         {
-            instance = factory.Invoke(this, key, ref cleanupCollector);
+            instance = factory.Invoke(resolver, key, ref cleanupCollector);
 
             ThrowIfDisposed();
         }
@@ -217,11 +233,11 @@ internal sealed class DependencyContainer(
             _creationDepth -= 1;
         }
 
-        _cleanups.Add(new CleanupEntry(instance, cleanup));
+        cleanups.Add(new CleanupEntry(instance, cleanup));
 
         foreach (var entry in cleanupCollector.Entries)
         {
-            _cleanups.Add(entry);
+            cleanups.Add(entry);
         }
 
         return instance;

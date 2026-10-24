@@ -25,8 +25,10 @@ public class DependencyContainerFactoryDisposalTests
         {
             registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
             registrar.Register<Service>(
-                factory: (container, ref collector) =>
+                factory: (resolver, ref collector) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     factoryCalls++;
 
                     var dependency = container.Resolve<Dependency>();
@@ -84,8 +86,10 @@ public class DependencyContainerFactoryDisposalTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register<Dependency>(
-                factory: (container, ref _) =>
+                factory: (resolver, ref _) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
 
                     if (failDependency)
@@ -99,8 +103,10 @@ public class DependencyContainerFactoryDisposalTests
                 Lifetime.Transient
             );
             registrar.Register<Service>(
-                factory: (container, ref _) =>
+                factory: (resolver, ref _) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     if (dependencyFails)
                     {
                         failDependency = true;
@@ -148,8 +154,10 @@ public class DependencyContainerFactoryDisposalTests
         {
             registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
             registrar.Register<Service>(
-                factory: (container, ref collector) =>
+                factory: (resolver, ref collector) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     factoryCalls++;
                     factoryContainer = container;
                     resolvedDependency = container.Resolve<Dependency>();

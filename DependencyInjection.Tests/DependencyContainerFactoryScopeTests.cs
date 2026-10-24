@@ -25,8 +25,10 @@ public class DependencyContainerFactoryScopeTests
         using (var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register<Dependency>(
-                factory: (container, ref collector) =>
+                factory: (resolver, ref collector) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     factoryCalls++;
                     var previousConfigurationCalls = configurationCalls;
 
@@ -91,8 +93,10 @@ public class DependencyContainerFactoryScopeTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register<Dependency>(
-                factory: (container, ref _) =>
+                factory: (resolver, ref _) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     Assert.That(() => container.CreateScope(_ => { }), Throws.InvalidOperationException);
 
                     return new Dependency();
@@ -100,8 +104,10 @@ public class DependencyContainerFactoryScopeTests
                 lifetime
             );
             registrar.Register<Service>(
-                factory: (container, ref _) =>
+                factory: (resolver, ref _) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     Assert.That(container.Contains<Dependency>(), Is.True);
 
                     var dependency = container.Resolve<Dependency>();
@@ -138,8 +144,10 @@ public class DependencyContainerFactoryScopeTests
         using (var root = DependencyContainerFactory.Create(registrar =>
         {
             registrar.Register<Dependency>(
-                factory: (container, ref collector) =>
+                factory: (resolver, ref collector) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     factoryCalls++;
                     factoryContainer = container;
 

@@ -23,7 +23,7 @@ public class DependencyContainerChildInitializationTests
     {
         var rootKey = new Key<object>("root");
         var childKey = new Key<object>("child");
-        var scopedInstances = new Dictionary<IDependencyContainer, Resource>();
+        var scopedInstances = new Dictionary<IDependencyResolver, Resource>();
         var rootSingletonCreations = 0;
         var childSingletonCreations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>

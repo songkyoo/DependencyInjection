@@ -202,7 +202,9 @@ public class DependencyInstallerTests
             {
                 if (attemptScopeCreation)
                 {
-                    Assert.That(() => resolver.CreateScope(installer), Throws.InvalidOperationException);
+                    var owningContainer = (IDependencyContainer)resolver;
+
+                    Assert.That(() => owningContainer.CreateScope(installer), Throws.InvalidOperationException);
                     Assert.That(installer.InstallCount, Is.Zero);
                 }
 

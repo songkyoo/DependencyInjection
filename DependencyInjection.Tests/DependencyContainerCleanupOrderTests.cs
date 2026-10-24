@@ -130,8 +130,10 @@ public class DependencyContainerCleanupOrderTests
         var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterSingleton<object>(
-                factory: (container, ref collector) =>
+                factory: (resolver, ref collector) =>
                 {
+                    var container = (IDependencyContainer)resolver;
+
                     collector.Add(new Resource(() =>
                     {
                         calls.Add("reentrant");
