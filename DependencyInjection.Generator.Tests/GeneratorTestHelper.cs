@@ -31,11 +31,15 @@ internal static class GeneratorTestHelper
         );
     }
 
-    internal static GeneratorDriver CreateDriver()
+    internal static GeneratorDriver CreateDriver(bool trackIncrementalSteps = false)
     {
         return CSharpGeneratorDriver.Create(
             generators: [new DependencyInjectionGenerator().AsSourceGenerator()],
-            parseOptions: InputParseOptions
+            parseOptions: InputParseOptions,
+            driverOptions: new GeneratorDriverOptions(
+                disabledOutputs: IncrementalGeneratorOutputKind.None,
+                trackIncrementalGeneratorSteps: trackIncrementalSteps
+            )
         );
     }
 

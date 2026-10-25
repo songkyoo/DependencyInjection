@@ -122,10 +122,16 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                 registrations: data.Left,
                 compilation: (CSharpCompilation)data.Right,
                 cancellationToken
-            ));
+            ))
+            .WithTrackingName("FactoryGeneration");
 
-        var factoriesSource = generation
-            .Select(static (result, _) => FactoriesRenderer.Render(result.Definitions));
+        var definitions = generation
+            .Select(static (result, _) => result.Definitions)
+            .WithComparer(FactoryDefinitionsComparer.Instance);
+
+        var factoriesSource = definitions
+            .Select(static (factories, _) => FactoriesRenderer.Render(factories))
+            .WithTrackingName("FactoriesSource");
 
         context.RegisterSourceOutput(generation, static (output, result) =>
         {
