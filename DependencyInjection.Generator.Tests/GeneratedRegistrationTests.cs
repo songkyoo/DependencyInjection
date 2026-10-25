@@ -1,54 +1,14 @@
-using System.Collections.Immutable;
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+
 namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class GeneratedRegistrationTests
 {
-    private static readonly MetadataReference[] References =
-        ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
-        .Split(Path.PathSeparator)
-        .Append(typeof(IDependencyRegistrar).Assembly.Location)
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .Select(path => MetadataReference.CreateFromFile(path))
-        .ToArray();
-
-    private static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources) Generate(
-        string source,
-        string assemblyName = "Consumer"
-    )
-    {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp9);
-        var input = CSharpSyntaxTree.ParseText(source, parseOptions, path: "Input.cs");
-        var compilation = CSharpCompilation.Create(
-            assemblyName,
-            syntaxTrees: [input],
-            References,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-        );
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            generators: [new DependencyInjectionGenerator().AsSourceGenerator()],
-            parseOptions: parseOptions
-        );
-
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
-
-        Assert.That(diagnostics, Is.Empty);
-
-        return (output, driver.GetRunResult().Results.Single().GeneratedSources);
-    }
-
-    private static void AssertCompiles(Compilation compilation)
-    {
-        using var stream = new MemoryStream();
-        var result = compilation.Emit(stream);
-
-        Assert.That(result.Success, Is.True, string.Join(Environment.NewLine, result.Diagnostics));
-    }
-
     [Test]
     public void EmptyInput_ShouldGenerateInternalStaticRegistrationAndFactories()
     {
