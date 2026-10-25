@@ -106,26 +106,34 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             );
         });
 
-        var implementations = context
+        var registrations = context
             .SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => FactoryDiscovery.IsRegistrationCandidate(node),
                 transform: FactoryDiscovery.Discover
             )
-            .Where(static implementation => implementation is not null)
-            .Select(static (implementation, _) => implementation!);
+            .Where(static registration => registration is not null)
+            .Select(static (registration, _) => registration!);
 
-        var definitions = implementations
+        var generation = registrations
             .Collect()
             .Combine(context.CompilationProvider)
             .Select(static (data, cancellationToken) => FactoryDiscovery.CreateDefinitions(
-                implementations: data.Left,
+                registrations: data.Left,
                 compilation: (CSharpCompilation)data.Right,
                 cancellationToken
             ));
 
-        var factoriesSource = definitions
-            .Select(static (factories, _) => FactoriesRenderer.Render(factories));
+        var factoriesSource = generation
+            .Select(static (result, _) => FactoriesRenderer.Render(result.Definitions));
+
+        context.RegisterSourceOutput(generation, static (output, result) =>
+        {
+            foreach (var diagnostic in result.Diagnostics)
+            {
+                output.ReportDiagnostic(diagnostic);
+            }
+        });
 
         var assemblyIdentity = context
             .CompilationProvider

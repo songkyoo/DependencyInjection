@@ -45,6 +45,20 @@ internal static class GeneratorTestHelper
         params MetadataReference[] additionalReferences
     )
     {
+        var (output, sources, diagnostics) = GenerateWithDiagnostics(source, assemblyName, additionalReferences);
+
+        Assert.That(diagnostics, Is.Empty);
+
+        return (output, sources);
+    }
+
+    internal static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources, ImmutableArray<Diagnostic> Diagnostics)
+        GenerateWithDiagnostics(
+            string source,
+            string assemblyName = "Consumer",
+            params MetadataReference[] additionalReferences
+        )
+    {
         var compilation = CreateCompilation(source, assemblyName, additionalReferences);
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(
             compilation,
@@ -52,9 +66,7 @@ internal static class GeneratorTestHelper
             out var diagnostics
         );
 
-        Assert.That(diagnostics, Is.Empty);
-
-        return (output, driver.GetRunResult().Results.Single().GeneratedSources);
+        return (output, driver.GetRunResult().Results.Single().GeneratedSources, diagnostics);
     }
 
     internal static byte[] EmitAssembly(Compilation compilation)

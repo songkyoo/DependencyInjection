@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using static Macaron.DependencyInjection.Generator.Result;
+using static Microsoft.CodeAnalysis.MetadataImportOptions;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
 namespace Macaron.DependencyInjection.Generator;
@@ -18,73 +20,220 @@ internal static class FactoryDiscovery
         };
     }
 
-    internal static INamedTypeSymbol? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    internal static FactoryRegistration? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
-        if (context.SemanticModel.GetSymbolInfo(context.Node, cancellationToken).Symbol is not IMethodSymbol method)
+        var semanticModel = context.SemanticModel;
+
+        if (semanticModel.GetSymbolInfo(context.Node, cancellationToken).Symbol is not IMethodSymbol method)
         {
             return null;
         }
 
-        var compilation = context.SemanticModel.Compilation;
+        var compilation = semanticModel.Compilation;
         var extensions = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions");
         var definition = (method.ReducedFrom ?? method).OriginalDefinition;
+        var comparer = SymbolEqualityComparer.Default;
 
-        if (!SymbolEqualityComparer.Default.Equals(definition.ContainingType, extensions)
-            || method.TypeArguments is not [_, INamedTypeSymbol implementation]
+        if (!comparer.Equals(definition.ContainingType, extensions)
+            || method.TypeArguments.Length != 2
+            || comparer.Equals(
+                semanticModel.GetEnclosingSymbol(context.Node.SpanStart, cancellationToken)?.ContainingType,
+                extensions
+            )
         )
         {
             return null;
         }
 
-        if (!IsSupportedType(implementation)
-            || implementation.TypeKind is not (TypeKind.Class or TypeKind.Struct)
-            || implementation.IsAbstract
-            || implementation.IsStatic
-            || !compilation.IsSymbolAccessibleWithin(implementation, within: compilation.Assembly)
+        var name = (GenericNameSyntax)context.Node;
+        var binding = name.Parent is MemberAccessExpressionSyntax or MemberBindingExpressionSyntax ? name.Parent : name;
+
+        if (binding.Parent is InvocationExpressionSyntax invocation)
+        {
+            binding = invocation;
+        }
+
+        var implementation = method.TypeArguments[1];
+
+        if (HasErrorDiagnostics(semanticModel, binding, cancellationToken)
+            || ContainsType(implementation, TypeKind.Error)
+            || (implementation is INamedTypeSymbol named && HasConstructorErrors(named, compilation, cancellationToken))
         )
         {
             return null;
         }
 
-        return implementation;
+        return new FactoryRegistration(implementation, name.TypeArgumentList.Arguments[1].GetLocation());
+
+        #region Local Functions
+        static bool HasErrorDiagnostics(
+            SemanticModel semanticModel1,
+            SyntaxNode syntaxNode,
+            CancellationToken cancellationToken
+        )
+        {
+            return semanticModel1
+                .GetDiagnostics(syntaxNode.Span, cancellationToken)
+                .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        }
+
+        static bool HasConstructorErrors(
+            INamedTypeSymbol implementation,
+            Compilation compilation,
+            CancellationToken cancellationToken
+        )
+        {
+            return implementation
+                .InstanceConstructors
+                .SelectMany(constructor => constructor.DeclaringSyntaxReferences)
+                .Any(reference =>
+                {
+                    return compilation
+                        .GetSemanticModel(reference.SyntaxTree)
+                        .GetDiagnostics(reference.Span, cancellationToken)
+                        .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+                });
+        }
+        #endregion
     }
 
-    internal static ImmutableArray<FactoryDefinition> CreateDefinitions(
-        ImmutableArray<INamedTypeSymbol> implementations,
+    internal static FactoryGenerationResult CreateDefinitions(
+        ImmutableArray<FactoryRegistration> registrations,
         CSharpCompilation compilation,
         CancellationToken cancellationToken
     )
     {
+        compilation = compilation.WithOptions(compilation.Options.WithMetadataImportOptions(All));
+
         var uniqueTypes = new List<INamedTypeSymbol>();
         var definitions = ImmutableArray.CreateBuilder<FactoryDefinition>();
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        foreach (var implementation in implementations)
+        foreach (var originalRegistration in registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            var tree = originalRegistration.Location.SourceTree!;
+            var syntax = tree.GetRoot(cancellationToken).FindNode(originalRegistration.Location.SourceSpan);
+            var implementationType = compilation.GetSemanticModel(tree).GetTypeInfo(syntax, cancellationToken).Type;
+
+            if (implementationType is null || ContainsType(implementationType, TypeKind.Error))
+            {
+                continue;
+            }
+
+            var registration = originalRegistration with { Implementation = implementationType };
+            var implementationResult = ValidateImplementation(registration, compilation);
+
+            if (implementationResult.IsError)
+            {
+                diagnostics.Add(implementationResult.Error);
+
+                continue;
+            }
+
+            var implementation = implementationResult.Value;
 
             if (uniqueTypes.Any(type => compilation.ClassifyConversion(type, implementation).IsIdentity))
             {
                 continue;
             }
 
-            uniqueTypes.Add(implementation);
+            var definition = CreateDefinition(registration, implementation, compilation);
 
-            if (CreateDefinition(implementation, compilation) is { } definition)
+            if (definition.IsError)
             {
-                definitions.Add(definition);
+                diagnostics.Add(definition.Error);
+
+                continue;
             }
+
+            uniqueTypes.Add(implementation);
+            definitions.Add(definition.Value);
         }
 
-        return definitions.ToImmutable();
+        return new FactoryGenerationResult(definitions.ToImmutable(), diagnostics.ToImmutable());
     }
 
-    private static FactoryDefinition? CreateDefinition(INamedTypeSymbol implementation, Compilation compilation)
+    private static Result<INamedTypeSymbol, Diagnostic> ValidateImplementation(
+        FactoryRegistration registration,
+        Compilation compilation
+    )
     {
-        var constructor = SelectConstructor(implementation, compilation);
+        var implementation = registration.Implementation;
+        var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
 
-        if (constructor is null || !compilation.IsSymbolAccessibleWithin(constructor, within: compilation.Assembly))
+        if (!IsClosed(implementation))
         {
-            return null;
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.ImplementationMustBeClosed,
+                registration,
+                additionalLocations: implementation.Locations,
+                arguments: [typeName]
+            ));
+        }
+
+        if (ContainsType(implementation, TypeKind.Dynamic))
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.DynamicTypeNotSupported,
+                registration,
+                additionalLocations: implementation.Locations,
+                arguments: [typeName, typeName]
+            ));
+        }
+
+        if (implementation is not INamedTypeSymbol { TypeKind: (TypeKind.Class or TypeKind.Struct) } named
+            || named.IsAbstract
+            || named.IsStatic
+            || named.IsRefLikeType
+        )
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.InvalidImplementationType,
+                registration,
+                additionalLocations: implementation.Locations,
+                arguments: [typeName]
+            ));
+        }
+
+        if (!compilation.IsSymbolAccessibleWithin(implementation, within: compilation.Assembly))
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.ImplementationNotAccessible,
+                registration,
+                additionalLocations: implementation.Locations,
+                arguments: [typeName]
+            ));
+        }
+
+        return Ok(named);
+    }
+
+    private static Result<FactoryDefinition, Diagnostic> CreateDefinition(
+        FactoryRegistration registration,
+        INamedTypeSymbol implementation,
+        Compilation compilation
+    )
+    {
+        var constructorResult = SelectConstructor(registration, implementation, compilation);
+
+        if (constructorResult.IsError)
+        {
+            return Error(constructorResult.Error);
+        }
+
+        var constructor = constructorResult.Value;
+        var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
+
+        if (!compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.ConstructorNotAccessible,
+                registration,
+                additionalLocations: constructor.Locations,
+                arguments: [constructor.ToDisplayString(), typeName]
+            ));
         }
 
         var arguments = new List<string>();
@@ -92,43 +241,84 @@ internal static class FactoryDiscovery
         foreach (var parameter in constructor.Parameters)
         {
             var parameterType = parameter.Type;
+            var parameterTypeName = parameterType.ToDisplayString(FullyQualifiedFormat);
 
-            if (parameter.RefKind != RefKind.None
-                || !IsSupportedType(parameterType)
-                || !compilation.IsSymbolAccessibleWithin(parameterType, compilation.Assembly)
-            )
+            if (ContainsType(parameterType, TypeKind.Dynamic))
             {
-                return null;
+                return Error(CreateDiagnostic(
+                    descriptor: FactoryDiagnostics.DynamicTypeNotSupported,
+                    registration,
+                    additionalLocations: parameter.Locations,
+                    arguments: [parameterTypeName, typeName]
+                ));
             }
 
-            arguments.Add($"resolver.Resolve<{parameterType.ToDisplayString(FullyQualifiedFormat)}>()");
+            if (parameter.RefKind != RefKind.None || !IsSupportedDependency(parameterType))
+            {
+                return Error(CreateDiagnostic(
+                    descriptor: FactoryDiagnostics.UnsupportedConstructorParameter,
+                    registration,
+                    additionalLocations: parameter.Locations,
+                    arguments: [parameter.Name, typeName, parameter.ToDisplayString()]
+                ));
+            }
+
+            if (!compilation.IsSymbolAccessibleWithin(parameterType, compilation.Assembly))
+            {
+                return Error(CreateDiagnostic(
+                    descriptor: FactoryDiagnostics.DependencyNotAccessible,
+                    registration,
+                    additionalLocations: parameter.Locations,
+                    arguments: [parameterTypeName, parameter.Name, typeName]
+                ));
+            }
+
+            arguments.Add($"resolver.Resolve<{parameterTypeName}>()");
         }
 
-        var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
         var creationExpression = $"new {typeName}({string.Join(", ", arguments)})";
 
-        return new FactoryDefinition(typeName, creationExpression);
+        return Ok(new FactoryDefinition(typeName, creationExpression));
     }
 
-    private static IMethodSymbol? SelectConstructor(INamedTypeSymbol implementation, Compilation compilation)
+    private static Result<IMethodSymbol, Diagnostic> SelectConstructor(
+        FactoryRegistration registration,
+        INamedTypeSymbol implementation,
+        Compilation compilation
+    )
     {
+        var comparer = SymbolEqualityComparer.Default;
+
         var injectAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
         var marked = implementation
             .InstanceConstructors
             .Where(constructor => injectAttribute is not null && constructor.GetAttributes().Any(attribute =>
             {
-                return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, injectAttribute);
+                return comparer.Equals(attribute.AttributeClass, injectAttribute);
             }))
             .ToArray();
+        var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
 
         if (marked.Length > 1)
         {
-            return null;
+            var locations = marked
+                .SelectMany(constructor => constructor.GetAttributes())
+                .Where(attribute => comparer.Equals(attribute.AttributeClass, injectAttribute))
+                .Select(attribute => attribute.ApplicationSyntaxReference)
+                .Where(reference => reference is not null)
+                .Select(reference => reference!.GetSyntax().GetLocation());
+
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.MultipleInjectConstructors,
+                registration,
+                additionalLocations: locations,
+                arguments: [typeName]
+            ));
         }
 
         if (marked.Length == 1)
         {
-            return marked[0];
+            return Ok(marked[0]);
         }
 
         var publicConstructors = implementation
@@ -136,15 +326,89 @@ internal static class FactoryDiscovery
             .Where(constructor => constructor.DeclaredAccessibility == Accessibility.Public)
             .ToArray();
 
-        return publicConstructors.Length == 1 ? publicConstructors[0] : null;
+        if (publicConstructors.Length == 0)
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.NoPublicConstructor,
+                registration,
+                additionalLocations: implementation.Locations,
+                arguments: [typeName]
+            ));
+        }
+
+        if (publicConstructors.Length > 1)
+        {
+            return Error(CreateDiagnostic(
+                descriptor: FactoryDiagnostics.AmbiguousPublicConstructors,
+                registration,
+                additionalLocations: publicConstructors.SelectMany(constructor => constructor.Locations),
+                arguments: [typeName]
+            ));
+        }
+
+        return Ok(publicConstructors[0]);
     }
 
-    private static bool IsSupportedType(ITypeSymbol type)
+    private static bool ContainsType(ITypeSymbol type, TypeKind kind)
+    {
+        if (type.TypeKind == kind)
+        {
+            return true;
+        }
+
+        if (type is IArrayTypeSymbol array)
+        {
+            return ContainsType(array.ElementType, kind);
+        }
+
+        if (type is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        if (named.ContainingType is not null && ContainsType(named.ContainingType, kind))
+        {
+            return true;
+        }
+
+        return named.TypeArguments.Any(argument => ContainsType(argument, kind));
+    }
+
+    private static bool IsClosed(ITypeSymbol type)
+    {
+        if (type.TypeKind == TypeKind.TypeParameter)
+        {
+            return false;
+        }
+
+        if (type is IArrayTypeSymbol array)
+        {
+            return IsClosed(array.ElementType);
+        }
+
+        if (type is not INamedTypeSymbol named)
+        {
+            return true;
+        }
+
+        if (named.IsUnboundGenericType)
+        {
+            return false;
+        }
+
+        if (named.ContainingType is not null && !IsClosed(named.ContainingType))
+        {
+            return false;
+        }
+
+        return named.TypeArguments.All(IsClosed);
+    }
+
+    private static bool IsSupportedDependency(ITypeSymbol type)
     {
         if (type.TypeKind
             is TypeKind.TypeParameter
             or TypeKind.Error
-            or TypeKind.Dynamic
             or TypeKind.Pointer
             or TypeKind.FunctionPointer
             || type.IsRefLikeType
@@ -155,16 +419,40 @@ internal static class FactoryDiscovery
 
         if (type is IArrayTypeSymbol array)
         {
-            return IsSupportedType(array.ElementType);
+            return IsSupportedDependency(array.ElementType);
         }
 
-        if (type is INamedTypeSymbol named)
+        if (type is not INamedTypeSymbol named)
         {
-            return !named.IsUnboundGenericType
-                && (named.ContainingType is null || IsSupportedType(named.ContainingType))
-                && named.TypeArguments.All(IsSupportedType);
+            return true;
         }
 
-        return true;
+        if (named.IsUnboundGenericType)
+        {
+            return false;
+        }
+
+        if (named.ContainingType is not null && !IsSupportedDependency(named.ContainingType))
+        {
+            return false;
+        }
+
+        return named.TypeArguments.All(IsSupportedDependency);
+    }
+
+    private static Diagnostic CreateDiagnostic(
+        DiagnosticDescriptor descriptor,
+        FactoryRegistration registration,
+        IEnumerable<Location> additionalLocations,
+        params object[] arguments
+    )
+    {
+        return Diagnostic.Create(
+            descriptor,
+            location: registration.Location,
+            additionalLocations.Where(location => location.IsInSource),
+            properties: null,
+            messageArgs: arguments
+        );
     }
 }

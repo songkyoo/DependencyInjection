@@ -205,20 +205,20 @@ public class FactoryGenerationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("public Service() { } public Service(string value) { }")]
-    [TestCase("[Inject] public Service() { } [Inject] public Service(string value) { }")]
-    [TestCase("private Service() { }")]
-    [TestCase("public Service() { } [Inject] private Service(string value) { }")]
-    [TestCase("public Service(ref int value) { }")]
-    [TestCase("public Service(in int value) { }")]
-    [TestCase("public Service(out int value) { value = 0; }")]
-    [TestCase("public Service(System.Span<int> value) { }")]
-    [TestCase("public Service(dynamic value) { }")]
-    [TestCase("public Service(dynamic[] value) { }")]
-    [TestCase("public Service(System.Collections.Generic.List<dynamic> value) { }")]
-    public void UnsupportedConstructor_ShouldLeaveFactoryMissingWithoutGeneratorDiagnostics(string constructors)
+    [TestCase("public Service() { } public Service(string value) { }", "MADI0007")]
+    [TestCase("[Inject] public Service() { } [Inject] public Service(string value) { }", "MADI0005")]
+    [TestCase("private Service() { }", "MADI0006")]
+    [TestCase("public Service() { } [Inject] private Service(string value) { }", "MADI0008")]
+    [TestCase("public Service(ref int value) { }", "MADI0009")]
+    [TestCase("public Service(in int value) { }", "MADI0009")]
+    [TestCase("public Service(out int value) { value = 0; }", "MADI0009")]
+    [TestCase("public Service(System.Span<int> value) { }", "MADI0009")]
+    [TestCase("public Service(dynamic value) { }", "MADI0002")]
+    [TestCase("public Service(dynamic[] value) { }", "MADI0002")]
+    [TestCase("public Service(System.Collections.Generic.List<dynamic> value) { }", "MADI0002")]
+    public void UnsupportedConstructor_ShouldReportDiagnostic(string constructors, string expectedId)
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
 
@@ -243,7 +243,8 @@ public class FactoryGenerationTests
             """
         );
 
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId]));
+        AssertCompiles(compilation);
     }
 
     [TestCase("Service<T>")]
@@ -251,7 +252,7 @@ public class FactoryGenerationTests
     [TestCase("Outer<T>.Inner")]
     public void OpenImplementation_ShouldNotBeInferredFromGenericHelperCalls(string implementation)
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
 
@@ -285,7 +286,8 @@ public class FactoryGenerationTests
             """
         );
 
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0001"]));
+        AssertCompiles(compilation);
     }
 
     [TestCase("dynamic")]
@@ -293,9 +295,9 @@ public class FactoryGenerationTests
     [TestCase("Service<dynamic[]>")]
     [TestCase("Service<System.Collections.Generic.List<dynamic>>")]
     [TestCase("Outer<dynamic>.Inner")]
-    public void DynamicImplementation_ShouldLeaveFactoryMissingWithoutGeneratorDiagnostics(string implementation)
+    public void DynamicImplementation_ShouldReportDiagnostic(string implementation)
     {
-        var (compilation, sources) = Generate(
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
 
@@ -326,7 +328,8 @@ public class FactoryGenerationTests
         var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
 
         Assert.That(factories, Does.Not.Contain("factories.Add("));
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0002"]));
+        AssertCompiles(compilation);
     }
 
     [Test]
@@ -628,7 +631,7 @@ public class FactoryGenerationTests
     [Test]
     public void ImplicitStructConstructor_ShouldParticipateInPublicConstructorAmbiguity()
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
 
@@ -653,14 +656,15 @@ public class FactoryGenerationTests
             """
         );
 
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0007"]));
+        AssertCompiles(compilation);
     }
 
     [TestCase("public abstract class Service { }")]
     [TestCase("public interface Service { }")]
-    public void NonConcreteImplementation_ShouldLeaveFactoryMissing(string declaration)
+    public void NonConcreteImplementation_ShouldReportDiagnostic(string declaration)
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
 
@@ -685,13 +689,14 @@ public class FactoryGenerationTests
             """
         );
 
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0003"]));
+        AssertCompiles(compilation);
     }
 
     [Test]
-    public void PrivateNestedImplementation_ShouldLeaveFactoryMissing()
+    public void PrivateNestedImplementation_ShouldReportDiagnostic()
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
 
@@ -716,7 +721,8 @@ public class FactoryGenerationTests
             """
         );
 
-        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0004"]));
+        AssertCompiles(compilation);
     }
 
     [TestCase("public", true)]
@@ -741,7 +747,7 @@ public class FactoryGenerationTests
             """,
             assemblyName: "ExternalServices"
         ));
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
 
@@ -770,7 +776,16 @@ public class FactoryGenerationTests
             additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(Execute<bool>(compilation, external), Is.EqualTo(expectedFactory));
+        Assert.That(
+            diagnostics.Select(diagnostic => diagnostic.Id),
+            Is.EqualTo(expectedFactory ? Array.Empty<string>() : ["MADI0008"])
+        );
+        AssertCompiles(compilation);
+
+        if (expectedFactory)
+        {
+            Assert.That(Execute<bool>(compilation, external), Is.True);
+        }
     }
 
     [Test]
