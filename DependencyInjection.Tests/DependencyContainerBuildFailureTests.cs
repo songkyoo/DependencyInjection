@@ -115,6 +115,7 @@ public class DependencyContainerBuildFailureTests
         Assert.That(cycleError.Message, Does.Contain(firstTag));
         Assert.That(() => failedContainer!.Contains<CycleA>(), Throws.TypeOf<ObjectDisposedException>());
 
+        #region Local Functions
         void Configure(IDependencyRegistrar registrar)
         {
             registrar.Register<CycleA>(factory: (container, ref _) =>
@@ -131,6 +132,7 @@ public class DependencyContainerBuildFailureTests
                 return new CycleB();
             }, tag: secondTag);
         }
+        #endregion
     }
 
     [Test]

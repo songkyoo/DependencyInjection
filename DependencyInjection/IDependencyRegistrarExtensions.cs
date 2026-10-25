@@ -50,18 +50,6 @@ public static partial class IDependencyRegistrarExtensions
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime, tag, cleanup);
     }
 
-    public static void Register<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Lifetime lifetime,
-        object? tag = null,
-        Action<TInterface>? cleanup = null
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register<TInterface>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new TImplementation(), lifetime, tag, cleanup);
-    }
-
     #region Transient
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
@@ -82,16 +70,6 @@ public static partial class IDependencyRegistrarExtensions
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime: Lifetime.Transient, tag, cleanup);
     }
 
-    public static void RegisterTransient<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object? tag = null,
-        Action<TInterface>? cleanup = null
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register<TInterface>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new TImplementation(), lifetime: Lifetime.Transient, tag, cleanup);
-    }
     #endregion
 
     #region Scoped
@@ -114,16 +92,6 @@ public static partial class IDependencyRegistrarExtensions
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime: Lifetime.Scoped, tag, cleanup);
     }
 
-    public static void RegisterScoped<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object? tag = null,
-        Action<TInterface>? cleanup = null
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register<TInterface>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new TImplementation(), lifetime: Lifetime.Scoped, tag, cleanup);
-    }
     #endregion
 
     #region Singleton
@@ -146,16 +114,6 @@ public static partial class IDependencyRegistrarExtensions
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime: Lifetime.Singleton, tag, cleanup);
     }
 
-    public static void RegisterSingleton<TInterface, TImplementation>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object? tag = null,
-        Action<TInterface>? cleanup = null
-    )
-        where TInterface : notnull
-        where TImplementation : TInterface, new()
-    {
-        Register<TInterface>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new TImplementation(), lifetime: Lifetime.Singleton, tag, cleanup);
-    }
     #endregion
 
     #region Instance

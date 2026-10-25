@@ -51,7 +51,7 @@ public class DependencyContainerCleanupTests
         var tag = "service";
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<IService, Service>(lifetime, cleanup: customCleanup ? service => service.CleanupCount++ : null, tag: tag);
+            registrar.Register<IService>(() => new Service(), lifetime, cleanup: customCleanup ? service => service.CleanupCount++ : null, tag: tag);
         });
         var service = container.Resolve<IService>(tag);
 
@@ -137,14 +137,6 @@ public class DependencyContainerCleanupTests
             (registrar, cleanup) => registrar.RegisterSingleton((_, ref _) => new Service(), cleanup: cleanup));
         yield return Registration("SingletonFactory", null,
             (registrar, cleanup) => registrar.RegisterSingleton(() => new Service(), cleanup: cleanup));
-        yield return Registration("ScopedImplementationWithTag", tag,
-            (registrar, cleanup) => registrar.RegisterScoped<IService, Service>(cleanup: cleanup, tag: tag));
-        yield return Registration("SingletonImplementation", null,
-            (registrar, cleanup) => registrar.RegisterSingleton<IService, Service>(cleanup: cleanup));
-        yield return Registration("GeneralImplementation", null,
-            (registrar, cleanup) => registrar.Register<IService, Service>(Lifetime.Scoped, cleanup: cleanup));
-        yield return Registration("GeneralImplementationWithTag", tag,
-            (registrar, cleanup) => registrar.Register<IService, Service>(Lifetime.Singleton, cleanup: cleanup, tag: tag));
         yield return Registration("InstanceWithTag", tag,
             (registrar, cleanup) => registrar.RegisterSingleton<IService>(new Service(), cleanup: cleanup, tag: tag));
         yield return Registration("Instance", null,
