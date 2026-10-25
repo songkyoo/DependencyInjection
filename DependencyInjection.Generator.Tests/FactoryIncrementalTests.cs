@@ -5,7 +5,7 @@ using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
-public class FactoryCachingTests
+public class FactoryIncrementalTests
 {
     private const string RegistrationSource =
         """
@@ -104,21 +104,55 @@ public class FactoryCachingTests
         AssertCompiles(output);
     }
 
-    [Test]
-    public void ConstructorParameterChange_ShouldRenderUpdatedFactory()
+    [TestCase("public Service() { Value = \"original\"; }", "original")]
+    [TestCase("public Service(int value) { Value = value.ToString(); }", "42")]
+    public void ConstructorChange_ShouldRenderUpdatedFactoryWhenRegistrationSyntaxIsUnchanged(
+        string originalConstructor,
+        string originalValue
+    )
     {
-        var source = RegistrationSource.Replace(
-            "public class Service { }",
-            "public class Service { public Service(int value) { } }"
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterSingleton(instance: "updated");
+                        registrar.RegisterTransient<Service, Service>();
+                    });
+
+                    return container.Resolve<Service>().Value;
+                }
+            }
+            """
         );
-        var input = CreateCompilation(source);
+        var originalType = CSharpSyntaxTree.ParseText(
+            text: $"public sealed class Service {{ public string Value {{ get; }} {originalConstructor} }}",
+            options: InputParseOptions,
+            path: "Service.cs"
+        );
+
+        input = input.AddSyntaxTrees(originalType);
+
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
+        Assert.That(Execute<string>(first), Is.EqualTo(originalValue));
+
+        var updatedType = CSharpSyntaxTree.ParseText(
+            text: "public sealed class Service { public string Value { get; } public Service(string value) { Value = value; } }",
+            options: InputParseOptions,
+            path: "Service.cs"
+        );
 
         driver = driver.RunGeneratorsAndUpdateCompilation(
-            CreateCompilation(source.Replace("int value", "string value")),
+            input.ReplaceSyntaxTree(originalType, updatedType),
             out var output,
             out diagnostics
         );
@@ -134,7 +168,7 @@ public class FactoryCachingTests
             result.GeneratedSources.Single(generated => generated.HintName.StartsWith("Factories.")).SourceText.ToString(),
             Does.Contain("resolver.Resolve<string>()")
         );
-        AssertCompiles(output);
+        Assert.That(Execute<string>(output), Is.EqualTo("updated"));
     }
 
     [TestCase(true)]
@@ -175,5 +209,86 @@ public class FactoryCachingTests
         );
         Assert.That(source.Contains("typeof(global::Extra)"), Is.EqualTo(addRegistration));
         AssertCompiles(output);
+    }
+
+    [Test]
+    public void RemovingLastRegistration_ShouldRemoveFactoryFromCollectedOutput()
+    {
+        const string source =
+            """
+            using Macaron.DependencyInjection;
+
+            public sealed class Service { }
+
+            public static class Probe
+            {
+                public static void Configure(IDependencyRegistrar registrar)
+                {
+                    registrar.RegisterTransient<Service, Service>();
+                }
+
+                public static bool Run()
+                {
+                    try { return Macaron.DependencyInjection.Generated.Factories.Get<Service>() != null; }
+                    catch (System.Collections.Generic.KeyNotFoundException) { return false; }
+                }
+            }
+            """;
+        var input = CreateCompilation(source);
+        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(Execute<bool>(first), Is.True);
+
+        var updatedSource = source.Replace("registrar.RegisterTransient<Service, Service>();", "");
+        var updatedInput = CreateCompilation(updatedSource);
+
+        driver.RunGeneratorsAndUpdateCompilation(updatedInput, out var updated, out diagnostics);
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(Execute<bool>(updated), Is.False);
+    }
+
+    [Test]
+    public void ConstructorChange_ShouldRemoveDiagnosticAndGenerateFactory()
+    {
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar)
+                {
+                    registrar.RegisterTransient<object, Service>();
+                }
+            }
+            """
+        );
+        var invalid = CSharpSyntaxTree.ParseText("public class Service { private Service() { } }", InputParseOptions, "Service.cs");
+
+        input = input.AddSyntaxTrees(invalid);
+
+        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out _, out var firstDiagnostics);
+
+        Assert.That(firstDiagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0006"]));
+
+        var valid = CSharpSyntaxTree.ParseText("public class Service { }", InputParseOptions, "Service.cs");
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(invalid, valid), out var output, out var diagnostics);
+
+        Assert.That(diagnostics, Is.Empty);
+        AssertCompiles(output);
+        Assert.That(
+            driver
+                .GetRunResult()
+                .Results
+                .Single()
+                .GeneratedSources
+                .Single(result => result.HintName.StartsWith("Factories."))
+                .SourceText
+                .ToString(),
+            Does.Contain("typeof(global::Service)")
+        );
     }
 }

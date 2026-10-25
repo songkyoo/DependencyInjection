@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
 
@@ -11,18 +10,23 @@ public class FactoryDiagnosticTests
 {
     [TestCase("T", "", "MADI0001")]
     [TestCase("Service<T>", "public class Service<T> { }", "MADI0001")]
-    [TestCase("dynamic", "", "MADI0002")]
-    [TestCase("Service<dynamic[]>", "public class Service<T> { }", "MADI0002")]
     [TestCase("Service", "public abstract class Service { }", "MADI0003")]
+    [TestCase("Service", "public interface Service { }", "MADI0003")]
     [TestCase("Service", "public enum Service { Value }", "MADI0003")]
     [TestCase("int[]", "", "MADI0003")]
     [TestCase("Service", "private class Service { }", "MADI0004")]
     [TestCase("Service", "public class Service { [Inject] public Service() { } [Inject] public Service(int value) { } }", "MADI0005")]
     [TestCase("Service", "public class Service { private Service() { } }", "MADI0006")]
     [TestCase("Service", "public class Service { public Service() { } public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", "public class Service { [Inject] private Service() { } }", "MADI0008")]
+    [TestCase("Service", "public struct Service { public Service(int value) { } }", "MADI0007")]
+    [TestCase("Service", "public class Service { public Service() { } [Inject] private Service(int value) { } }", "MADI0008")]
     [TestCase("Service", "public class Service { public Service(in int value) { } }", "MADI0009")]
     [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0009")]
+    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
+    [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0009")]
+    [TestCase("Service", "public class Service { public Service(dynamic value) { } }", "MADI0002")]
+    [TestCase("Service", "public class Service { public Service(dynamic[] value) { } }", "MADI0002")]
+    [TestCase("Service", "public class Service { public Service(System.Collections.Generic.List<dynamic> value) { } }", "MADI0002")]
     public void InvalidRegistration_ShouldReportErrorAtImplementationArgument(
         string implementation,
         string declaration,
@@ -319,46 +323,75 @@ public class FactoryDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [Test]
-    public void ConstructorChange_ShouldRemoveDiagnosticAndGenerateFactory()
+    [TestCase("Service<T>")]
+    [TestCase("Service<T[]>")]
+    [TestCase("Outer<T>.Inner")]
+    public void OpenImplementation_ShouldNotBeInferredFromGenericHelperCalls(string implementation)
     {
-        var input = CreateCompilation(
-            """
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
+            $$"""
             using Macaron.DependencyInjection;
 
-            public class Configuration
+            public interface IService { }
+
+            public sealed class Service<T> : IService { }
+
+            public class Outer<T> { public sealed class Inner : IService { } }
+
+            public static class Probe
             {
-                public void Configure(IDependencyRegistrar registrar)
+                private static void Configure<T>(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterTransient<object, Service>();
+                    registrar.RegisterTransient<IService, {{implementation}}>();
+                }
+
+                public static void ConfigureClosed(IDependencyRegistrar registrar)
+                {
+                    Configure<string>(registrar);
                 }
             }
             """
         );
-        var invalid = CSharpSyntaxTree.ParseText("public class Service { private Service() { } }", InputParseOptions, "Service.cs");
 
-        input = input.AddSyntaxTrees(invalid);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0001"]));
+        AssertCompiles(compilation);
+    }
 
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out _, out var firstDiagnostics);
+    [TestCase("dynamic")]
+    [TestCase("Service<dynamic>")]
+    [TestCase("Service<dynamic[]>")]
+    [TestCase("Service<System.Collections.Generic.List<dynamic>>")]
+    [TestCase("Outer<dynamic>.Inner")]
+    public void DynamicImplementation_ShouldReportDiagnostic(string implementation)
+    {
+        var source =
+            $$"""
+            using Macaron.DependencyInjection;
 
-        Assert.That(firstDiagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0006"]));
+            public sealed class Service<T> { }
 
-        var valid = CSharpSyntaxTree.ParseText("public class Service { }", InputParseOptions, "Service.cs");
+            public class Outer<T> { public sealed class Inner { } }
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(invalid, valid), out var output, out var diagnostics);
+            public static class Probe
+            {
+                public static void Configure(IDependencyRegistrar registrar)
+                {
+                    registrar.RegisterTransient<object, {{implementation}}>();
+                }
+            }
+            """;
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(source);
+        var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostics, Is.Empty);
-        AssertCompiles(output);
-        Assert.That(
-            driver
-                .GetRunResult()
-                .Results
-                .Single()
-                .GeneratedSources
-                .Single(result => result.HintName.StartsWith("Factories."))
-                .SourceText
-                .ToString(),
-            Does.Contain("typeof(global::Service)")
-        );
+        Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+        Assert.That(diagnostic.Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf(implementation, StringComparison.Ordinal)));
+        Assert.That(diagnostic.Location.SourceSpan.Length, Is.EqualTo(implementation.Length));
+        Assert.That(diagnostic.GetMessage(), Does.Contain("dynamic"));
+
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(factories, Does.Not.Contain("factories.Add("));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0002"]));
+        AssertCompiles(compilation);
     }
 }

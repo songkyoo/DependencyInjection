@@ -8,8 +8,7 @@ public class DependencyContainerFactoryScopeTests
     [Test]
     public void ScopeCreationDuringFactory_ShouldThrowBeforeConfiguration_WithoutChangingOwnership(
         [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
-        [Values] bool resolveFromChild,
-        [Values] bool useActionOverload
+        [Values] bool resolveFromChild
     )
     {
         var configurationCalls = 0;
@@ -33,12 +32,14 @@ public class DependencyContainerFactoryScopeTests
 
                     var exception = Assert.Throws<InvalidOperationException>(() =>
                     {
-                        using var scope = useActionOverload
-                            ? container.CreateScope(_ => configurationCalls++)
-                            : container.CreateScope(new ActionDependencyInstaller(_ => configurationCalls++));
+                        using var scope = container.CreateScope(_ => configurationCalls++);
                     });
 
                     Assert.That(exception!.Message, Does.Contain("CreateScope"));
+                    Assert.That(
+                        () => container.CreateScope(new ActionDependencyInstaller(_ => configurationCalls++)),
+                        Throws.InvalidOperationException
+                    );
                     Assert.That(configurationCalls, Is.EqualTo(previousConfigurationCalls));
                     Assert.That(serviceCleanups, Is.Zero);
                     Assert.That(collectedCleanups, Is.Zero);

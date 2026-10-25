@@ -13,6 +13,8 @@ public class TransientScopeResolveTests
 
     private sealed record Service(Resource Dependency, Resource Shared);
 
+    private sealed record FallbackService(Resource Resource);
+
     [Test]
     public void SharedServices_ShouldReuseBaseContainerCaches([Values] bool useChild)
     {
@@ -21,8 +23,8 @@ public class TransientScopeResolveTests
         var creations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(CreateResource, Lifetime.Scoped, tag: scopedTag);
-            registrar.Register<Resource>(CreateResource, Lifetime.Singleton, tag: singletonTag);
+            registrar.Register(CreateResource, Lifetime.Scoped, tag: scopedTag);
+            registrar.Register(CreateResource, Lifetime.Singleton, tag: singletonTag);
         });
         using var child = root.CreateScope();
         var container = useChild ? child : root;
@@ -33,7 +35,7 @@ public class TransientScopeResolveTests
         Assert.That(creations, Is.EqualTo(3));
         Assert.That(scope.Contains<Resource>(scopedTag), Is.True);
         Assert.That(scope.Contains<Resource>(singletonTag), Is.True);
-        Assert.That(scope.Contains<Service>(null), Is.False);
+        Assert.That(scope.Contains<Service>(), Is.False);
         Assert.That(scope.Resolve<Resource>(scopedTag), Is.SameAs(expectedScoped));
         Assert.That(scope.Resolve<Resource>(singletonTag), Is.SameAs(expectedSingleton));
 
@@ -68,7 +70,7 @@ public class TransientScopeResolveTests
         using var child = root.CreateScope();
         var container = useChild ? child : root;
         var scope = container.CreateTransientScope();
-        var service = scope.Resolve<Service>(null);
+        var service = scope.Resolve<Service>();
 
         Assert.That(service, Is.SameAs(container.Resolve<Service>()));
 
@@ -174,27 +176,30 @@ public class TransientScopeResolveTests
     }
 
     [Test]
-    public void FailedLookupAndCycle_ShouldAllowLaterResolution()
+    public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedTag)
     {
-        var cycle = true;
-        object? tag = null;
-        using var container = DependencyContainerFactory.Create(registrar =>
+        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>());
+        var scope = container.CreateTransientScope();
+        IDependencyResolver? capturedResolver = null;
+        Func<IDependencyResolver, FallbackService> factory = resolver =>
         {
-            registrar.RegisterTransient<object>(factory: (resolver, ref _) =>
-            {
-                return cycle ? resolver.Resolve<object>(tag) : new object();
-            });
-        });
-        using var scope = container.CreateTransientScope();
+            capturedResolver = resolver;
 
-        Assert.That(() => scope.Resolve<Resource>(null), Throws.InvalidOperationException);
+            return new FallbackService(resolver.Resolve<Resource>());
+        };
 
-        var exception = Assert.Throws<InvalidOperationException>(() => scope.Resolve<object>(tag));
+        var service = useNamedTag
+            ? scope.ResolveOrElse(factory, tag: "missing")
+            : scope.ResolveOrElse(factory);
 
-        Assert.That(exception!.Message, Does.Contain("Cyclic dependency detected"));
+        Assert.That(capturedResolver, Is.SameAs(scope));
+        Assert.That(scope.Contains<FallbackService>(), Is.False);
+        Assert.That(scope.ResolveOrNull<FallbackService>(), Is.Null);
+        Assert.That(service.Resource.DisposeCount, Is.Zero);
 
-        cycle = false;
+        scope.Dispose();
 
-        Assert.That(scope.Resolve<object>(tag), Is.Not.Null);
+        Assert.That(service.Resource.DisposeCount, Is.EqualTo(1));
+        Assert.That(() => capturedResolver!.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
     }
 }

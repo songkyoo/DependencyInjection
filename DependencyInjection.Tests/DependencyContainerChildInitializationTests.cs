@@ -1,3 +1,4 @@
+// ReSharper disable AccessToModifiedClosure
 // ReSharper disable DisposeOnUsingVariable
 namespace Macaron.DependencyInjection.Tests;
 
@@ -255,5 +256,34 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(childResource.IsDisposed, Is.True);
         Assert.That(root.Resolve<Resource>().IsDisposed, Is.False);
+    }
+
+    [Test]
+    public void InheritedScopedNullFactoryResult_ShouldFailChildCreation_AndPreserveParent(
+        [Values] bool useDefaultTag
+    )
+    {
+        var tag = useDefaultTag ? null : "service";
+        var failCreation = false;
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<string>(factory: (_, ref _) => failCreation ? null! : "Hello", tag: tag);
+        });
+
+        failCreation = true;
+
+        var exception = Assert.Throws<AggregateException>(() => root.CreateScope());
+
+        Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
+        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(typeof(string).ToString()));
+        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(tag?.ToString() ?? "null"));
+        Assert.That(root.Resolve<string>(tag), Is.EqualTo("Hello"));
+
+        failCreation = false;
+
+        using var child = root.CreateScope();
+
+        Assert.That(child.Resolve<string>(tag), Is.EqualTo("Hello"));
     }
 }

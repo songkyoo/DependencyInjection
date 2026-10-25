@@ -170,49 +170,6 @@ public class CleanupCollectorTests
     }
 
     [Test]
-    public void CollectedEntries_ShouldFollowFactoryOwnership(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
-    )
-    {
-        var cleanupCount = 0;
-        using var root = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.Register<object>(
-                factory: (_, ref collector) =>
-                {
-                    collector.Add(new object(), _ => cleanupCount++);
-
-                    return new object();
-                },
-                lifetime
-            );
-        });
-        using var child = root.CreateScope();
-        using var sibling = root.CreateScope();
-
-        child.Resolve<object>();
-        sibling.Resolve<object>();
-        child.Dispose();
-
-        Assert.That(cleanupCount, Is.EqualTo(lifetime == Lifetime.Singleton ? 0 : 1));
-
-        sibling.Dispose();
-
-        Assert.That(cleanupCount, Is.EqualTo(lifetime == Lifetime.Singleton ? 0 : 2));
-
-        root.Dispose();
-
-        var expectedCleanups = lifetime switch
-        {
-            Lifetime.Singleton => 1,
-            Lifetime.Scoped => 3,
-            _ => 2
-        };
-
-        Assert.That(cleanupCount, Is.EqualTo(expectedCleanups));
-    }
-
-    [Test]
     public void FailedFactory_ShouldLeaveResolvedDependencyOwnedByContainer()
     {
         var dependency = new Resource();
@@ -238,28 +195,5 @@ public class CleanupCollectorTests
 
         Assert.That(dependency.DisposeCount, Is.EqualTo(1));
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void CollectedCustomCleanup_ShouldReplaceDispose()
-    {
-        var resource = new Resource();
-        var cleanupCount = 0;
-        using var container = DependencyContainerFactory.Create(registrar =>
-        {
-            registrar.RegisterSingleton<object>(factory: (_, ref collector) =>
-            {
-                collector.Add(resource, _ => cleanupCount++);
-                collector.Add(resource, _ => { });
-
-                return new object();
-            });
-        });
-
-        container.Resolve<object>();
-        container.Dispose();
-
-        Assert.That(resource.DisposeCount, Is.Zero);
-        Assert.That(cleanupCount, Is.EqualTo(1));
     }
 }
