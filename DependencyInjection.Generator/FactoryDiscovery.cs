@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using static Macaron.DependencyInjection.Generator.InjectionParameterValidation;
 using static Macaron.DependencyInjection.Generator.Result;
 using static Microsoft.CodeAnalysis.MetadataImportOptions;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
@@ -162,9 +163,13 @@ internal static class FactoryDiscovery
                 continue;
             }
 
-            if (TagAttributeValidation.ValidateConstructors(implementation, compilation, registration.Location)
-                is { } tagDiagnostic
-            )
+            var tagDiagnostic = TagAttributeValidation.ValidateConstructors(
+                implementation,
+                compilation,
+                registrationLocation: registration.Location
+            );
+
+            if (tagDiagnostic is not null)
             {
                 if (!implementation.Locations.Any(location => location.IsInSource))
                 {
@@ -201,7 +206,7 @@ internal static class FactoryDiscovery
         if (!IsClosed(implementation))
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.ImplementationMustBeClosed,
+                descriptor: DiagnosticDescriptors.ImplementationMustBeClosed,
                 registration,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
@@ -211,21 +216,21 @@ internal static class FactoryDiscovery
         if (ContainsType(implementation, TypeKind.Dynamic))
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.DynamicTypeNotSupported,
+                descriptor: DiagnosticDescriptors.DynamicTypeNotSupported,
                 registration,
                 additionalLocations: implementation.Locations,
-                arguments: [typeName, typeName]
+                arguments: [typeName, typeName, "automatic construction"]
             ));
         }
 
-        if (implementation is not INamedTypeSymbol { TypeKind: (TypeKind.Class or TypeKind.Struct) } named
+        if (implementation is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named
             || named.IsAbstract
             || named.IsStatic
             || named.IsRefLikeType
         )
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.InvalidImplementationType,
+                descriptor: DiagnosticDescriptors.InvalidImplementationType,
                 registration,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
@@ -235,7 +240,7 @@ internal static class FactoryDiscovery
         if (!compilation.IsSymbolAccessibleWithin(implementation, within: compilation.Assembly))
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.ImplementationNotAccessible,
+                descriptor: DiagnosticDescriptors.ImplementationNotAccessible,
                 registration,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
@@ -264,7 +269,7 @@ internal static class FactoryDiscovery
         if (!compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.ConstructorNotAccessible,
+                descriptor: DiagnosticDescriptors.ConstructorNotAccessible,
                 registration,
                 additionalLocations: constructor.Locations,
                 arguments: [constructor.ToDisplayString(), typeName]
@@ -272,6 +277,8 @@ internal static class FactoryDiscovery
         }
 
         var arguments = new List<string>();
+        var dependencyStatements = new List<string>();
+        var usesInParameters = constructor.Parameters.Any(parameter => parameter.RefKind == RefKind.In);
         var tagAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.TagAttribute");
 
         foreach (var parameter in constructor.Parameters)
@@ -279,51 +286,53 @@ internal static class FactoryDiscovery
             var parameterType = parameter.Type;
             var parameterTypeName = parameterType.ToDisplayString(FullyQualifiedFormat);
 
-            if (ContainsType(parameterType, TypeKind.Dynamic))
+            var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
             {
-                return Error(CreateDiagnostic(
-                    descriptor: FactoryDiagnostics.DynamicTypeNotSupported,
-                    registration,
-                    additionalLocations: parameter.Locations,
-                    arguments: [parameterTypeName, typeName]
-                ));
-            }
+                return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
+            });
+            var parameterDiagnostic = ValidateShape(
+                parameter,
+                attributeName: tag is null ? "dependency injection" : "Tag",
+                registration.Location,
+                additionalLocations: parameter.Locations
+            );
 
-            if (parameter.RefKind != RefKind.None || !IsSupportedDependency(parameterType))
+            if (parameterDiagnostic is not null)
             {
-                return Error(CreateDiagnostic(
-                    descriptor: FactoryDiagnostics.UnsupportedConstructorParameter,
-                    registration,
-                    additionalLocations: parameter.Locations,
-                    arguments: [parameter.Name, typeName, parameter.ToDisplayString()]
-                ));
+                return Error(parameterDiagnostic);
             }
 
             if (!compilation.IsSymbolAccessibleWithin(parameterType, compilation.Assembly))
             {
                 return Error(CreateDiagnostic(
-                    descriptor: FactoryDiagnostics.DependencyNotAccessible,
+                    descriptor: DiagnosticDescriptors.DependencyNotAccessible,
                     registration,
                     additionalLocations: parameter.Locations,
                     arguments: [parameterTypeName, parameter.Name, typeName]
                 ));
             }
 
-            var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
-            {
-                return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
-            });
-
             var resolveArguments = tag is { ConstructorArguments.Length: 1 }
                 ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0])}"
                 : "";
+            var resolveExpression = $"resolver.Resolve<{parameterTypeName}>({resolveArguments})";
 
-            arguments.Add($"resolver.Resolve<{parameterTypeName}>({resolveArguments})");
+            if (usesInParameters)
+            {
+                var variableName = $"dependency{arguments.Count}";
+
+                dependencyStatements.Add($"var {variableName} = {resolveExpression};");
+                arguments.Add(parameter.RefKind == RefKind.In ? $"in {variableName}" : variableName);
+            }
+            else
+            {
+                arguments.Add(resolveExpression);
+            }
         }
 
         var creationExpression = $"new {typeName}({string.Join(", ", arguments)})";
 
-        return Ok(new FactoryDefinition(typeName, creationExpression));
+        return Ok(new FactoryDefinition(typeName, creationExpression, string.Join("\n", dependencyStatements)));
     }
 
     private static Result<IMethodSymbol, Diagnostic> SelectConstructor(
@@ -354,7 +363,7 @@ internal static class FactoryDiscovery
                 .Select(reference => reference!.GetSyntax().GetLocation());
 
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.MultipleInjectConstructors,
+                descriptor: DiagnosticDescriptors.MultipleInjectConstructors,
                 registration,
                 additionalLocations: locations,
                 arguments: [typeName]
@@ -374,7 +383,7 @@ internal static class FactoryDiscovery
         if (publicConstructors.Length == 0)
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.NoPublicConstructor,
+                descriptor: DiagnosticDescriptors.NoPublicConstructor,
                 registration,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
@@ -384,7 +393,7 @@ internal static class FactoryDiscovery
         if (publicConstructors.Length > 1)
         {
             return Error(CreateDiagnostic(
-                descriptor: FactoryDiagnostics.AmbiguousPublicConstructors,
+                descriptor: DiagnosticDescriptors.AmbiguousPublicConstructors,
                 registration,
                 additionalLocations: publicConstructors.SelectMany(constructor => constructor.Locations),
                 arguments: [typeName]
@@ -392,31 +401,6 @@ internal static class FactoryDiscovery
         }
 
         return Ok(publicConstructors[0]);
-    }
-
-    private static bool ContainsType(ITypeSymbol type, TypeKind kind)
-    {
-        if (type.TypeKind == kind)
-        {
-            return true;
-        }
-
-        if (type is IArrayTypeSymbol array)
-        {
-            return ContainsType(array.ElementType, kind);
-        }
-
-        if (type is not INamedTypeSymbol named)
-        {
-            return false;
-        }
-
-        if (named.ContainingType is not null && ContainsType(named.ContainingType, kind))
-        {
-            return true;
-        }
-
-        return named.TypeArguments.Any(argument => ContainsType(argument, kind));
     }
 
     private static bool IsClosed(ITypeSymbol type)
@@ -447,42 +431,6 @@ internal static class FactoryDiscovery
         }
 
         return named.TypeArguments.All(IsClosed);
-    }
-
-    private static bool IsSupportedDependency(ITypeSymbol type)
-    {
-        if (type.TypeKind
-            is TypeKind.TypeParameter
-            or TypeKind.Error
-            or TypeKind.Pointer
-            or TypeKind.FunctionPointer
-            || type.IsRefLikeType
-        )
-        {
-            return false;
-        }
-
-        if (type is IArrayTypeSymbol array)
-        {
-            return IsSupportedDependency(array.ElementType);
-        }
-
-        if (type is not INamedTypeSymbol named)
-        {
-            return true;
-        }
-
-        if (named.IsUnboundGenericType)
-        {
-            return false;
-        }
-
-        if (named.ContainingType is not null && !IsSupportedDependency(named.ContainingType))
-        {
-            return false;
-        }
-
-        return named.TypeArguments.All(IsSupportedDependency);
     }
 
     private static Diagnostic CreateDiagnostic(

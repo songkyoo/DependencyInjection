@@ -22,9 +22,11 @@ public class FactoryIncrementalTests
         }
         """;
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void InvalidTagDeclarationChange_ShouldUpdateDiagnosticAndFactory(bool missingInject)
+    [TestCase("array", "MADI0011")]
+    [TestCase("inject", "MADI0012")]
+    [TestCase("ref", "MADI0009")]
+    [TestCase("dynamic", "MADI0002")]
+    public void InvalidTagDeclarationChange_ShouldUpdateDiagnosticAndFactory(string invalidation, string expectedId)
     {
         var input = CreateCompilation(
             """
@@ -66,15 +68,20 @@ public class FactoryIncrementalTests
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string>(first), Is.EqualTo("first"));
 
-        var invalidDeclaration = missingInject
-            ? declaration.Replace("[Inject]", "")
-            : declaration.Replace("Tag(\"first\")", "Tag(new[] { 1 })");
+        var invalidDeclaration = invalidation switch
+        {
+            "array" => declaration.Replace("Tag(\"first\")", "Tag(new[] { 1 })"),
+            "inject" => declaration.Replace("[Inject]", ""),
+            "ref" => declaration.Replace("string value)", "ref string value)"),
+            "dynamic" => declaration.Replace("string value)", "dynamic value)"),
+            _ => throw new ArgumentOutOfRangeException(nameof(invalidation)),
+        };
         var invalid = CSharpSyntaxTree.ParseText(invalidDeclaration, InputParseOptions, "Service.cs");
         var invalidInput = input.ReplaceSyntaxTree(valid, invalid);
 
         driver = driver.RunGeneratorsAndUpdateCompilation(invalidInput, out var withoutFactory, out diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([missingInject ? "MADI0012" : "MADI0011"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId]));
         Assert.That(diagnostics.Single().Location.SourceTree, Is.SameAs(invalid));
         Assert.That(
             driver
@@ -95,8 +102,9 @@ public class FactoryIncrementalTests
         Assert.That(Execute<string>(restored), Is.EqualTo("first"));
     }
 
-    [Test]
-    public void TagConstantChange_ShouldRenderUpdatedFactoryWhenRegistrationIsUnchanged()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void TagConstantChange_ShouldRenderUpdatedFactoryWhenRegistrationIsUnchanged(bool inParameter)
     {
         const string source =
             """
@@ -130,7 +138,8 @@ public class FactoryIncrementalTests
             options: InputParseOptions,
             path: "Tags.cs"
         );
-        var input = CreateCompilation(source).AddSyntaxTrees(original);
+        var parameterSource = inParameter ? source.Replace("string value)", "in string value)") : source;
+        var input = CreateCompilation(parameterSource).AddSyntaxTrees(original);
         var driver = CreateDriver(trackIncrementalSteps: true)
             .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
 

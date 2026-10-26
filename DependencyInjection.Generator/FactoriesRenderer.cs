@@ -56,6 +56,15 @@ internal static class FactoriesRenderer
             source.AppendLine("            global::Macaron.DependencyInjection.IDependencyResolver resolver,");
             source.AppendLine("            ref global::Macaron.DependencyInjection.CleanupCollector collector)");
             source.AppendLine("        {");
+
+            if (factory.DependencyStatements.Length > 0)
+            {
+                foreach (var statement in factory.DependencyStatements.Split('\n'))
+                {
+                    source.AppendLine($"            {statement}");
+                }
+            }
+
             source.AppendLine($"            return {factory.CreationExpression};");
             source.AppendLine("        }");
         }

@@ -20,7 +20,6 @@ public class FactoryDiagnosticTests
     [TestCase("Service", "public class Service { public Service() { } public Service(int value) { } }", "MADI0007")]
     [TestCase("Service", "public struct Service { public Service(int value) { } }", "MADI0007")]
     [TestCase("Service", "public class Service { public Service() { } [Inject] private Service(int value) { } }", "MADI0008")]
-    [TestCase("Service", "public class Service { public Service(in int value) { } }", "MADI0009")]
     [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0009")]
     [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
     [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0009")]

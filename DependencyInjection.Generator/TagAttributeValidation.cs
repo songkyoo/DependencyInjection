@@ -2,6 +2,8 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
+
 namespace Macaron.DependencyInjection.Generator;
 
 internal static class TagAttributeValidation
@@ -27,25 +29,48 @@ internal static class TagAttributeValidation
 
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        if (HasArrayValue(parameter.GetAttributes().FirstOrDefault(attribute =>
+        var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
         {
             return attribute.ApplicationSyntaxReference?.Span == syntax.Span;
-        })))
+        });
+
+        if (HasArrayValue(tag))
         {
             diagnostics.Add(Diagnostic.Create(
-                descriptor: FactoryDiagnostics.ArrayTagNotSupported,
+                descriptor: DiagnosticDescriptors.ArrayTagNotSupported,
                 location: syntax.ArgumentList!.Arguments[0].Expression.GetLocation(),
                 messageArgs: [parameter.Name, parameter.ContainingSymbol.ToDisplayString()]
             ));
         }
 
-        if (IsConstructorWithoutInject(parameter.ContainingSymbol, semanticModel.Compilation))
+        var valueDiagnostic = ValidateValueAccessibility(
+            tag, parameter, semanticModel.Compilation,
+            location: syntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression.GetLocation() ?? syntax.GetLocation()
+        );
+
+        if (valueDiagnostic is not null)
         {
-            diagnostics.Add(Diagnostic.Create(
-                descriptor: FactoryDiagnostics.TaggedConstructorRequiresInject,
-                location: syntax.GetLocation(),
-                messageArgs: [parameter.Name, parameter.ContainingSymbol.ToDisplayString()]
-            ));
+            diagnostics.Add(valueDiagnostic);
+        }
+
+        var injectDiagnostic = InjectionParameterValidation.ValidateInjectRequirement(
+            parameter, semanticModel.Compilation, attributeName: "Tag", syntax.GetLocation()
+        );
+
+        if (injectDiagnostic is not null)
+        {
+            diagnostics.Add(injectDiagnostic);
+        }
+
+        var shapeDiagnostic = InjectionParameterValidation.ValidateShape(
+            parameter,
+            attributeName: "Tag",
+            location: parameterSyntax.Identifier.GetLocation()
+        );
+
+        if (shapeDiagnostic is not null)
+        {
+            diagnostics.Add(shapeDiagnostic);
         }
 
         return diagnostics.ToImmutable();
@@ -61,28 +86,43 @@ internal static class TagAttributeValidation
 
         foreach (var constructor in implementation.InstanceConstructors)
         {
-            var requiresInject = IsConstructorWithoutInject(constructor, compilation);
-
             foreach (var parameter in constructor.Parameters)
             {
                 var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
                 {
                     return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
                 });
-                var descriptor = tag switch
+                if (tag is null)
                 {
-                    not null when HasArrayValue(tag) => FactoryDiagnostics.ArrayTagNotSupported,
-                    not null when requiresInject => FactoryDiagnostics.TaggedConstructorRequiresInject,
-                    _ => null,
-                };
+                    continue;
+                }
 
-                if (descriptor is not null)
+                if (HasArrayValue(tag))
                 {
                     return Diagnostic.Create(
-                        descriptor,
+                        descriptor: DiagnosticDescriptors.ArrayTagNotSupported,
                         location: registrationLocation,
                         messageArgs: [parameter.Name, constructor.ToDisplayString()]
                     );
+                }
+
+                var diagnostic = ValidateValueAccessibility(
+                    tag, parameter, compilation, location: registrationLocation
+                ) ?? InjectionParameterValidation.ValidateInjectRequirement(
+                    parameter,
+                    compilation,
+                    attributeName: "Tag",
+                    location: registrationLocation
+                ) ?? InjectionParameterValidation.ValidateShape(
+                    parameter,
+                    attributeName: "Tag",
+                    location: registrationLocation,
+                    additionalLocations: parameter.Locations
+                );
+
+                if (diagnostic is not null)
+                {
+                    return diagnostic;
                 }
             }
         }
@@ -90,19 +130,35 @@ internal static class TagAttributeValidation
         return null;
     }
 
-    private static bool IsConstructorWithoutInject(ISymbol member, Compilation compilation)
+    private static Diagnostic? ValidateValueAccessibility(
+        AttributeData? tag,
+        IParameterSymbol parameter,
+        Compilation compilation,
+        Location location
+    )
     {
-        if (member is not IMethodSymbol { MethodKind: MethodKind.Constructor } constructor)
+        if (tag is not { ConstructorArguments: [{ IsNull: false } value] })
         {
-            return false;
+            return null;
         }
 
-        var injectAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
-
-        return !constructor.GetAttributes().Any(attribute =>
+        var valueType = value.Kind switch
         {
-            return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, injectAttribute);
-        });
+            TypedConstantKind.Enum => value.Type,
+            TypedConstantKind.Type => value.Value as ITypeSymbol,
+            _ => null,
+        };
+
+        if (valueType is null || compilation.IsSymbolAccessibleWithin(valueType, compilation.Assembly))
+        {
+            return null;
+        }
+
+        return Diagnostic.Create(
+            descriptor: DiagnosticDescriptors.TagValueTypeNotAccessible,
+            location,
+            messageArgs: [valueType.ToDisplayString(FullyQualifiedFormat), parameter.Name, parameter.ContainingSymbol.ToDisplayString()]
+        );
     }
 
     private static bool HasArrayValue(AttributeData? attribute)
