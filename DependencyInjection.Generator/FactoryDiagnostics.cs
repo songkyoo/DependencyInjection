@@ -95,4 +95,13 @@ internal static class FactoryDiagnostics
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    internal static readonly DiagnosticDescriptor ArrayTagNotSupported = new(
+        id: "MADI0011",
+        title: "Tag attribute value must not be an array",
+        messageFormat: "Tag attribute value for parameter '{0}' on '{1}' must not be an array",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

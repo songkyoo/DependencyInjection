@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Macaron.DependencyInjection.Generator;
@@ -139,6 +140,20 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             );
         });
 
+        context.RegisterSourceOutput(
+            source: context
+                .SyntaxProvider
+                .CreateSyntaxProvider(
+                    predicate: static (node, _) => node is AttributeSyntax { Parent.Parent: ParameterSyntax },
+                    transform: TagAttributeValidation.ValidateDeclaration
+                )
+                .Where(static diagnostic => diagnostic is not null),
+            action: static (output, diagnostic) =>
+            {
+                output.ReportDiagnostic(diagnostic!);
+            }
+        );
+
         var registrations = context
             .SyntaxProvider
             .CreateSyntaxProvider(
@@ -158,6 +173,21 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             ))
             .WithTrackingName("FactoryGeneration");
 
+        context.RegisterSourceOutput(
+            source: generation,
+            action: static (output, result) =>
+            {
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    output.ReportDiagnostic(diagnostic);
+                }
+            }
+        );
+
+        var assemblyIdentity = context
+            .CompilationProvider
+            .Select(static (compilation, _) => compilation.Assembly.Identity.ToString());
+
         var definitions = generation
             .Select(static (result, _) => result.Definitions)
             .WithComparer(FactoryDefinitionsComparer.Instance);
@@ -165,18 +195,6 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
         var factoriesSource = definitions
             .Select(static (factories, _) => FactoriesRenderer.Render(factories))
             .WithTrackingName("FactoriesSource");
-
-        context.RegisterSourceOutput(generation, static (output, result) =>
-        {
-            foreach (var diagnostic in result.Diagnostics)
-            {
-                output.ReportDiagnostic(diagnostic);
-            }
-        });
-
-        var assemblyIdentity = context
-            .CompilationProvider
-            .Select(static (compilation, _) => compilation.Assembly.Identity.ToString());
 
         context.RegisterSourceOutput(
             source: assemblyIdentity.Combine(factoriesSource),

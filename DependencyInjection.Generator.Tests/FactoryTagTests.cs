@@ -7,6 +7,7 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 public class FactoryTagTests
 {
     [TestCase("null")]
+    [TestCase("(int[])null")]
     [TestCase("true")]
     [TestCase("(byte)1")]
     [TestCase("(sbyte)-1")]
@@ -33,6 +34,7 @@ public class FactoryTagTests
     [TestCase("Tags.Kind.First | Tags.Kind.Second")]
     [TestCase("(Tags.Kind)ulong.MaxValue")]
     [TestCase("typeof(string)")]
+    [TestCase("typeof(int[])")]
     [TestCase("typeof(System.Collections.Generic.Dictionary<string, int[]>)")]
     [TestCase("typeof(System.Collections.Generic.Dictionary<,>)")]
     public void TagValue_ShouldResolveWithOriginalValueAndType(string expression)
