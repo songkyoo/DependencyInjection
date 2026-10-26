@@ -23,6 +23,66 @@ public class FactoryIncrementalTests
         """;
 
     [Test]
+    public void TagConstantChange_ShouldRenderUpdatedFactoryWhenRegistrationIsUnchanged()
+    {
+        const string source =
+            """
+            using Macaron.DependencyInjection;
+
+            public sealed class Service
+            {
+                public string Value { get; }
+
+                [Inject]
+                public Service([Tag(Tags.Value)] string value) { Value = value; }
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterSingleton(instance: "first", tag: "first");
+                        registrar.RegisterSingleton(instance: "second", tag: "second");
+                        registrar.RegisterTransient<Service>();
+                    });
+
+                    return container.Resolve<Service>().Value;
+                }
+            }
+            """;
+        var original = CSharpSyntaxTree.ParseText(
+            text: "public static class Tags { public const string Value = \"first\"; }",
+            options: InputParseOptions,
+            path: "Tags.cs"
+        );
+        var input = CreateCompilation(source).AddSyntaxTrees(original);
+        var driver = CreateDriver(trackIncrementalSteps: true)
+            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(Execute<string>(first), Is.EqualTo("first"));
+
+        var updated = CSharpSyntaxTree.ParseText(
+            text: "public static class Tags { public const string Value = \"second\"; }",
+            options: InputParseOptions,
+            path: "Tags.cs"
+        );
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(
+            input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics
+        );
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(
+            driver.GetRunResult().Results.Single().TrackedSteps["FactoriesSource"].Single().Outputs.Single().Reason,
+            Is.EqualTo(IncrementalStepRunReason.Modified)
+        );
+        Assert.That(Execute<string>(output), Is.EqualTo("second"));
+    }
+
+    [Test]
     public void UnrelatedBodyChange_ShouldReuseFactoryRenderingAfterAnalysis()
     {
         var unrelated = CSharpSyntaxTree.ParseText(

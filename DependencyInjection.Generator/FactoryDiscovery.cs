@@ -260,6 +260,7 @@ internal static class FactoryDiscovery
         }
 
         var arguments = new List<string>();
+        var tagAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.TagAttribute");
 
         foreach (var parameter in constructor.Parameters)
         {
@@ -296,7 +297,15 @@ internal static class FactoryDiscovery
                 ));
             }
 
-            arguments.Add($"resolver.Resolve<{parameterTypeName}>()");
+            var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
+            {
+                return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
+            });
+            var resolveArguments = tag is { ConstructorArguments.Length: 1 }
+                ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0])}"
+                : "";
+
+            arguments.Add($"resolver.Resolve<{parameterTypeName}>({resolveArguments})");
         }
 
         var creationExpression = $"new {typeName}({string.Join(", ", arguments)})";
