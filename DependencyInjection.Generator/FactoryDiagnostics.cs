@@ -104,4 +104,13 @@ internal static class FactoryDiagnostics
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    internal static readonly DiagnosticDescriptor TaggedConstructorRequiresInject = new(
+        id: "MADI0012",
+        title: "Constructor with Tag must have Inject",
+        messageFormat: "Constructor '{1}' must be marked with Inject because parameter '{0}' has Tag",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

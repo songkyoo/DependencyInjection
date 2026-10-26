@@ -22,8 +22,9 @@ public class FactoryIncrementalTests
         }
         """;
 
-    [Test]
-    public void ArrayTagChange_ShouldUpdateDeclarationDiagnosticAndFactory()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void InvalidTagDeclarationChange_ShouldUpdateDiagnosticAndFactory(bool missingInject)
     {
         var input = CreateCompilation(
             """
@@ -57,23 +58,35 @@ public class FactoryIncrementalTests
             }
             """;
         var valid = CSharpSyntaxTree.ParseText(declaration, InputParseOptions, "Service.cs");
+
         input = input.AddSyntaxTrees(valid);
+
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string>(first), Is.EqualTo("first"));
 
-        var invalid = CSharpSyntaxTree.ParseText(
-            declaration.Replace("Tag(\"first\")", "Tag(new[] { 1 })"), InputParseOptions, "Service.cs"
-        );
+        var invalidDeclaration = missingInject
+            ? declaration.Replace("[Inject]", "")
+            : declaration.Replace("Tag(\"first\")", "Tag(new[] { 1 })");
+        var invalid = CSharpSyntaxTree.ParseText(invalidDeclaration, InputParseOptions, "Service.cs");
         var invalidInput = input.ReplaceSyntaxTree(valid, invalid);
+
         driver = driver.RunGeneratorsAndUpdateCompilation(invalidInput, out var withoutFactory, out diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([missingInject ? "MADI0012" : "MADI0011"]));
         Assert.That(diagnostics.Single().Location.SourceTree, Is.SameAs(invalid));
-        Assert.That(driver.GetRunResult().Results.Single().GeneratedSources
-            .Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
-            Does.Not.Contain("typeof(global::Service)"));
+        Assert.That(
+            driver
+                .GetRunResult()
+                .Results
+                .Single()
+                .GeneratedSources
+                .Single(source => source.HintName.StartsWith("Factories."))
+                .SourceText
+                .ToString(),
+            Does.Not.Contain("typeof(global::Service)")
+        );
         AssertCompiles(withoutFactory);
 
         driver.RunGeneratorsAndUpdateCompilation(input, out var restored, out diagnostics);

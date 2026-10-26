@@ -6,6 +6,167 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class TagDiagnosticTests
 {
+    [TestCase("public Service([Tag] string value) { }")]
+    [TestCase("private Service([Tag(null)] string value) { }")]
+    [TestCase("public Service([Tag(\"tagged\")] string value) { } public Service() { }")]
+    [TestCase("private Service([Tag(\"tagged\")] string value) { } [Inject] public Service() { }")]
+    public void UnusedTaggedConstructorWithoutInject_ShouldReportAtTag(string constructors)
+    {
+        var source =
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public class Service<T> { {{constructors}} }
+            """;
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
+        var diagnostic = diagnostics.Single();
+
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
+        Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+        Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Does.StartWith("Tag"));
+        Assert.That(diagnostic.GetMessage(), Does.Contain("Inject").And.Contain("Service").And.Contain("value"));
+        AssertCompiles(compilation);
+    }
+
+    [Test]
+    public void ArrayTagWithoutInject_ShouldReportBothDeclarationErrors()
+    {
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service([Tag(new[] { 1 })] string value) { }
+            }
+            """
+        );
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0011", "MADI0012"]));
+        AssertCompiles(compilation);
+    }
+
+    [Test]
+    public void InjectOnDifferentTypeOrUnrelatedAttribute_ShouldNotMarkConstructor()
+    {
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
+            """
+            using Macaron.DependencyInjection;
+
+            public sealed class InjectAttribute : System.Attribute { }
+
+            public class Parent
+            {
+                [Macaron.DependencyInjection.Inject]
+                public Parent() { }
+            }
+
+            public class Service : Parent
+            {
+                [Inject]
+                public Service([Tag("tagged")] string value) { }
+            }
+            """
+        );
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
+        AssertCompiles(compilation);
+    }
+
+    [Test]
+    public void MultipleTagsWithoutInject_ShouldReportEachAttributeOnce()
+    {
+        var source =
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service([Tag("first")] string first, [Tag("second")] string second) { }
+            }
+            """;
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012", "MADI0012"]));
+        Assert.That(diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
+            Is.EquivalentTo(["Tag(\"first\")", "Tag(\"second\")"]));
+        AssertCompiles(compilation);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RepeatedUnmarkedConstructorRegistration_ShouldReportOnceAndExcludeFactory(bool singleType)
+    {
+        var typeArguments = singleType ? "Service" : "object, Service";
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service([Tag("tagged")] string value) { }
+                public Service() { }
+            }
+
+            public class Valid { }
+
+            public static class Configuration
+            {
+                public static void Configure(IDependencyRegistrar registrar)
+                {
+                    registrar.RegisterTransient<{{typeArguments}}>();
+                    registrar.RegisterSingleton<{{typeArguments}}>();
+                    registrar.RegisterTransient<Valid>();
+                }
+            }
+            """
+        );
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service)").And.Contain("typeof(global::Valid)"));
+        AssertCompiles(compilation);
+    }
+
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public void ReferencedTaggedConstructorWithoutInject_ShouldReportAtRegistration(bool singleType, bool hasDefaultConstructor)
+    {
+        var external = EmitAssembly(CreateCompilation(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public sealed class Service
+            {
+                {{(hasDefaultConstructor ? "[Inject] public Service() { }" : "")}}
+                {{(hasDefaultConstructor ? "private" : "public")}} Service([Tag("tagged")] string value) { }
+            }
+            """, assemblyName: "ExternalServices"
+        ));
+        var typeArguments = singleType ? "Service" : "object, Service";
+        var source =
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public static class Configuration
+            {
+                public static void Configure(IDependencyRegistrar registrar) => registrar.RegisterTransient<{{typeArguments}}>();
+            }
+            """;
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
+            source,
+            additionalReferences: MetadataReference.CreateFromImage(external)
+        );
+        var diagnostic = diagnostics.Single();
+
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
+        Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo("Service"));
+        Assert.That(diagnostic.GetMessage(), Does.Contain("Inject").And.Contain("Service").And.Contain("value"));
+        AssertCompiles(compilation);
+    }
+
     [TestCase("new int[] { 1, 2 }")]
     [TestCase("new[] { \"first\", \"second\" }")]
     [TestCase("new object[] { 1, typeof(string) }")]
@@ -34,7 +195,6 @@ public class TagDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase("public Service([Tag(new[] { 1 })] string value) { }")]
     [TestCase("public void Method([Tag(new[] { 1 })] string value) { }")]
     [TestCase("public delegate void Callback([Tag(new[] { 1 })] string value);")]
     [TestCase("public string this[[Tag(new[] { 1 })] string value] => value;")]
@@ -144,7 +304,6 @@ public class TagDiagnosticTests
 
             public class Service
             {
-                [Inject]
                 public Service({{attribute}} string value) { }
             }
             """
@@ -152,6 +311,23 @@ public class TagDiagnosticTests
 
         Assert.That(compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
         Assert.That(diagnostics, Is.Empty);
+    }
+
+    [Test]
+    public void TaggedMethodWithoutInject_ShouldRemainOutsideConstructorDiagnostic()
+    {
+        var (compilation, _) = Generate(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public void Method([Tag("tagged")] string value) { }
+            }
+            """
+        );
+
+        AssertCompiles(compilation);
     }
 
     [Test]

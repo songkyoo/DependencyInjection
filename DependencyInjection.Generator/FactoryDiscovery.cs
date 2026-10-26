@@ -162,8 +162,15 @@ internal static class FactoryDiscovery
                 continue;
             }
 
-            if (TagAttributeValidation.HasInvalidSourceConstructor(implementation, compilation))
+            if (TagAttributeValidation.ValidateConstructors(implementation, compilation, registration.Location)
+                is { } tagDiagnostic
+            )
             {
+                if (!implementation.Locations.Any(location => location.IsInSource))
+                {
+                    diagnostics.Add(tagDiagnostic);
+                }
+
                 continue;
             }
 
@@ -306,16 +313,6 @@ internal static class FactoryDiscovery
             {
                 return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
             });
-
-            if (TagAttributeValidation.HasArrayValue(tag))
-            {
-                return Error(CreateDiagnostic(
-                    descriptor: FactoryDiagnostics.ArrayTagNotSupported,
-                    registration,
-                    additionalLocations: parameter.Locations,
-                    arguments: [parameter.Name, constructor.ToDisplayString()]
-                ));
-            }
 
             var resolveArguments = tag is { ConstructorArguments.Length: 1 }
                 ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0])}"

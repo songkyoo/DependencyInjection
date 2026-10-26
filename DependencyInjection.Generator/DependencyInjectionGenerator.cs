@@ -147,10 +147,10 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                     predicate: static (node, _) => node is AttributeSyntax { Parent.Parent: ParameterSyntax },
                     transform: TagAttributeValidation.ValidateDeclaration
                 )
-                .Where(static diagnostic => diagnostic is not null),
+                .SelectMany(static (diagnostics, _) => diagnostics),
             action: static (output, diagnostic) =>
             {
-                output.ReportDiagnostic(diagnostic!);
+                output.ReportDiagnostic(diagnostic);
             }
         );
 
