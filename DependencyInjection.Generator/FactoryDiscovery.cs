@@ -13,11 +13,20 @@ internal static class FactoryDiscovery
 {
     internal static bool IsRegistrationCandidate(SyntaxNode node)
     {
-        return node is GenericNameSyntax
+        if (node is not SimpleNameSyntax simpleNameSyntax)
         {
-            TypeArgumentList.Arguments.Count: 2,
+            return false;
+        }
+
+        if (simpleNameSyntax is not
+        {
             Identifier.ValueText: "Register" or "RegisterTransient" or "RegisterScoped" or "RegisterSingleton",
-        };
+        })
+        {
+            return false;
+        }
+
+        return simpleNameSyntax is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count is 1 or 2;
     }
 
     internal static FactoryRegistration? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
@@ -35,7 +44,7 @@ internal static class FactoryDiscovery
         var comparer = SymbolEqualityComparer.Default;
 
         if (!comparer.Equals(definition.ContainingType, extensions)
-            || method.TypeArguments.Length != 2
+            || method.TypeArguments.Length is not (1 or 2)
             || comparer.Equals(
                 semanticModel.GetEnclosingSymbol(context.Node.SpanStart, cancellationToken)?.ContainingType,
                 extensions
@@ -45,7 +54,7 @@ internal static class FactoryDiscovery
             return null;
         }
 
-        var name = (GenericNameSyntax)context.Node;
+        var name = (SimpleNameSyntax)context.Node;
         var binding = name.Parent is MemberAccessExpressionSyntax or MemberBindingExpressionSyntax ? name.Parent : name;
 
         if (binding.Parent is InvocationExpressionSyntax invocation)
@@ -53,7 +62,8 @@ internal static class FactoryDiscovery
             binding = invocation;
         }
 
-        var implementation = method.TypeArguments[1];
+        var implementationIndex = method.TypeArguments.Length - 1;
+        var implementation = method.TypeArguments[implementationIndex];
 
         if (HasErrorDiagnostics(semanticModel, binding, cancellationToken)
             || ContainsType(implementation, TypeKind.Error)
@@ -63,7 +73,11 @@ internal static class FactoryDiscovery
             return null;
         }
 
-        return new FactoryRegistration(implementation, name.TypeArgumentList.Arguments[1].GetLocation());
+        var location = name is GenericNameSyntax genericName
+            ? genericName.TypeArgumentList.Arguments[implementationIndex].GetLocation()
+            : name.GetLocation();
+
+        return new FactoryRegistration(implementation, location, name.GetReference());
 
         #region Local Functions
         static bool HasErrorDiagnostics(
@@ -113,11 +127,20 @@ internal static class FactoryDiscovery
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var tree = originalRegistration.Location.SourceTree!;
-            var syntax = tree.GetRoot(cancellationToken).FindNode(originalRegistration.Location.SourceSpan);
-            var implementationType = compilation.GetSemanticModel(tree).GetTypeInfo(syntax, cancellationToken).Type;
+            var name = originalRegistration.NameReference.GetSyntax(cancellationToken);
+            var symbol = compilation
+                .GetSemanticModel(name.SyntaxTree)
+                .GetSymbolInfo(name, cancellationToken)
+                .Symbol;
 
-            if (implementationType is null || ContainsType(implementationType, TypeKind.Error))
+            if (symbol is not IMethodSymbol methodSymbol)
+            {
+                continue;
+            }
+
+            var implementationType = methodSymbol.TypeArguments[^1];
+
+            if (ContainsType(implementationType, TypeKind.Error))
             {
                 continue;
             }

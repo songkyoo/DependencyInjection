@@ -104,11 +104,14 @@ public class FactoryIncrementalTests
         AssertCompiles(output);
     }
 
-    [TestCase("public Service() { Value = \"original\"; }", "original")]
-    [TestCase("public Service(int value) { Value = value.ToString(); }", "42")]
+    [TestCase("public Service() { Value = \"original\"; }", "original", false)]
+    [TestCase("public Service(int value) { Value = value.ToString(); }", "42", false)]
+    [TestCase("public Service() { Value = \"original\"; }", "original", true)]
+    [TestCase("public Service(int value) { Value = value.ToString(); }", "42", true)]
     public void ConstructorChange_ShouldRenderUpdatedFactoryWhenRegistrationSyntaxIsUnchanged(
         string originalConstructor,
-        string originalValue
+        string originalValue,
+        bool singleType
     )
     {
         var input = CreateCompilation(
@@ -129,7 +132,7 @@ public class FactoryIncrementalTests
                     return container.Resolve<Service>().Value;
                 }
             }
-            """
+            """.Replace("RegisterTransient<Service, Service>", singleType ? "RegisterTransient<Service>" : "RegisterTransient<Service, Service>")
         );
         var originalType = CSharpSyntaxTree.ParseText(
             text: $"public sealed class Service {{ public string Value {{ get; }} {originalConstructor} }}",
@@ -211,8 +214,9 @@ public class FactoryIncrementalTests
         AssertCompiles(output);
     }
 
-    [Test]
-    public void RemovingLastRegistration_ShouldRemoveFactoryFromCollectedOutput()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RemovingLastRegistration_ShouldRemoveFactoryFromCollectedOutput(bool singleType)
     {
         const string source =
             """
@@ -234,13 +238,14 @@ public class FactoryIncrementalTests
                 }
             }
             """;
-        var input = CreateCompilation(source);
+        var registrationSource = singleType ? source.Replace("RegisterTransient<Service, Service>", "RegisterTransient<Service>") : source;
+        var input = CreateCompilation(registrationSource);
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<bool>(first), Is.True);
 
-        var updatedSource = source.Replace("registrar.RegisterTransient<Service, Service>();", "");
+        var updatedSource = registrationSource.Replace(singleType ? "registrar.RegisterTransient<Service>();" : "registrar.RegisterTransient<Service, Service>();", "");
         var updatedInput = CreateCompilation(updatedSource);
 
         driver.RunGeneratorsAndUpdateCompilation(updatedInput, out var updated, out diagnostics);

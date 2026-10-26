@@ -10,12 +10,12 @@ public class DependencyContainerFactoryTests
     }
 
     [Test]
-    public void Register_DefaultConstructor_ShouldResolveInstance()
+    public void Register_ExplicitFactory_ShouldResolveInstance()
     {
         object? tag = null;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<FooWithDefaultCtor>(Lifetime.Singleton, tag: tag);
+            registrar.Register<FooWithDefaultCtor>(factory: () => new FooWithDefaultCtor(), Lifetime.Singleton, tag: tag);
         });
         var instance = container.Resolve<FooWithDefaultCtor>(tag);
 
@@ -29,7 +29,7 @@ public class DependencyContainerFactoryTests
 
         Assert.That(container.Contains<Foo>(), Is.False);
 
-        using var child = container.CreateScope(registrar => registrar.RegisterScoped<Foo>());
+        using var child = container.CreateScope(registrar => registrar.RegisterScoped<Foo>(factory: () => new Foo()));
 
         Assert.That(child.Resolve<Foo>(), Is.Not.Null);
         Assert.That(container.Contains<Foo>(), Is.False);

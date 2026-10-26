@@ -117,8 +117,8 @@ public class TransientScopeLifecycleTests
 
         container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Resource>();
-            registrar.RegisterTransient<object>(cleanup: _ =>
+            registrar.RegisterSingleton<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient<object>(factory: () => new object(), cleanup: _ =>
             {
                 cleanupCalls++;
 

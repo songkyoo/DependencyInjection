@@ -182,7 +182,7 @@ public class DependencyContainerSharedInstanceTests
         var customCleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(lifetime);
+            registrar.Register<Resource>(factory: () => new Resource(), lifetime);
             registrar.Register<IFirst>(
                 factory: (resolver, ref _) => resolver.Resolve<Resource>(),
                 lifetime,

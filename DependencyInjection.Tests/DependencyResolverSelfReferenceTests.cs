@@ -203,7 +203,7 @@ public class DependencyResolverSelfReferenceTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>();
+            registrar.RegisterTransient<Resource>(factory: () => new Resource());
             registrar.RegisterTransient<Dependency>(factory: (resolver, ref _) =>
             {
                 return new Dependency(resolver.Resolve<IDependencyResolver>());

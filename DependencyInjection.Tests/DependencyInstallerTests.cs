@@ -74,7 +74,7 @@ public class DependencyInstallerTests
     {
         var failure = new AggregateException(new ArgumentException("Installation failed."));
         var factoryCalls = 0;
-        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton<Service>());
+        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton<Service>(factory: () => new Service()));
         var parentService = parent.Resolve<Service>();
         var error = Assert.Throws<AggregateException>(() =>
         {
@@ -118,7 +118,7 @@ public class DependencyInstallerTests
         var installer = new Installer(registrar =>
         {
             registrars.Add(registrar);
-            registrar.Register<Resource>(lifetime, tag: tag);
+            registrar.Register<Resource>(factory: () => new Resource(), lifetime, tag: tag);
         });
         using var parent = DependencyContainerFactory.Create(_ => { });
         var first = createChild ? parent.CreateScope(installer) : DependencyContainerFactory.Create(installer);
@@ -177,7 +177,7 @@ public class DependencyInstallerTests
     [Test]
     public void EmptyScope_ShouldInheritParentWithoutAddingRegistrations([Values] bool useActionOverload)
     {
-        using var parent = DependencyContainerFactory.Create(new Installer(registrar => registrar.RegisterSingleton<Resource>()));
+        using var parent = DependencyContainerFactory.Create(new Installer(registrar => registrar.RegisterSingleton<Resource>(factory: () => new Resource())));
         var resource = parent.Resolve<Resource>();
         var child = useActionOverload ? parent.CreateScope(_ => { }) : parent.CreateScope();
 

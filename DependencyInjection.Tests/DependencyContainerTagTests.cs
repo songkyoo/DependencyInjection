@@ -93,8 +93,8 @@ public class DependencyContainerTagTests
         Assert.That(
             () => DependencyContainerFactory.Create(registrar =>
             {
-                registrar.Register<Service>(lifetime);
-                registrar.Register<Service>(lifetime, tag: null);
+                registrar.Register<Service>(factory: () => new Service(), lifetime);
+                registrar.Register<Service>(factory: () => new Service(), lifetime, tag: null);
             }),
             Throws.ArgumentException
         );
@@ -108,7 +108,7 @@ public class DependencyContainerTagTests
         {
             foreach (var tag in tags)
             {
-                registrar.Register<Service>(lifetime, tag: tag);
+                registrar.Register<Service>(factory: () => new Service(), lifetime, tag: tag);
             }
         });
         var instances = tags.Select(tag => container.Resolve<Service>(tag)).ToArray();
@@ -129,8 +129,8 @@ public class DependencyContainerTagTests
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Service>(lifetime, tag: "service");
-            registrar.Register<OtherService>(lifetime, tag: "service");
+            registrar.Register<Service>(factory: () => new Service(), lifetime, tag: "service");
+            registrar.Register<OtherService>(factory: () => new OtherService(), lifetime, tag: "service");
         });
 
         Assert.That(container.Resolve<Service>("service"), Is.TypeOf<Service>());

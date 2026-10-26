@@ -17,6 +17,43 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
         {
             internal static class DependencyRegistrarExtensions
             {
+                internal static void Register<T>(
+                    this global::Macaron.DependencyInjection.IDependencyRegistrar registrar,
+                    global::Macaron.DependencyInjection.Lifetime lifetime,
+                    object? tag = null,
+                    global::System.Action<T>? cleanup = null)
+                    where T : notnull
+                {
+                    Register<T, T>(registrar, lifetime, tag, cleanup);
+                }
+
+                internal static void RegisterTransient<T>(
+                    this global::Macaron.DependencyInjection.IDependencyRegistrar registrar,
+                    object? tag = null,
+                    global::System.Action<T>? cleanup = null)
+                    where T : notnull
+                {
+                    Register<T, T>(registrar, global::Macaron.DependencyInjection.Lifetime.Transient, tag, cleanup);
+                }
+
+                internal static void RegisterScoped<T>(
+                    this global::Macaron.DependencyInjection.IDependencyRegistrar registrar,
+                    object? tag = null,
+                    global::System.Action<T>? cleanup = null)
+                    where T : notnull
+                {
+                    Register<T, T>(registrar, global::Macaron.DependencyInjection.Lifetime.Scoped, tag, cleanup);
+                }
+
+                internal static void RegisterSingleton<T>(
+                    this global::Macaron.DependencyInjection.IDependencyRegistrar registrar,
+                    object? tag = null,
+                    global::System.Action<T>? cleanup = null)
+                    where T : notnull
+                {
+                    Register<T, T>(registrar, global::Macaron.DependencyInjection.Lifetime.Singleton, tag, cleanup);
+                }
+
                 internal static void Register<TService, TImplementation>(
                     this global::Macaron.DependencyInjection.IDependencyRegistrar registrar,
                     global::Macaron.DependencyInjection.Lifetime lifetime,
@@ -38,8 +75,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                         serviceFactory,
                         lifetime,
                         tag,
-                        cleanup
-                    );
+                        cleanup);
                 }
 
                 internal static void RegisterTransient<TService, TImplementation>(
@@ -53,8 +89,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                         registrar,
                         global::Macaron.DependencyInjection.Lifetime.Transient,
                         tag,
-                        cleanup
-                    );
+                        cleanup);
                 }
 
                 internal static void RegisterScoped<TService, TImplementation>(
@@ -68,8 +103,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                         registrar,
                         global::Macaron.DependencyInjection.Lifetime.Scoped,
                         tag,
-                        cleanup
-                    );
+                        cleanup);
                 }
 
                 internal static void RegisterSingleton<TService, TImplementation>(
@@ -83,8 +117,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                         registrar,
                         global::Macaron.DependencyInjection.Lifetime.Singleton,
                         tag,
-                        cleanup
-                    );
+                        cleanup);
                 }
             }
         }

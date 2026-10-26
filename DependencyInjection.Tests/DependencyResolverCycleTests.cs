@@ -63,7 +63,7 @@ public class DependencyResolverCycleTests
                 },
                 tag: "first"
             );
-            registrar.RegisterTransient<Service>(tag: "second");
+            registrar.RegisterTransient<Service>(factory: () => new Service(), tag: "second");
         });
 
         Assert.That(() => container.Resolve<Service>("first"), Throws.Nothing);
@@ -83,7 +83,7 @@ public class DependencyResolverCycleTests
                 },
                 tag: "service"
             );
-            registrar.RegisterTransient<OtherService>(tag: "service");
+            registrar.RegisterTransient<OtherService>(factory: () => new OtherService(), tag: "service");
         });
 
         Assert.That(() => container.Resolve<Service>("service"), Throws.Nothing);

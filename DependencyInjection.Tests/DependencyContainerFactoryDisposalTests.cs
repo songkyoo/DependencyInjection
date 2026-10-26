@@ -23,7 +23,7 @@ public class DependencyContainerFactoryDisposalTests
         var collectedCleanups = 0;
         using (var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
+            registrar.RegisterScoped<Dependency>(factory: () => new Dependency(), cleanup: _ => dependencyCleanups++);
             registrar.Register<Service>(
                 factory: (resolver, ref collector) =>
                 {
@@ -159,7 +159,7 @@ public class DependencyContainerFactoryDisposalTests
         IDependencyContainer? factoryContainer = null;
         using (var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Dependency>(cleanup: _ => dependencyCleanups++);
+            registrar.RegisterScoped<Dependency>(factory: () => new Dependency(), cleanup: _ => dependencyCleanups++);
             registrar.Register<Service>(
                 factory: (resolver, ref collector) =>
                 {

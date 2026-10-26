@@ -14,8 +14,8 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Service>();
-            registrar.RegisterSingleton<Service>(tag: "service");
+            registrar.RegisterSingleton<Service>(factory: () => new Service());
+            registrar.RegisterSingleton<Service>(factory: () => new Service(), tag: "service");
         });
         using var scope = container.CreateTransientScope();
         IDependencyResolver resolver = useTransientScope ? scope : container;
@@ -36,11 +36,11 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Service>(tag: "service");
+            registrar.RegisterSingleton<Service>(factory: () => new Service(), tag: "service");
 
             if (missingTag is not null)
             {
-                registrar.RegisterSingleton<Service>();
+                registrar.RegisterSingleton<Service>(factory: () => new Service());
             }
         });
         using var scope = container.CreateTransientScope();

@@ -27,8 +27,16 @@ public class GeneratedRegistrationTests
         Assert.That(extensions.DeclaredAccessibility, Is.EqualTo(Accessibility.Internal));
         Assert.That(factories.DeclaredAccessibility, Is.EqualTo(Accessibility.Internal));
 
-        var register = extensions.GetMembers("Register").OfType<IMethodSymbol>().Single();
+        var registers = extensions.GetMembers("Register").OfType<IMethodSymbol>().OrderBy(method => method.Arity).ToArray();
 
+        Assert.That(registers, Has.Length.EqualTo(2));
+
+        var singleType = registers[0];
+        var register = registers[1];
+
+        Assert.That(singleType.IsExtensionMethod, Is.True);
+        Assert.That(singleType.TypeParameters.Single().HasNotNullConstraint, Is.True);
+        Assert.That(singleType.TypeParameters.Single().HasConstructorConstraint, Is.False);
         Assert.That(register.IsExtensionMethod, Is.True);
         Assert.That(
             register.TypeParameters.Select(parameter => parameter.Name),

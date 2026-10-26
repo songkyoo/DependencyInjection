@@ -63,7 +63,7 @@ public class TransientScopeResolveTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>();
+            registrar.RegisterTransient<Resource>(factory: () => new Resource());
             registrar.Register<Service>(factory: (resolver, ref _) =>
                 new Service(resolver.Resolve<Resource>(), resolver.Resolve<Resource>()), lifetime);
         });
@@ -104,7 +104,7 @@ public class TransientScopeResolveTests
         var serviceId = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Resource>(tag: sharedTag);
+            registrar.RegisterScoped<Resource>(factory: () => new Resource(), tag: sharedTag);
             registrar.RegisterTransient<Resource>(
                 factory: (resolver, ref collector) =>
                 {
@@ -178,7 +178,7 @@ public class TransientScopeResolveTests
     [Test]
     public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedTag)
     {
-        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>());
+        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(factory: () => new Resource()));
         var scope = container.CreateTransientScope();
         IDependencyResolver? capturedResolver = null;
         Func<IDependencyResolver, FallbackService> factory = resolver =>

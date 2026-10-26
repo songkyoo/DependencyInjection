@@ -6,19 +6,26 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class FactoryGenerationTests
 {
-    [TestCase("Register", Lifetime.Scoped)]
-    [TestCase("RegisterTransient", Lifetime.Transient)]
-    [TestCase("RegisterScoped", Lifetime.Scoped)]
-    [TestCase("RegisterSingleton", Lifetime.Singleton)]
+    [TestCase("Register", Lifetime.Scoped, false)]
+    [TestCase("RegisterTransient", Lifetime.Transient, false)]
+    [TestCase("RegisterScoped", Lifetime.Scoped, false)]
+    [TestCase("RegisterSingleton", Lifetime.Singleton, false)]
+    [TestCase("Register", Lifetime.Scoped, true)]
+    [TestCase("RegisterTransient", Lifetime.Transient, true)]
+    [TestCase("RegisterScoped", Lifetime.Scoped, true)]
+    [TestCase("RegisterSingleton", Lifetime.Singleton, true)]
     public void Registration_ShouldInjectDefaultDependencyAndPreserveLifetimeAndCleanup(
         string registrationMethod,
-        Lifetime lifetime
+        Lifetime lifetime,
+        bool singleType
     )
     {
         var requiredArguments = registrationMethod == "Register" ? $"Lifetime.{lifetime}," : "";
         var expectedRootReuse = lifetime != Lifetime.Transient ? "true" : "false";
         var expectedChildReuse = lifetime == Lifetime.Singleton ? "true" : "false";
-        var expectedCleanups = lifetime == Lifetime.Transient ? 3 : lifetime == Lifetime.Scoped ? 2 : 1;
+        var expectedCleanups = lifetime == Lifetime.Transient ? 4 : lifetime == Lifetime.Scoped ? 2 : 1;
+        var typeArguments = singleType ? "Service" : "IService, Service";
+        var serviceType = singleType ? "Service" : "IService";
         var (compilation, _) = Generate(
             $$"""
             using Macaron.DependencyInjection;
@@ -45,20 +52,24 @@ public class FactoryGenerationTests
                     {
                         registrar.RegisterSingleton<IDependency>(() => new Dependency());
                         registrar.RegisterSingleton<IDependency>(() => new Dependency(), tag: "other");
-                        registrar.{{registrationMethod}}<IService, Service>({{requiredArguments}} tag: "service", cleanup: _ => cleanups++);
+                        registrar.{{registrationMethod}}<{{typeArguments}}>({{requiredArguments}} tag: "service", cleanup: _ => cleanups++);
                     });
                     using var child = container.CreateScope();
-                    var first = container.Resolve<IService>("service");
-                    var second = container.Resolve<IService>("service");
-                    var inherited = child.Resolve<IService>("service");
+                    using var transientScope = container.CreateTransientScope();
+                    var first = container.Resolve<{{serviceType}}>("service");
+                    var second = container.Resolve<{{serviceType}}>("service");
+                    var inherited = child.Resolve<{{serviceType}}>("service");
+                    var scoped = transientScope.Resolve<{{serviceType}}>("service");
                     var injected = object.ReferenceEquals(first.Dependency, container.Resolve<IDependency>());
                     var rootReuse = object.ReferenceEquals(first, second) == {{expectedRootReuse}};
                     var childReuse = object.ReferenceEquals(first, inherited) == {{expectedChildReuse}};
+                    var transientScopeReuse = object.ReferenceEquals(first, scoped) == {{expectedRootReuse}};
 
+                    transientScope.Dispose();
                     child.Dispose();
                     container.Dispose();
 
-                    return injected && rootReuse && childReuse && cleanups == {{expectedCleanups}};
+                    return injected && rootReuse && childReuse && transientScopeReuse && cleanups == {{expectedCleanups}};
                 }
             }
             """
@@ -135,10 +146,14 @@ public class FactoryGenerationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("class")]
-    [TestCase("struct")]
-    public void ImplicitDefaultConstructor_ShouldCreateService(string typeKind)
+    [TestCase("class", false)]
+    [TestCase("struct", false)]
+    [TestCase("class", true)]
+    [TestCase("struct", true)]
+    public void ImplicitDefaultConstructor_ShouldCreateService(string typeKind, bool singleType)
     {
+        var typeArguments = singleType ? "Service" : "IService, Service";
+        var serviceType = singleType ? "Service" : "IService";
         var (compilation, _) = Generate(
             $$"""
             using Macaron.DependencyInjection;
@@ -151,9 +166,9 @@ public class FactoryGenerationTests
             {
                 public static bool Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<IService, Service>());
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<{{typeArguments}}>());
 
-                    return container.Resolve<IService>() is Service;
+                    return container.Resolve<{{serviceType}}>() is Service;
                 }
             }
             """
@@ -162,11 +177,14 @@ public class FactoryGenerationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [Test]
-    public void ClosedNestedGenericType_ShouldUseSubstitutedConstructorParameters()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ClosedNestedGenericType_ShouldUseSubstitutedConstructorParameters(bool singleType)
     {
+        var typeArguments = singleType ? "Outer<string>.Inner<int>" : "object, Outer<string>.Inner<int>";
+        var serviceType = singleType ? "Outer<string>.Inner<int>" : "object";
         var (compilation, _) = Generate(
-            """
+            $$"""
             using Macaron.DependencyInjection;
 
             public class Outer<T>
@@ -191,9 +209,9 @@ public class FactoryGenerationTests
                     {
                         registrar.RegisterSingleton<string>(() => "nested");
                         registrar.RegisterSingleton<int>(() => 42);
-                        registrar.RegisterTransient<object, Outer<string>.Inner<int>>();
+                        registrar.RegisterTransient<{{typeArguments}}>();
                     });
-                    var service = (Outer<string>.Inner<int>)container.Resolve<object>();
+                    var service = (Outer<string>.Inner<int>)container.Resolve<{{serviceType}}>();
 
                     return service.First == "nested" && service.Second == 42;
                 }
@@ -325,13 +343,18 @@ public class FactoryGenerationTests
             """
             public sealed class Service { }
 
-            public static class Other { public static void Register<TService, TImplementation>() { } }
+            public static class Other
+            {
+                public static void Register<T>() { }
+                public static void Register<TService, TImplementation>() { }
+            }
 
             public static class Probe
             {
                 public static bool Run()
                 {
                     Other.Register<Service, Service>();
+                    Other.Register<Service>();
 
                     try
                     {
@@ -500,11 +523,14 @@ public class FactoryGenerationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("public", true)]
-    [TestCase("internal", false)]
+    [TestCase("public", true, false)]
+    [TestCase("internal", false, false)]
+    [TestCase("public", true, true)]
+    [TestCase("internal", false, true)]
     public void ReferencedImplementation_ShouldHonorInjectMetadataAndAccessibility(
         string accessibility,
-        bool expectedFactory
+        bool expectedFactory,
+        bool singleType
     )
     {
         var external = EmitAssembly(CreateCompilation(
@@ -522,8 +548,9 @@ public class FactoryGenerationTests
             """,
             assemblyName: "ExternalServices"
         ));
+        var typeArguments = singleType ? "Service" : "Service, Service";
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            """
+            $$"""
             using Macaron.DependencyInjection;
 
             public static class Probe
@@ -535,7 +562,7 @@ public class FactoryGenerationTests
                         using var container = DependencyContainerFactory.Create(registrar =>
                         {
                             registrar.RegisterSingleton<string>(() => "external");
-                            registrar.RegisterTransient<Service, Service>();
+                            registrar.RegisterTransient<{{typeArguments}}>();
                         });
 
                         return container.Resolve<Service>().Value == "external";

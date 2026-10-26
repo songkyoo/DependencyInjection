@@ -2,4 +2,8 @@ using Microsoft.CodeAnalysis;
 
 namespace Macaron.DependencyInjection.Generator;
 
-internal sealed record FactoryRegistration(ITypeSymbol Implementation, Location Location);
+internal sealed record FactoryRegistration(
+    ITypeSymbol Implementation,
+    Location Location,
+    SyntaxReference NameReference
+);

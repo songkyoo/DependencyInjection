@@ -136,9 +136,9 @@ public class FactoryDiagnosticTests
             {
                 public void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterTransient<object, Invalid>();
+                    registrar.RegisterTransient<Invalid>();
                     registrar.RegisterScoped<object, Invalid>();
-                    registrar.RegisterSingleton<Valid, Valid>();
+                    registrar.RegisterSingleton<Valid>();
                 }
             }
             """

@@ -29,7 +29,7 @@ public class DependencyContainerCleanupTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(lifetime, cleanup: _ => { });
+            registrar.Register<Resource>(factory: () => new Resource(), lifetime, cleanup: _ => { });
         });
         var resource = container.Resolve<Resource>();
 

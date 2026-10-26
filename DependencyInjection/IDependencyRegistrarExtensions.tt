@@ -42,16 +42,6 @@ public static partial class IDependencyRegistrarExtensions
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => factory.Invoke(), lifetime, tag, cleanup);
     }
 
-    public static void Register<T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        Lifetime lifetime,
-        object? tag = null,
-        Action<T>? cleanup = null
-    ) where T : notnull, new()
-    {
-        Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime, tag, cleanup);
-    }
-
 <#
 foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
 {
@@ -65,15 +55,6 @@ foreach (var scope in new[] { "Transient", "Scoped", "Singleton" })
     ) where T : notnull
     {
         Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => factory.Invoke(), lifetime: Lifetime.<#= scope #>, tag, cleanup);
-    }
-
-    public static void Register<#= scope #><T>(
-        this IDependencyRegistrar dependencyRegistrar,
-        object? tag = null,
-        Action<T>? cleanup = null
-    ) where T : notnull, new()
-    {
-        Register<T>(dependencyRegistrar, factory: (IDependencyResolver _, ref CleanupCollector _) => new T(), lifetime: Lifetime.<#= scope #>, tag, cleanup);
     }
 
     #endregion
