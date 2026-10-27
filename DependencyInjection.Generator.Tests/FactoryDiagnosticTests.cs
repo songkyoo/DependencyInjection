@@ -175,8 +175,9 @@ public class FactoryDiagnosticTests
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0002"]));
     }
 
-    [Test]
-    public void ExternalConstructorWithInaccessibleDependency_ShouldReportDependencyFailureAtRegistration()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ExternalConstructorWithInaccessibleDependency_ShouldReportDependencyFailureAtUse(bool creation)
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName("ExternalServices"), typeof(object).Assembly);
         var module = builder.DefineDynamicModule("ExternalServices");
@@ -194,7 +195,20 @@ public class FactoryDiagnosticTests
 
         builder.Save(image);
 
-        const string source =
+        var source = creation
+            ?
+            """
+            using Macaron.DependencyInjection;
+
+            public class Configuration
+            {
+                public void Configure(IDependencyResolver resolver)
+                {
+                    resolver.For<Service>();
+                }
+            }
+            """
+            :
             """
             using Macaron.DependencyInjection;
 
@@ -206,6 +220,7 @@ public class FactoryDiagnosticTests
                 }
             }
             """;
+
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             source,
             additionalReferences: MetadataReference.CreateFromImage(image.ToArray())

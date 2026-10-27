@@ -2,6 +2,11 @@ namespace Macaron.DependencyInjection;
 
 public static class IDependencyResolverExtensions
 {
+    public static InjectionContext<T> For<T>(this IDependencyResolver resolver)
+    {
+        return new InjectionContext<T>(resolver);
+    }
+
     #region ResolveOrNull
     public static T? ResolveOrNull<T>(this IDependencyResolver dependencyResolver, object? tag = null)
         where T : class

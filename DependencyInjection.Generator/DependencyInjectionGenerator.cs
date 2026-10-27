@@ -154,20 +154,20 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             }
         );
 
-        var registrations = context
+        var requests = context
             .SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (node, _) => FactoryDiscovery.IsRegistrationCandidate(node),
-                transform: FactoryDiscovery.Discover
+                predicate: static (node, _) => ConstructionDiscovery.IsConstructionCandidate(node),
+                transform: ConstructionDiscovery.Discover
             )
-            .Where(static registration => registration is not null)
-            .Select(static (registration, _) => registration!);
+            .Where(static request => request is not null)
+            .Select(static (request, _) => request!);
 
-        var generation = registrations
+        var generation = requests
             .Collect()
             .Combine(context.CompilationProvider)
-            .Select(static (data, cancellationToken) => FactoryDiscovery.CreateDefinitions(
-                registrations: data.Left,
+            .Select(static (data, cancellationToken) => ConstructionDiscovery.CreateDefinitions(
+                requests: data.Left,
                 compilation: (CSharpCompilation)data.Right,
                 cancellationToken
             ))
@@ -181,6 +181,19 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                 {
                     output.ReportDiagnostic(diagnostic);
                 }
+            }
+        );
+
+        var creationSources = generation
+            .SelectMany(static (result, _) => result.Creations)
+            .Select(static (definition, _) => (definition.HintName, Source: CreationRenderer.Render(definition)))
+            .WithTrackingName("CreationSource");
+
+        context.RegisterSourceOutput(
+            source: creationSources,
+            action: static (output, creation) =>
+            {
+                output.AddSource(creation.HintName, SourceText.From(creation.Source, Encoding.UTF8));
             }
         );
 

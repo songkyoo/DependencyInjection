@@ -10,9 +10,9 @@ using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
 namespace Macaron.DependencyInjection.Generator;
 
-internal static class FactoryDiscovery
+internal static class ConstructionDiscovery
 {
-    internal static bool IsRegistrationCandidate(SyntaxNode node)
+    internal static bool IsConstructionCandidate(SyntaxNode node)
     {
         if (node is not SimpleNameSyntax simpleNameSyntax)
         {
@@ -21,7 +21,7 @@ internal static class FactoryDiscovery
 
         if (simpleNameSyntax is not
         {
-            Identifier.ValueText: "Register" or "RegisterTransient" or "RegisterScoped" or "RegisterSingleton",
+            Identifier.ValueText: "For" or "Register" or "RegisterTransient" or "RegisterScoped" or "RegisterSingleton",
         })
         {
             return false;
@@ -30,7 +30,7 @@ internal static class FactoryDiscovery
         return simpleNameSyntax is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count is 1 or 2;
     }
 
-    internal static FactoryRegistration? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    internal static ConstructionRequest? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         var semanticModel = context.SemanticModel;
 
@@ -40,12 +40,21 @@ internal static class FactoryDiscovery
         }
 
         var compilation = semanticModel.Compilation;
-        var extensions = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions");
+        var generateCreate = method.Name == "For";
+        var extensions = generateCreate
+            ? compilation
+                .GetTypeByMetadataName("Macaron.DependencyInjection.IDependencyResolver")?
+                .ContainingAssembly
+                .GetTypeByMetadataName("Macaron.DependencyInjection.IDependencyResolverExtensions")
+            : compilation.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions");
         var definition = (method.ReducedFrom ?? method).OriginalDefinition;
         var comparer = SymbolEqualityComparer.Default;
 
         if (!comparer.Equals(definition.ContainingType, extensions)
-            || method.TypeArguments.Length is not (1 or 2)
+            || (generateCreate
+                ? method.TypeArguments.Length != 1
+                : method.TypeArguments.Length is not (1 or 2)
+            )
             || comparer.Equals(
                 semanticModel.GetEnclosingSymbol(context.Node.SpanStart, cancellationToken)?.ContainingType,
                 extensions
@@ -56,7 +65,9 @@ internal static class FactoryDiscovery
         }
 
         var name = (SimpleNameSyntax)context.Node;
-        var binding = name.Parent is MemberAccessExpressionSyntax or MemberBindingExpressionSyntax ? name.Parent : name;
+        var binding = name.Parent is MemberAccessExpressionSyntax or MemberBindingExpressionSyntax
+            ? name.Parent
+            : name;
 
         if (binding.Parent is InvocationExpressionSyntax invocation)
         {
@@ -78,7 +89,7 @@ internal static class FactoryDiscovery
             ? genericName.TypeArgumentList.Arguments[implementationIndex].GetLocation()
             : name.GetLocation();
 
-        return new FactoryRegistration(implementation, location, name.GetReference());
+        return new ConstructionRequest(implementation, location, name.GetReference(), generateCreate);
 
         #region Local Functions
         static bool HasErrorDiagnostics(
@@ -113,7 +124,7 @@ internal static class FactoryDiscovery
     }
 
     internal static FactoryGenerationResult CreateDefinitions(
-        ImmutableArray<FactoryRegistration> registrations,
+        ImmutableArray<ConstructionRequest> requests,
         CSharpCompilation compilation,
         CancellationToken cancellationToken
     )
@@ -123,12 +134,13 @@ internal static class FactoryDiscovery
         var uniqueTypes = new List<INamedTypeSymbol>();
         var definitions = ImmutableArray.CreateBuilder<FactoryDefinition>();
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        var creations = ImmutableArray.CreateBuilder<CreationDefinition>();
 
-        foreach (var originalRegistration in registrations)
+        foreach (var originalRequest in requests)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var name = originalRegistration.NameReference.GetSyntax(cancellationToken);
+            var name = originalRequest.NameReference.GetSyntax(cancellationToken);
             var symbol = compilation
                 .GetSemanticModel(name.SyntaxTree)
                 .GetSymbolInfo(name, cancellationToken)
@@ -146,8 +158,8 @@ internal static class FactoryDiscovery
                 continue;
             }
 
-            var registration = originalRegistration with { Implementation = implementationType };
-            var implementationResult = ValidateImplementation(registration, compilation);
+            var request = originalRequest with { Implementation = implementationType };
+            var implementationResult = ValidateImplementation(request, compilation);
 
             if (implementationResult.IsError)
             {
@@ -158,15 +170,19 @@ internal static class FactoryDiscovery
 
             var implementation = implementationResult.Value;
 
-            if (uniqueTypes.Any(type => compilation.ClassifyConversion(type, implementation).IsIdentity))
+            var existingIndex = uniqueTypes.FindIndex(type => compilation.ClassifyConversion(type, implementation).IsIdentity);
+
+            if (existingIndex >= 0)
             {
+                AddCreation(request, implementation, definitions[existingIndex]);
+
                 continue;
             }
 
             var tagDiagnostic = TagAttributeValidation.ValidateConstructors(
                 implementation,
                 compilation,
-                registrationLocation: registration.Location
+                registrationLocation: request.Location
             );
 
             if (tagDiagnostic is not null)
@@ -179,7 +195,7 @@ internal static class FactoryDiscovery
                 continue;
             }
 
-            var definition = CreateDefinition(registration, implementation, compilation);
+            var definition = CreateDefinition(request, implementation, compilation);
 
             if (definition.IsError)
             {
@@ -190,24 +206,37 @@ internal static class FactoryDiscovery
 
             uniqueTypes.Add(implementation);
             definitions.Add(definition.Value);
+            AddCreation(request, implementation, definition.Value);
         }
 
-        return new FactoryGenerationResult(definitions.ToImmutable(), diagnostics.ToImmutable());
+        return new FactoryGenerationResult(definitions.ToImmutable(), creations.ToImmutable(), diagnostics.ToImmutable());
+
+        void AddCreation(ConstructionRequest request, INamedTypeSymbol implementation, FactoryDefinition factory)
+        {
+            if (!request.GenerateCreate || creations.Any(creation => creation.Factory == factory))
+            {
+                return;
+            }
+
+            var hintName = HintNameHelper.GetCreationHintName(implementation.Name, implementation.Arity, factory.TypeName);
+
+            creations.Add(new CreationDefinition(hintName, factory));
+        }
     }
 
     private static Result<INamedTypeSymbol, Diagnostic> ValidateImplementation(
-        FactoryRegistration registration,
+        ConstructionRequest request,
         Compilation compilation
     )
     {
-        var implementation = registration.Implementation;
+        var implementation = request.Implementation;
         var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
 
         if (!IsClosed(implementation))
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.ImplementationMustBeClosed,
-                registration,
+                request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
             ));
@@ -217,7 +246,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.DynamicTypeNotSupported,
-                registration,
+                request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName, typeName, "automatic construction"]
             ));
@@ -231,7 +260,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.InvalidImplementationType,
-                registration,
+                request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
             ));
@@ -241,7 +270,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.ImplementationNotAccessible,
-                registration,
+                request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
             ));
@@ -251,12 +280,12 @@ internal static class FactoryDiscovery
     }
 
     private static Result<FactoryDefinition, Diagnostic> CreateDefinition(
-        FactoryRegistration registration,
+        ConstructionRequest request,
         INamedTypeSymbol implementation,
         Compilation compilation
     )
     {
-        var constructorResult = SelectConstructor(registration, implementation, compilation);
+        var constructorResult = SelectConstructor(request, implementation, compilation);
 
         if (constructorResult.IsError)
         {
@@ -270,7 +299,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.ConstructorNotAccessible,
-                registration,
+                request,
                 additionalLocations: constructor.Locations,
                 arguments: [constructor.ToDisplayString(), typeName]
             ));
@@ -293,7 +322,7 @@ internal static class FactoryDiscovery
             var parameterDiagnostic = ValidateShape(
                 parameter,
                 attributeName: tag is null ? "dependency injection" : "Tag",
-                registration.Location,
+                request.Location,
                 additionalLocations: parameter.Locations
             );
 
@@ -306,7 +335,7 @@ internal static class FactoryDiscovery
             {
                 return Error(CreateDiagnostic(
                     descriptor: DiagnosticDescriptors.DependencyNotAccessible,
-                    registration,
+                    request,
                     additionalLocations: parameter.Locations,
                     arguments: [parameterTypeName, parameter.Name, typeName]
                 ));
@@ -336,7 +365,7 @@ internal static class FactoryDiscovery
     }
 
     private static Result<IMethodSymbol, Diagnostic> SelectConstructor(
-        FactoryRegistration registration,
+        ConstructionRequest request,
         INamedTypeSymbol implementation,
         Compilation compilation
     )
@@ -364,7 +393,7 @@ internal static class FactoryDiscovery
 
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.MultipleInjectConstructors,
-                registration,
+                request,
                 additionalLocations: locations,
                 arguments: [typeName]
             ));
@@ -384,7 +413,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.NoPublicConstructor,
-                registration,
+                request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
             ));
@@ -394,7 +423,7 @@ internal static class FactoryDiscovery
         {
             return Error(CreateDiagnostic(
                 descriptor: DiagnosticDescriptors.AmbiguousPublicConstructors,
-                registration,
+                request,
                 additionalLocations: publicConstructors.SelectMany(constructor => constructor.Locations),
                 arguments: [typeName]
             ));
@@ -435,14 +464,14 @@ internal static class FactoryDiscovery
 
     private static Diagnostic CreateDiagnostic(
         DiagnosticDescriptor descriptor,
-        FactoryRegistration registration,
+        ConstructionRequest request,
         IEnumerable<Location> additionalLocations,
         params object[] arguments
     )
     {
         return Diagnostic.Create(
             descriptor,
-            location: registration.Location,
+            location: request.Location,
             additionalLocations.Where(location => location.IsInSource),
             properties: null,
             messageArgs: arguments
