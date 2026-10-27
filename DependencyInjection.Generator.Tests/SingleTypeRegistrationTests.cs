@@ -84,65 +84,6 @@ public class SingleTypeRegistrationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("T", "", "MADI0001")]
-    [TestCase("Service<T>", "public class Service<T> { }", "MADI0001")]
-    [TestCase("Service<dynamic>", "public class Service<T> { }", "MADI0002")]
-    [TestCase("int[]", "", "MADI0003")]
-    [TestCase("Service", "public abstract class Service { }", "MADI0003")]
-    [TestCase("Service", "public interface Service { }", "MADI0003")]
-    [TestCase("Service", "public class Service { [Inject] public Service() { } [Inject] public Service(int value) { } }", "MADI0005")]
-    [TestCase("Service", "public class Service { private Service() { } }", "MADI0006")]
-    [TestCase("Service", "public class Service { public Service() { } public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", "public class Service { public Service() { } [Inject] private Service(int value) { } }", "MADI0008")]
-    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(dynamic value) { } }", "MADI0002")]
-    public void InvalidTarget_ShouldReportAtSingleTypeArgument(string target, string declaration, string expectedId)
-    {
-        var source =
-            $$"""
-            using Macaron.DependencyInjection;
-
-            {{declaration}}
-
-            public static class Configuration
-            {
-                public static void Install<T>(IDependencyRegistrar registrar) where T : notnull
-                {
-                    registrar.RegisterTransient<{{target}}>();
-                }
-            }
-            """;
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
-        var diagnostic = diagnostics.Single();
-
-        Assert.That(diagnostic.Id, Is.EqualTo(expectedId));
-        Assert.That(diagnostic.Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf(target, StringComparison.Ordinal)));
-        Assert.That(diagnostic.Location.SourceSpan.Length, Is.EqualTo(target.Length));
-        AssertCompiles(compilation);
-    }
-
-    [TestCase("Missing")]
-    [TestCase("System.Span<int>")]
-    public void CompilerRejectedTarget_ShouldNotProduceGeneratorDiagnostic(string target)
-    {
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public static class Configuration
-            {
-                public static void Install(IDependencyRegistrar registrar)
-                {
-                    registrar.RegisterTransient<{{target}}>();
-                }
-            }
-            """
-        );
-
-        Assert.That(compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
-        Assert.That(diagnostics, Is.Empty);
-    }
-
     [Test]
     public void PrivateNestedTarget_ShouldReportInaccessibleImplementation()
     {

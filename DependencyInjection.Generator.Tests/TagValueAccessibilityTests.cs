@@ -133,7 +133,7 @@ public class TagValueAccessibilityTests
 
     [TestCase("Kind.Main")]
     [TestCase("typeof(Hidden)")]
-    public void RepeatedRegistration_ShouldReportDeclarationOnceAndPreserveValidFactory(string expression)
+    public void RepeatedUses_ShouldReportDeclarationOnceAndPreserveValidFactory(string expression)
     {
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
             $$"""
@@ -152,11 +152,14 @@ public class TagValueAccessibilityTests
 
             public static class Configuration
             {
-                public static void Configure(IDependencyRegistrar registrar)
+                public static void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
                 {
                     registrar.RegisterTransient<Service>();
                     registrar.RegisterSingleton<object, Service>();
+                    resolver.For<Service>();
+                    resolver.For<Service>();
                     registrar.RegisterTransient<Valid>();
+                    resolver.For<Valid>().Create();
                 }
             }
             """

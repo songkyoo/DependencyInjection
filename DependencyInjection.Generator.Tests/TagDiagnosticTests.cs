@@ -93,13 +93,11 @@ public class TagDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void RepeatedUnmarkedConstructorRegistration_ShouldReportOnceAndExcludeFactory(bool singleType)
+    [Test]
+    public void RepeatedUnmarkedConstructorUses_ShouldReportOnceAndExcludeFactory()
     {
-        var typeArguments = singleType ? "Service" : "object, Service";
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
-            $$"""
+            """
             using Macaron.DependencyInjection;
 
             public class Service
@@ -112,11 +110,14 @@ public class TagDiagnosticTests
 
             public static class Configuration
             {
-                public static void Configure(IDependencyRegistrar registrar)
+                public static void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
                 {
-                    registrar.RegisterTransient<{{typeArguments}}>();
-                    registrar.RegisterSingleton<{{typeArguments}}>();
+                    registrar.RegisterTransient<Service>();
+                    registrar.RegisterSingleton<object, Service>();
+                    resolver.For<Service>();
+                    resolver.For<Service>();
                     registrar.RegisterTransient<Valid>();
+                    resolver.For<Valid>().Create();
                 }
             }
             """
@@ -213,13 +214,11 @@ public class TagDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void RepeatedSourceRegistration_ShouldReportDeclarationOnceAndPreserveValidFactory(bool singleType)
+    [Test]
+    public void RepeatedSourceUses_ShouldReportDeclarationOnceAndPreserveValidFactory()
     {
-        var typeArguments = singleType ? "Service" : "object, Service";
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
-            $$"""
+            """
             using Macaron.DependencyInjection;
 
             public sealed class Service
@@ -237,11 +236,14 @@ public class TagDiagnosticTests
                     return Macaron.DependencyInjection.Generated.Factories.Get<Valid>() != null;
                 }
 
-                public static void Configure(IDependencyRegistrar registrar)
+                public static void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
                 {
-                    registrar.RegisterTransient<{{typeArguments}}>();
-                    registrar.RegisterSingleton<{{typeArguments}}>();
+                    registrar.RegisterTransient<Service>();
+                    registrar.RegisterSingleton<object, Service>();
+                    resolver.For<Service>();
+                    resolver.For<Service>();
                     registrar.RegisterTransient<Valid>();
+                    resolver.For<Valid>().Create();
                 }
             }
             """

@@ -56,6 +56,15 @@ internal static class GeneratorTestHelper
         return (output, sources);
     }
 
+    internal static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources) Generate(CSharpCompilation input)
+    {
+        var (output, sources, diagnostics) = GenerateWithDiagnostics(input);
+
+        Assert.That(diagnostics, Is.Empty);
+
+        return (output, sources);
+    }
+
     internal static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources, ImmutableArray<Diagnostic> Diagnostics)
         GenerateWithDiagnostics(
             string source,
@@ -63,7 +72,12 @@ internal static class GeneratorTestHelper
             params MetadataReference[] additionalReferences
         )
     {
-        var compilation = CreateCompilation(source, assemblyName, additionalReferences);
+        return GenerateWithDiagnostics(CreateCompilation(source, assemblyName, additionalReferences));
+    }
+
+    internal static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources, ImmutableArray<Diagnostic> Diagnostics)
+        GenerateWithDiagnostics(CSharpCompilation compilation)
+    {
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(
             compilation,
             out var output,

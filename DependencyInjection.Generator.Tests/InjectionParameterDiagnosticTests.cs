@@ -46,7 +46,7 @@ public class InjectionParameterDiagnosticTests
     [TestCase("out int", "value = 0;", "MADI0009")]
     [TestCase("System.Span<int>", "", "MADI0009")]
     [TestCase("dynamic", "", "MADI0002")]
-    public void RepeatedRegistration_ShouldReportShapeOnceAndPreserveValidFactory(string parameterType, string body, string expectedId)
+    public void RepeatedUses_ShouldReportShapeOnceAndPreserveValidFactory(string parameterType, string body, string expectedId)
     {
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
             $$"""
@@ -62,11 +62,14 @@ public class InjectionParameterDiagnosticTests
 
             public static class Configuration
             {
-                public static void Configure(IDependencyRegistrar registrar)
+                public static void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
                 {
                     registrar.RegisterTransient<Service>();
                     registrar.RegisterSingleton<object, Service>();
+                    resolver.For<Service>();
+                    resolver.For<Service>();
                     registrar.RegisterTransient<Valid>();
+                    resolver.For<Valid>().Create();
                 }
             }
             """

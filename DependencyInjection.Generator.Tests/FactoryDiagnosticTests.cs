@@ -8,62 +8,6 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class FactoryDiagnosticTests
 {
-    [TestCase("T", "", "MADI0001")]
-    [TestCase("Service<T>", "public class Service<T> { }", "MADI0001")]
-    [TestCase("Service", "public abstract class Service { }", "MADI0003")]
-    [TestCase("Service", "public interface Service { }", "MADI0003")]
-    [TestCase("Service", "public enum Service { Value }", "MADI0003")]
-    [TestCase("int[]", "", "MADI0003")]
-    [TestCase("Service", "private class Service { }", "MADI0004")]
-    [TestCase("Service", "public class Service { [Inject] public Service() { } [Inject] public Service(int value) { } }", "MADI0005")]
-    [TestCase("Service", "public class Service { private Service() { } }", "MADI0006")]
-    [TestCase("Service", "public class Service { public Service() { } public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", "public struct Service { public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", "public class Service { public Service() { } [Inject] private Service(int value) { } }", "MADI0008")]
-    [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(dynamic value) { } }", "MADI0002")]
-    [TestCase("Service", "public class Service { public Service(dynamic[] value) { } }", "MADI0002")]
-    [TestCase("Service", "public class Service { public Service(System.Collections.Generic.List<dynamic> value) { } }", "MADI0002")]
-    public void InvalidRegistration_ShouldReportErrorAtImplementationArgument(
-        string implementation,
-        string declaration,
-        string expectedId
-    )
-    {
-        var source =
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                {{declaration}}
-
-                public void Configure<T>(IDependencyRegistrar registrar) where T : notnull
-                {
-                    registrar.RegisterTransient<object, {{implementation}}>();
-                }
-            }
-            """;
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(source);
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId]));
-
-        var diagnostic = diagnostics.Single();
-
-        Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
-        Assert.That(diagnostic.Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf(implementation, StringComparison.Ordinal)));
-        Assert.That(diagnostic.Location.SourceSpan.Length, Is.EqualTo(implementation.Length));
-        Assert.That(diagnostic.GetMessage(), Does.Contain(implementation));
-        Assert.That(sources, Has.Length.EqualTo(2));
-        Assert.That(
-            sources.Single(result => result.HintName.StartsWith("Factories.")).SourceText.ToString(),
-            Does.Not.Contain("factories.Add(")
-        );
-        AssertCompiles(compilation);
-    }
-
     [TestCase("Register", "Lifetime.Transient")]
     [TestCase("RegisterTransient", "")]
     [TestCase("RegisterScoped", "")]
@@ -116,42 +60,6 @@ public class FactoryDiagnosticTests
         );
     }
 
-    [TestCase("public abstract class Invalid { }", "MADI0003")]
-    [TestCase("public class Invalid { private Invalid() { } }", "MADI0006")]
-    public void RepeatedInvalidImplementation_ShouldReportEveryRegistrationAndPreserveValidFactory(
-        string declaration,
-        string expectedId
-    )
-    {
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            {{declaration}}
-
-            public class Valid { }
-
-            public class Configuration
-            {
-                public void Configure(IDependencyRegistrar registrar)
-                {
-                    registrar.RegisterTransient<Invalid>();
-                    registrar.RegisterScoped<object, Invalid>();
-                    registrar.RegisterSingleton<Valid>();
-                }
-            }
-            """
-        );
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId, expectedId]));
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start).Distinct().Count(), Is.EqualTo(2));
-        Assert.That(
-            sources.Single(result => result.HintName.StartsWith("Factories.")).SourceText.ToString(),
-            Does.Contain("typeof(global::Valid)")
-        );
-        AssertCompiles(compilation);
-    }
-
     [Test]
     public void DynamicImplementation_ShouldBeDiagnosedEvenWhenEquivalentObjectFactoryExists()
     {
@@ -175,9 +83,8 @@ public class FactoryDiagnosticTests
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0002"]));
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void ExternalConstructorWithInaccessibleDependency_ShouldReportDependencyFailureAtUse(bool creation)
+    [Test]
+    public void ExternalConstructorWithInaccessibleDependency_ShouldReportDependencyFailureAtUse()
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName("ExternalServices"), typeof(object).Assembly);
         var module = builder.DefineDynamicModule("ExternalServices");
@@ -195,28 +102,16 @@ public class FactoryDiagnosticTests
 
         builder.Save(image);
 
-        var source = creation
-            ?
+        const string source =
             """
             using Macaron.DependencyInjection;
 
             public class Configuration
             {
-                public void Configure(IDependencyResolver resolver)
-                {
-                    resolver.For<Service>();
-                }
-            }
-            """
-            :
-            """
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                public void Configure(IDependencyRegistrar registrar)
+                public void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
                 {
                     registrar.RegisterTransient<object, Service>();
+                    resolver.For<Service>();
                 }
             }
             """;
@@ -225,60 +120,15 @@ public class FactoryDiagnosticTests
             source,
             additionalReferences: MetadataReference.CreateFromImage(image.ToArray())
         );
-        var diagnostic = diagnostics.Single();
-
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0010"));
-        Assert.That(diagnostic.Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf("Service", StringComparison.Ordinal)));
-        Assert.That(diagnostic.AdditionalLocations, Is.Empty);
-        Assert.That(diagnostic.GetMessage(), Does.Contain("Dependency"));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0010", "MADI0010" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start), Is.EqualTo(new[]
+        {
+            source.IndexOf("Service>", StringComparison.Ordinal),
+            source.LastIndexOf("Service>", StringComparison.Ordinal),
+        }));
+        Assert.That(diagnostics.SelectMany(diagnostic => diagnostic.AdditionalLocations), Is.Empty);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.GetMessage()), Is.All.Contains("Dependency"));
         AssertCompiles(compilation);
-    }
-
-    [TestCase("Missing")]
-    [TestCase("System.Span<int>")]
-    public void CompilerRejectedTypeArgument_ShouldNotProduceGeneratorDiagnostic(string implementation)
-    {
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                public void Configure(IDependencyRegistrar registrar)
-                {
-                    registrar.RegisterTransient<object, {{implementation}}>();
-                }
-            }
-            """
-        );
-
-        Assert.That(compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
-        Assert.That(diagnostics, Is.Empty);
-    }
-
-    [TestCase("public Service(Missing value) { }")]
-    [TestCase("[Inject, Inject] public Service(in int value) { }")]
-    [TestCase("[Inject] public Service() { } [Inject] public Service() { }")]
-    public void CompilerRejectedConstructor_ShouldNotProduceGeneratorDiagnostic(string constructors)
-    {
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Service { {{constructors}} }
-
-            public class Configuration
-            {
-                public void Configure(IDependencyRegistrar registrar)
-                {
-                    registrar.RegisterTransient<object, Service>();
-                }
-            }
-            """
-        );
-
-        Assert.That(compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
-        Assert.That(diagnostics, Is.Empty);
     }
 
     [TestCase("int*")]

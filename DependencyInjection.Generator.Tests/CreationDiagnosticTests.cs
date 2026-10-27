@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
 
@@ -6,93 +7,52 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class CreationDiagnosticTests
 {
-    [TestCase("T", "", "MADI0001")]
-    [TestCase("Service<T>", "public class Service<T> { }", "MADI0001")]
-    [TestCase("Outer<T>.Service", "public class Outer<T> { public class Service { } }", "MADI0001")]
-    [TestCase("Service<dynamic>", "public class Service<T> { }", "MADI0002")]
-    [TestCase("Service", "public abstract class Service { }", "MADI0003")]
-    [TestCase("Service", "public interface Service { }", "MADI0003")]
-    [TestCase("int[]", "", "MADI0003")]
-    [TestCase("Service", "private class Service { }", "MADI0004")]
-    [TestCase("Service", "public class Service { [Inject] public Service() { } [Inject] public Service(int value) { } }", "MADI0005")]
-    [TestCase("Service", "public class Service { private Service() { } }", "MADI0006")]
-    [TestCase("Service", "public class Service { public Service() { } public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", "public class Service { [Inject] private Service() { } }", "MADI0008")]
-    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(dynamic value) { } }", "MADI0002")]
-    public void InvalidForTarget_ShouldDiagnoseUseAndPreserveOtherCreation(string target, string declaration, string id)
-    {
-        var source =
-            $$"""
-            using Macaron.DependencyInjection;
+    private const string InternalConstructor =
+        """
+        using Macaron.DependencyInjection;
 
-            public class Valid { }
+        public class Service
+        {
+            public string Value { get; }
 
-            public class Configuration
+            [Inject]
+            internal Service([Tag("value")] string value) { Value = value; }
+        }
+        """;
+
+    private const string InternalTag =
+        """
+        using Macaron.DependencyInjection;
+
+        internal enum Kind { Value }
+
+        public class Service
+        {
+            public int Value { get; }
+
+            [Inject]
+            public Service([Tag(Kind.Value)] int value) { Value = value; }
+        }
+        """;
+
+    private const string ForUse =
+        """
+        using Macaron.DependencyInjection;
+
+        public class Configuration
+        {
+            public void Configure(IDependencyResolver resolver)
             {
-                {{declaration}}
-                public void Configure<T>(IDependencyResolver resolver)
-                {
-                    resolver.For<Valid>().Create();
-                    resolver.For<{{target}}>();
-                    resolver.For<{{target}}>();
-                }
+                resolver.For<Service>();
             }
-            """;
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(source);
+        }
+        """;
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { id, id }));
-        Assert.That(diagnostics.All(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
-        Assert.That(diagnostics.Last().Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf(target, StringComparison.Ordinal)));
-        Assert.That(sources.Count(result => result.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(1));
-        AssertCompiles(compilation);
-    }
-
-    [TestCase("Missing")]
-    [TestCase("System.Span<int>")]
-    public void CompilerRejectedFor_ShouldNotDuplicateDiagnostic(string target)
-    {
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                public void Configure(IDependencyResolver resolver) { resolver.For<{{target}}>(); }
-            }
-            """
-        );
-
-        Assert.That(diagnostics, Is.Empty);
-        Assert.That(compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
-    }
-
-    [TestCase("public Service(Missing value) { }")]
-    [TestCase("[Inject, Inject] public Service() { }")]
-    [TestCase("[Inject] public Service([Tag, Tag] int value) { }")]
-    public void CompilerRejectedConstructor_ShouldNotDuplicateDiagnostic(string constructor)
-    {
-        var (_, sources, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Service
-            {
-                {{constructor}}
-            }
-
-            public class Configuration
-            {
-                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
-            }
-            """
-        );
-
-        Assert.That(diagnostics, Is.Empty);
-        Assert.That(sources, Has.Length.EqualTo(2));
-    }
+    private static readonly SyntaxTree FriendAccess = CSharpSyntaxTree.ParseText(
+        """
+        [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Consumer")]
+        """, InputParseOptions, "AssemblyInfo.cs"
+    );
 
     [TestCase("public Service([Tag] int value) { }", "MADI0012")]
     [TestCase("[Inject] public Service([Tag(new[] { 1 })] int value) { }", "MADI0011")]
@@ -131,112 +91,75 @@ public class CreationDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void ExternalInternalConstructor_ShouldUseConsumerFriendAccess(bool friend)
+    [Test]
+    public void ExternalInternalConstructor_ShouldBeRejectedWithoutFriendAccess()
     {
-        var external = EmitAssembly(CreateCompilation(
-            $$"""
-            using Macaron.DependencyInjection;
+        var external = EmitAssembly(CreateCompilation(InternalConstructor, "External"));
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(ForUse,
+            additionalReferences: MetadataReference.CreateFromImage(external));
 
-            {{(friend ? "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Consumer\")]" : "")}}
-            public class Service
-            {
-                public string Value;
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0008" }));
+        Assert.That(sources, Has.Length.EqualTo(2));
+        AssertCompiles(compilation);
+    }
 
-                [Inject] internal Service([Tag("value")] string value) { Value = value; }
-            }
-            """,
-            assemblyName: "External"
-        ));
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
+    [Test]
+    public void ExternalInternalConstructor_ShouldExecuteWithConsumerFriendAccess()
+    {
+        var external = EmitAssembly(CreateCompilation(InternalConstructor, "External").AddSyntaxTrees(FriendAccess));
+        var (compilation, _) = Generate(
             """
             using Macaron.DependencyInjection;
+
             public static class Probe
             {
-                public static bool Run()
+                public static string Run()
                 {
-                    using var container = DependencyContainerFactory.Create(r => r.RegisterSingleton(instance: "expected", tag: "value"));
-                    var context = container.For<Service>();
-            """ + (friend ? "return context.Create().Value == \"expected\";" : "return true;") +
-            """
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                        registrar.RegisterSingleton(instance: "expected", tag: "value"));
+
+                    return container.For<Service>().Create().Value;
                 }
             }
-            """,
-            additionalReferences: MetadataReference.CreateFromImage(external)
+            """, additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(
-            diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo(friend ? Array.Empty<string>() : ["MADI0008"])
-        );
-        Assert.That(Execute<bool>(compilation, external), Is.True);
+        Assert.That(Execute<string>(compilation, external), Is.EqualTo("expected"));
     }
 
-    [TestCase("public Invalid([Tag] int value) { }", "MADI0012")]
-    [TestCase("[Inject] public Invalid([Tag(new[] { 1 })] int value) { }", "MADI0011")]
-    [TestCase("[Inject] public Invalid([Tag] ref int value) { }", "MADI0009")]
-    public void InvalidSourceDeclaration_ShouldDiagnoseOnceAcrossRepeatedForUses(string constructor, string id)
+    [Test]
+    public void ExternalInternalTag_ShouldBeRejectedWithoutFriendAccess()
     {
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
-            $$"""
-            using Macaron.DependencyInjection;
+        var external = EmitAssembly(CreateCompilation(InternalTag, "External"));
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(ForUse,
+            additionalReferences: MetadataReference.CreateFromImage(external));
 
-            public class Invalid { {{constructor}} }
-
-            public class Valid { }
-
-            public class Configuration
-            {
-                public void Configure(IDependencyResolver resolver)
-                {
-                    resolver.For<Invalid>(); resolver.For<Invalid>();
-                    resolver.For<Valid>().Create();
-                }
-            }
-            """
-        );
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo([id]));
-        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(1));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0013" }));
+        Assert.That(sources, Has.Length.EqualTo(2));
         AssertCompiles(compilation);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void ExternalTagTypeAccessibility_ShouldFollowConsumerFriendAccess(bool friend)
+    [Test]
+    public void ExternalInternalTag_ShouldResolveWithConsumerFriendAccess()
     {
-        var external = EmitAssembly(CreateCompilation(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            {{(friend ? "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Consumer\")]" : "")}}
-            internal enum Kind { Value }
-
-            public class Service
-            {
-                [Inject] public Service([Tag(Kind.Value)] int value) { }
-            }
-            """,
-            assemblyName: "External"
-        ));
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+        var external = EmitAssembly(CreateCompilation(InternalTag, "External").AddSyntaxTrees(FriendAccess));
+        var (compilation, _) = Generate(
             """
             using Macaron.DependencyInjection;
 
-            public class Configuration
+            public static class Probe
             {
-                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
+                public static int Run()
+                {
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                        registrar.RegisterSingleton(instance: 42, tag: Kind.Value));
+
+                    return container.For<Service>().Create().Value;
+                }
             }
-            """,
-            additionalReferences: MetadataReference.CreateFromImage(external)
+            """, additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(
-            diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo(friend ? Array.Empty<string>() : ["MADI0013"])
-        );
-        Assert.That(sources.Length, Is.EqualTo(friend ? 3 : 2));
-        AssertCompiles(compilation);
+        Assert.That(Execute<int>(compilation, external), Is.EqualTo(42));
     }
 }

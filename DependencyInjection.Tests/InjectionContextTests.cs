@@ -8,14 +8,15 @@ public class InjectionContextTests
         Assert.Throws<InvalidOperationException>(() => _ = default(InjectionContext<object>).Resolver);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void For_ShouldPreserveSelectedResolver(bool transientScope)
+    [Test]
+    public void For_ShouldPreserveSelectedResolver()
     {
         using var container = DependencyContainerFactory.Create(_ => { });
         using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = transientScope ? scope : container;
+        using var child = container.CreateScope();
 
-        Assert.That(resolver.For<object>().Resolver, Is.SameAs(resolver));
+        Assert.That(container.For<object>().Resolver, Is.SameAs(container));
+        Assert.That(child.For<object>().Resolver, Is.SameAs(child));
+        Assert.That(scope.For<object>().Resolver, Is.SameAs(scope));
     }
 }

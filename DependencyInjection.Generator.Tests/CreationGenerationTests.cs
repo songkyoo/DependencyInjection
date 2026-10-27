@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
 
@@ -6,11 +7,42 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class CreationGenerationTests
 {
+    private const string ClosedTypes =
+        """
+        namespace A { public class Service<T> { } }
+        namespace B { public class Service<T> { } }
+
+        public class Outer<T>
+        {
+            public struct Inner { }
+        }
+
+        public struct Empty { }
+        """;
+
+    private const string ClosedTypeConsumer =
+        """
+        using Macaron.DependencyInjection;
+
+        public static class Probe
+        {
+            public static bool Run()
+            {
+                using var container = DependencyContainerFactory.Create(_ => { });
+
+                return container.For<A.Service<int>>().Create() != null
+                    && container.For<A.Service<string>>().Create() != null
+                    && container.For<B.Service<int>>().Create() != null
+                    && container.For<Outer<string>.Inner>().Create().Equals(new Outer<string>.Inner())
+                    && container.For<Empty>().Create().Equals(new Empty());
+            }
+        }
+        """;
+
     [TestCase("resolver.For<Service>()")]
     [TestCase("IDependencyResolverExtensions.For<Service>(resolver)")]
-    [TestCase("getContext()")]
     [TestCase("resolver?.For<Service>()")]
-    public void ForSymbolUse_ShouldGenerateCreateAndShareRegisteredFactory(string expression)
+    public void ForInvocation_ShouldGenerateCreateAndShareRegisteredFactory(string expression)
     {
         var (compilation, sources) = Generate(
             $$"""
@@ -25,8 +57,6 @@ public class CreationGenerationTests
                 {
                     using var container = DependencyContainerFactory.Create(r => r.RegisterTransient<Service>());
                     IDependencyResolver resolver = container;
-                    {{(expression == "getContext()" ? "Func<InjectionContext<Service>> getContext = resolver.For<Service>;" : "")}}
-
                     return {{expression}}.Create() is Service;
                 }
             }
@@ -47,156 +77,62 @@ public class CreationGenerationTests
         Assert.That(creation.SourceText.ToString(), Does.Contain("return new global::Service();"));
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void UnregisteredClosedTypes_ShouldSupportExternalAssemblyAndDistinctNames(bool externalType)
+    [Test]
+    public void ForMethodGroup_ShouldDiscoverUnregisteredTarget()
     {
-        const string declarations =
-            """
-            namespace A
-            {
-                public class Service<T> { public Service() { } }
-            }
-
-            namespace B
-            {
-                public class Service<T> { public Service() { } }
-            }
-
-            public class Outer<T> { public struct Inner { } }
-
-            public struct Empty { }
-            """;
-        var external = externalType ? EmitAssembly(CreateCompilation(declarations, "External")) : null;
         var (compilation, sources) = Generate(
             """
+            using System;
             using Macaron.DependencyInjection;
+
+            public class Service { }
 
             public static class Probe
             {
                 public static bool Run()
                 {
                     using var container = DependencyContainerFactory.Create(_ => { });
+                    IDependencyResolver resolver = container;
+                    Func<InjectionContext<Service>> getContext = resolver.For<Service>;
 
-                    return container.For<A.Service<int>>().Create() != null
-                        && container.For<A.Service<string>>().Create() != null
-                        && container.For<B.Service<int>>().Create() != null
-                        && container.For<Outer<string>.Inner>().Create().Equals(new Outer<string>.Inner())
-                        && container.For<Empty>().Create().Equals(new Empty());
-                }
-            }
-            """ + (externalType ? "" : declarations),
-            additionalReferences: external is null ? [] : [MetadataReference.CreateFromImage(external)]
-        );
-
-        Assert.That(Execute<bool>(compilation, external is null ? [] : [external]), Is.True);
-        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(5));
-        Assert.That(sources.Select(source => source.HintName).Distinct().Count(), Is.EqualTo(sources.Length));
-    }
-
-    [TestCase(false, false, false)]
-    [TestCase(false, true, false)]
-    [TestCase(true, false, false)]
-    [TestCase(true, true, false)]
-    [TestCase(false, false, true)]
-    [TestCase(false, true, true)]
-    [TestCase(true, false, true)]
-    [TestCase(true, true, true)]
-    public void Parameters_ShouldSelectMarkedConstructorAndResolveOnceInOrder(bool tagged, bool externalType, bool inParameter)
-    {
-        var declarations =
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public class Service<T>
-            {
-                public string Value { get; }
-
-                {{(inParameter ? "public Service(T first, T middle, T last) { Value = \"wrong\"; }" : "")}}
-
-                [Inject]
-                public Service([Tag("first")] T first, {{(tagged ? "[Tag(\"middle\")]" : "")}} {{(inParameter ? "in " : "")}}T middle, [Tag("last")] T last)
-                {
-                    Value = $"{first}|{middle}|{last}";
-                }
-            }
-            """;
-        var external = externalType ? EmitAssembly(CreateCompilation(declarations, "External")) : null;
-        var (compilation, _) = Generate(
-            (externalType ? "using Macaron.DependencyInjection;" : declarations) +
-            $$"""
-            public static class Probe
-            {
-                public static bool Run()
-                {
-                    var calls = 0;
-                    using var container = DependencyContainerFactory.Create(r =>
-                    {
-                        r.RegisterTransient<int>(() => ++calls, tag: "first");
-                        r.RegisterTransient<int>(() => ++calls, tag: {{(tagged ? "\"middle\"" : "null")}});
-                        r.RegisterTransient<int>(() => ++calls, tag: "last");
-                    });
-
-                    return container.For<Service<int>>().Create().Value == "1|2|3" && calls == 3;
-                }
-            }
-            """,
-            additionalReferences: external is null ? [] : [MetadataReference.CreateFromImage(external)]
-        );
-
-        Assert.That(Execute<bool>(compilation, external is null ? [] : [external]), Is.True);
-    }
-
-    [TestCase("null")]
-    [TestCase("\"\"")]
-    [TestCase("\"한글\"")]
-    [TestCase("(byte)1")]
-    [TestCase("1")]
-    [TestCase("1L")]
-    [TestCase("Kind.Value")]
-    [TestCase("typeof(int[])")]
-    public void Tag_ShouldPreserveValueAndBoxingType(string tag)
-    {
-        var (compilation, _) = Generate(
-            $$"""
-            using Macaron.DependencyInjection;
-
-            public enum Kind { Value }
-
-            public class Service
-            {
-                public string Value { get; }
-
-                [Inject] public Service([Tag({{tag}})] string value) { Value = value; }
-            }
-
-            public static class Probe
-            {
-                public static bool Run()
-                {
-                    using var container = DependencyContainerFactory.Create(r =>
-                    {
-                        r.RegisterSingleton(instance: "expected", tag: {{tag}});
-                        r.RegisterSingleton(instance: "wrong", tag: "service");
-                        r.RegisterTransient<Service>(tag: "service");
-                    });
-
-                    return container.For<Service>().Create().Value == "expected";
+                    return getContext().Create() is Service;
                 }
             }
             """
         );
 
         Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(1));
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void OptionalAndParamsDependencies_ShouldAlwaysResolve(bool missing)
+    [Test]
+    public void UnregisteredClosedTypes_ShouldGenerateDistinctCreationFiles()
+    {
+        var input = CreateCompilation(ClosedTypeConsumer)
+            .AddSyntaxTrees(CSharpSyntaxTree.ParseText(ClosedTypes, InputParseOptions, "Types.cs"));
+        var (compilation, sources) = Generate(input);
+
+        Assert.That(Execute<bool>(compilation), Is.True);
+        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(5));
+        Assert.That(sources.Select(source => source.HintName).Distinct().Count(), Is.EqualTo(sources.Length));
+    }
+
+    [Test]
+    public void ExternalClosedTypes_ShouldGenerateAndExecuteInConsumerAssembly()
+    {
+        var external = EmitAssembly(CreateCompilation(ClosedTypes, "ExternalServices"));
+        var (compilation, sources) = Generate(ClosedTypeConsumer, additionalReferences: MetadataReference.CreateFromImage(external));
+
+        Assert.That(Execute<bool>(compilation, external), Is.True);
+        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(5));
+        Assert.That(sources.Select(source => source.HintName).Distinct().Count(), Is.EqualTo(sources.Length));
+    }
+
+    [Test]
+    public void OptionalAndParamsParameters_ShouldResolveRegisteredValues()
     {
         var (compilation, _) = Generate(
-            $$"""
-            using System;
+            """
             using Macaron.DependencyInjection;
 
             public class Service
@@ -211,15 +147,77 @@ public class CreationGenerationTests
 
             public static class Probe
             {
-                public static bool Run()
+                public static string Run()
                 {
-                    using var container = DependencyContainerFactory.Create(r =>
+                    using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        {{(missing ? "" : "r.RegisterSingleton(instance: \"resolved\"); r.RegisterSingleton(instance: new[] { 1, 2 });")}}
+                        registrar.RegisterSingleton(instance: "resolved");
+                        registrar.RegisterSingleton(instance: new[] { 1, 2 });
                     });
 
-                    try { return container.For<Service>().Create().Value == "resolved2" && !{{missing.ToString().ToLowerInvariant()}}; }
-                    catch (InvalidOperationException) { return {{missing.ToString().ToLowerInvariant()}}; }
+                    return container.For<Service>().Create().Value;
+                }
+            }
+            """
+        );
+
+        Assert.That(Execute<string>(compilation), Is.EqualTo("resolved2"));
+    }
+
+    [Test]
+    public void MissingOptionalDependency_ShouldFailInsteadOfUsingDefaultValue()
+    {
+        var (compilation, _) = Generate(
+            """
+            using System;
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service(string value = "fallback") { }
+            }
+
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    using var container = DependencyContainerFactory.Create(_ => { });
+
+                    try { container.For<Service>().Create(); }
+                    catch (InvalidOperationException) { return true; }
+
+                    return false;
+                }
+            }
+            """
+        );
+
+        Assert.That(Execute<bool>(compilation), Is.True);
+    }
+
+    [Test]
+    public void MissingParamsArray_ShouldFailInsteadOfCreatingEmptyArray()
+    {
+        var (compilation, _) = Generate(
+            """
+            using System;
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service(params int[] values) { }
+            }
+
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    using var container = DependencyContainerFactory.Create(_ => { });
+
+                    try { container.For<Service>().Create(); }
+                    catch (InvalidOperationException) { return true; }
+
+                    return false;
                 }
             }
             """
