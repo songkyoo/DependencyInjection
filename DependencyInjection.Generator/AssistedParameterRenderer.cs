@@ -13,7 +13,7 @@ internal static class AssistedParameterRenderer
         | IncludeNullableReferenceTypeModifier
     );
 
-    internal static string Render(IParameterSymbol parameter)
+    internal static string Render(IParameterSymbol parameter, Compilation compilation)
     {
         var type = parameter.Type.ToDisplayString(SignatureTypeFormat);
         var modifier = parameter.IsParams ? "params " : parameter.RefKind == RefKind.In ? "in " : "";
@@ -26,11 +26,24 @@ internal static class AssistedParameterRenderer
 
         if (parameter.ExplicitDefaultValue is not { } value)
         {
-            return $"{declaration} = default({type})";
+            var defaultExpression = parameter.Type.IsReferenceType
+                || parameter.Type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+                ? "null"
+                : "default";
+
+            return $"{declaration} = {defaultExpression}";
         }
 
-        var literal = ConstantValueRenderer.Render(value);
+        var valueType = parameter.Type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+            } nullableType
+            ? nullableType.TypeArguments[0]
+            : parameter.Type;
+        var expression = valueType is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            ? EnumValueRenderer.Render(enumType, value, compilation)
+            : ConstantValueRenderer.Render(value);
 
-        return $"{declaration} = ({type})({literal})";
+        return $"{declaration} = {expression}";
     }
 }

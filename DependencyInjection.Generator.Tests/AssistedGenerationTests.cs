@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
 
@@ -255,20 +256,31 @@ public class AssistedGenerationTests
         Assert.That(Execute<int>(compilation), Is.EqualTo(42));
     }
 
-    [TestCase("decimal", "1.25M")]
-    [TestCase("float", "float.NaN")]
-    [TestCase("double", "double.NegativeInfinity")]
-    [TestCase("ulong", "ulong.MaxValue")]
-    [TestCase("int", "int.MinValue")]
-    [TestCase("char", "'\\''")]
-    [TestCase("string", "\"quoted\\\"\\n\"")]
-    [TestCase("int?", "null")]
-    [TestCase("System.DateTime", "default")]
-    [TestCase("(int Count, string Text)", "default")]
-    public void OptionalArgument_ShouldKeepItsTypedDefault(string type, string value)
+    [TestCase("decimal", "1.25M", "1.25M")]
+    [TestCase("float", "1.25F", "1.25F")]
+    [TestCase("double", "1.25D", "1.25D")]
+    [TestCase("float", "float.NaN", "float.NaN")]
+    [TestCase("float", "float.PositiveInfinity", "float.PositiveInfinity")]
+    [TestCase("float", "float.NegativeInfinity", "float.NegativeInfinity")]
+    [TestCase("double", "double.NaN", "double.NaN")]
+    [TestCase("double", "double.PositiveInfinity", "double.PositiveInfinity")]
+    [TestCase("double", "double.NegativeInfinity", "double.NegativeInfinity")]
+    [TestCase("ulong", "ulong.MaxValue", "18446744073709551615")]
+    [TestCase("int", "int.MinValue", "-2147483648")]
+    [TestCase("byte", "1", "1")]
+    [TestCase("char", "'\\''", "'\\''")]
+    [TestCase("string", "\"quoted\\\"\\n\"", "\"quoted\\\"\\n\"")]
+    [TestCase("string?", "default", "null")]
+    [TestCase("int?", "null", "null")]
+    [TestCase("System.DateTime", "default", "default")]
+    [TestCase("(int Count, string Text)", "default", "default")]
+    [TestCase("System.DayOfWeek?", "System.DayOfWeek.Friday", "global::System.DayOfWeek.Friday")]
+    [SetCulture("fr-FR")]
+    public void OptionalArgument_ShouldRenderReadableDefaultAndPreserveItsValue(string type, string value, string expectedExpression)
     {
-        var (compilation, _) = Generate(
+        var (compilation, sources) = Generate(
             $$"""
+            #nullable enable
             using Macaron.DependencyInjection;
 
             public class Service
@@ -287,6 +299,48 @@ public class AssistedGenerationTests
                     var service = container.For<Service>().Create();
 
                     return System.Collections.Generic.EqualityComparer<{{type}}>.Default.Equals(service.Value, {{value}});
+                }
+            }
+            """
+        );
+
+        var parameter = sources
+            .Single(source => source.HintName.StartsWith("InjectionContextExtensions."))
+            .SyntaxTree.GetRoot()
+            .DescendantNodes()
+            .OfType<ParameterSyntax>()
+            .Single(parameter => parameter.Identifier.ValueText == "value");
+        var original = compilation.GetTypeByMetadataName("Service")!.InstanceConstructors.Single().Parameters.Single();
+        var generated = compilation
+            .GetTypeByMetadataName("Macaron.DependencyInjection.InjectionContextExtensions")!
+            .GetMembers("Create").OfType<IMethodSymbol>().Single().Parameters[1];
+
+        Assert.That(parameter.Default!.Value.ToString(), Is.EqualTo(expectedExpression));
+        Assert.That(generated.HasExplicitDefaultValue, Is.True);
+        Assert.That(generated.ExplicitDefaultValue, Is.EqualTo(original.ExplicitDefaultValue));
+        Assert.That(Execute<bool>(compilation), Is.True);
+    }
+
+    [TestCase("float", "-0.0F", "System.BitConverter.SingleToInt32Bits", "int.MinValue")]
+    [TestCase("double", "-0.0D", "System.BitConverter.DoubleToInt64Bits", "long.MinValue")]
+    public void NegativeZeroDefault_ShouldPreserveItsSign(string type, string value, string getBits, string expectedBits)
+    {
+        var (compilation, _) = Generate(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public sealed class Service
+            {
+                public {{type}} Value { get; }
+                [Inject] public Service([Assisted] {{type}} value = {{value}}) { Value = value; }
+            }
+
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    using var container = DependencyContainerFactory.Create(_ => { });
+                    return {{getBits}}(container.For<Service>().Create().Value) == {{expectedBits}};
                 }
             }
             """

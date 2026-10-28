@@ -6,7 +6,7 @@ namespace Macaron.DependencyInjection.Generator;
 
 internal static class TagValueRenderer
 {
-    internal static string Render(TypedConstant value)
+    internal static string Render(TypedConstant value, Compilation compilation)
     {
         if (value.IsNull)
         {
@@ -18,6 +18,11 @@ internal static class TagValueRenderer
             var type = (ITypeSymbol)value.Value!;
 
             return $"typeof({type.ToDisplayString(FullyQualifiedFormat)})";
+        }
+
+        if (value is { Kind: TypedConstantKind.Enum, Type: INamedTypeSymbol enumType })
+        {
+            return EnumValueRenderer.Render(enumType, value.Value!, compilation);
         }
 
         var typeName = value.Type!.ToDisplayString(FullyQualifiedFormat);

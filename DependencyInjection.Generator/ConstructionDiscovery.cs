@@ -422,7 +422,7 @@ internal static class ConstructionDiscovery
 
             if (assisted is not null)
             {
-                assistedParameters.Add(AssistedParameterRenderer.Render(parameter));
+                assistedParameters.Add(AssistedParameterRenderer.Render(parameter, compilation));
 
                 var name = EscapeName(parameter.Name);
 
@@ -432,7 +432,7 @@ internal static class ConstructionDiscovery
             }
 
             var resolveArguments = tag is { ConstructorArguments.Length: 1 }
-                ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0])}"
+                ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0], compilation)}"
                 : "";
             var resolveExpression = $"{resolverName}.Resolve<{parameterTypeName}>({resolveArguments})";
 
