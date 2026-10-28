@@ -6,7 +6,7 @@
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <RootNamespace>Macaron.DependencyInjection.Generator.Tests</RootNamespace>
+    <RootNamespace>Macaron.DependencyInjection.Analyzers.Tests</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
@@ -24,10 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../Shared/Testing/*.cs" Link="Testing/%(Filename)%(Extension)" />
-    <ProjectReference Include="..\DependencyInjection.Analyzers\DependencyInjection.Analyzers.csproj" />
-    <ProjectReference Include="..\DependencyInjection\DependencyInjection.csproj" />
-    <ProjectReference Include="..\DependencyInjection.Generator\DependencyInjection.Generator.csproj" />
+    <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <ProjectReference Include="..\..\src\DependencyInjection.Analyzers\DependencyInjection.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\DependencyInjection\DependencyInjection.csproj" />
+    <ProjectReference Include="..\..\src\DependencyInjection.Generator\DependencyInjection.Generator.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,8 +1,12 @@
 <Solution>
-  <Project Path="DependencyInjection.Analyzers.Tests/DependencyInjection.Analyzers.Tests.csproj" />
-  <Project Path="DependencyInjection.Analyzers/DependencyInjection.Analyzers.csproj" />
-  <Project Path="DependencyInjection.Generator.Tests/DependencyInjection.Generator.Tests.csproj" />
-  <Project Path="DependencyInjection.Generator/DependencyInjection.Generator.csproj" />
-  <Project Path="DependencyInjection.Tests/DependencyInjection.Tests.csproj" />
-  <Project Path="DependencyInjection/DependencyInjection.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/DependencyInjection/DependencyInjection.csproj" />
+    <Project Path="src/DependencyInjection.Analyzers/DependencyInjection.Analyzers.csproj" />
+    <Project Path="src/DependencyInjection.Generator/DependencyInjection.Generator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DependencyInjection.Tests/DependencyInjection.Tests.csproj" />
+    <Project Path="tests/DependencyInjection.Analyzers.Tests/DependencyInjection.Analyzers.Tests.csproj" />
+    <Project Path="tests/DependencyInjection.Generator.Tests/DependencyInjection.Generator.Tests.csproj" />
+  </Folder>
 </Solution>
