@@ -86,6 +86,42 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
         Assert.That(resolver.Contains<Service>(missingTag), Is.False);
     }
 
+    [TestCase(null)]
+    [TestCase("service")]
+    public void NullFactoryResult_ShouldThrowWithoutReturningNullOrUsingFallback(string? tag)
+    {
+        var factoryCalls = 0;
+        var fallbackCalls = 0;
+        var fallback = new Service();
+        using var container = DependencyContainerFactory.Create(registrar =>
+            registrar.RegisterTransient<Service>(factory: () =>
+            {
+                factoryCalls++;
+                return null!;
+            }, tag));
+        using var scope = container.CreateTransientScope();
+        IDependencyResolver resolver = useTransientScope ? scope : container;
+
+        var error = Assert.Throws<InvalidOperationException>(() => resolver.ResolveOrNull<Service>(tag));
+
+        Assert.That(error!.Message, Does.Contain(typeof(Service).ToString()));
+        Assert.That(error.Message, Does.Contain(tag ?? "null"));
+        Assert.That(() => resolver.ResolveOrElse<Service>(current =>
+        {
+            fallbackCalls++;
+            return fallback;
+        }, tag), Throws.TypeOf<InvalidOperationException>());
+        Assert.That(() => resolver.ResolveOrElse<Service>(() =>
+        {
+            fallbackCalls++;
+            return fallback;
+        }, tag), Throws.TypeOf<InvalidOperationException>());
+        Assert.That(() => resolver.ResolveOrElse(fallback, tag), Throws.TypeOf<InvalidOperationException>());
+
+        Assert.That(factoryCalls, Is.EqualTo(4));
+        Assert.That(fallbackCalls, Is.Zero);
+    }
+
     [Test]
     public void ResolveOrNullValueTypes_ShouldUseExactTagAndDefaultTag()
     {

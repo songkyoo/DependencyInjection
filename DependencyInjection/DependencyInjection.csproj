@@ -28,11 +28,6 @@
     <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
   </ItemGroup>
 
-  <Target Name="TransformT4TextTemplates" BeforeTargets="BeforeBuild">
-    <Exec Command="dotnet tool restore" />
-    <Exec Command="dotnet t4 IDependencyRegistrarExtensions.tt" />
-  </Target>
-
   <ItemGroup>
     <ProjectReference Include="..\DependencyInjection.Generator\DependencyInjection.Generator.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" />
     <None Include="..\DependencyInjection.Generator\bin\$(Configuration)\netstandard2.0\Macaron.DependencyInjection.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" />

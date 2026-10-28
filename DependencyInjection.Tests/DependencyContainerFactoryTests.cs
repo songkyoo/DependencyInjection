@@ -9,6 +9,33 @@ public class DependencyContainerFactoryTests
         public string Name => "Default";
     }
 
+    [TestCase(null)]
+    [TestCase("service")]
+    public void NullInstance_ShouldFailDuringRegistration_AndLeaveTheRegistrationAvailable(string? tag)
+    {
+        var instance = new Foo();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            var error = Assert.Throws<ArgumentNullException>(() =>
+                registrar.RegisterSingleton<Foo>(instance: null!, tag));
+
+            Assert.That(error!.ParamName, Is.EqualTo("instance"));
+            registrar.RegisterSingleton(instance, tag);
+        });
+
+        Assert.That(container.Resolve<Foo>(tag), Is.SameAs(instance));
+    }
+
+    [TestCase(0)]
+    [TestCase(42)]
+    public void ValueTypeInstance_ShouldRegisterAndResolve(int instance)
+    {
+        using var container = DependencyContainerFactory.Create(registrar =>
+            registrar.RegisterSingleton(instance: instance));
+
+        Assert.That(container.Resolve<int>(), Is.EqualTo(instance));
+    }
+
     [Test]
     public void Register_ExplicitFactory_ShouldResolveInstance()
     {
