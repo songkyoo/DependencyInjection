@@ -1,9 +1,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
-namespace Macaron.DependencyInjection.Generator.Tests;
+namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class AssistedRegistrationTests
 {

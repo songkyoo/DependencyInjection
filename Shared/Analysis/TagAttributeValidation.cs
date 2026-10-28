@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
-namespace Macaron.DependencyInjection.Generator;
+namespace Macaron.DependencyInjection.Analysis;
 
 internal static class TagAttributeValidation
 {

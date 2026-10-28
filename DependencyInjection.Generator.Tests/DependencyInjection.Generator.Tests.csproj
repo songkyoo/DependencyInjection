@@ -24,6 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/Testing/*.cs" Link="Testing/%(Filename)%(Extension)" />
+    <ProjectReference Include="..\DependencyInjection.Analyzers\DependencyInjection.Analyzers.csproj" />
     <ProjectReference Include="..\DependencyInjection\DependencyInjection.csproj" />
     <ProjectReference Include="..\DependencyInjection.Generator\DependencyInjection.Generator.csproj" />
   </ItemGroup>

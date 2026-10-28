@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -80,14 +80,14 @@ public class AssistedIncrementalTests
         var original = CSharpSyntaxTree.ParseText(Declaration, InputParseOptions, "Service.cs");
         var input = CreateCompilation(Consumer).AddSyntaxTrees(original);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string>(first), Is.EqualTo("first"));
 
         var updated = CSharpSyntaxTree.ParseText(declaration, InputParseOptions, "Service.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(original, updated),
             out var output,
             out diagnostics
@@ -123,7 +123,7 @@ public class AssistedIncrementalTests
         var other = CSharpSyntaxTree.ParseText("public class Other { public int Value => 1; }", InputParseOptions, "Other.cs");
         var input = CreateCompilation(Consumer).AddSyntaxTrees(service, other);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
 
@@ -133,7 +133,7 @@ public class AssistedIncrementalTests
             path: "Other.cs"
         );
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(other, updated),
             out var output,
             out diagnostics
@@ -169,14 +169,14 @@ public class AssistedIncrementalTests
                 original,
                 CSharpSyntaxTree.ParseText(registration, InputParseOptions, "Registration.cs")
             );
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015", "MADI0015" }));
         Assert.That(Execute<string>(first), Is.EqualTo("first"));
 
         var updated = CSharpSyntaxTree.ParseText(DiDeclaration, InputParseOptions, "Service.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(original, updated),
             out var output,
             out diagnostics
@@ -196,7 +196,7 @@ public class AssistedIncrementalTests
             Does.Contain("typeof(global::Service)")
         );
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input, out var restored, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input, out var restored, out diagnostics);
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0015", "MADI0015"]));
         Assert.That(Execute<string>(restored), Is.EqualTo("first"));
@@ -221,7 +221,7 @@ public class AssistedIncrementalTests
         var firstReference = MetadataReference.CreateFromImage(firstImage);
         var secondReference = MetadataReference.CreateFromImage(secondImage);
         var input = CreateCompilation(Consumer, additionalReferences: firstReference);
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(
             input,
             out var first,
             out var diagnostics
@@ -230,7 +230,7 @@ public class AssistedIncrementalTests
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string>(first, firstImage), Is.EqualTo("first"));
 
-        driver.RunGeneratorsAndUpdateCompilation(
+        driver.RunGeneratorsAndAnalyze(
             input.ReplaceReference(firstReference, secondReference),
             out var updated,
             out diagnostics

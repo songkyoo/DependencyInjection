@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Macaron.DependencyInjection.Generator;
+namespace Macaron.DependencyInjection.Analysis;
 
 internal static class DiagnosticDescriptors
 {

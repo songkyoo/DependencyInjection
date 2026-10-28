@@ -1,0 +1,161 @@
+using Microsoft.CodeAnalysis;
+
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
+
+namespace Macaron.DependencyInjection.Analyzers.Tests;
+
+public class AnalyzerSeparationTests
+{
+    [TestCase("public Service([Tag(\"main\")] string value) { }", "MADI0012")]
+    [TestCase("[Inject] public Service([Tag(new[] { 1 })] string value) { }", "MADI0011")]
+    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0014")]
+    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0009")]
+    [TestCase("[Inject] public Service([Assisted] dynamic value) { }", "MADI0002")]
+    public void AnalyzerWithoutGenerator_ShouldCheckUnusedDeclarations(string constructor, string expectedId)
+    {
+        var input = CreateCompilation(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                {{constructor}}
+            }
+            """
+        );
+
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { expectedId }));
+        Assert.That(input.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions"), Is.Null);
+    }
+
+    [TestCase("registrar.RegisterSingleton(new Service(1));")]
+    [TestCase("registrar.RegisterTransient(() => new Service(1));")]
+    [TestCase("registrar.RegisterTransient<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1));")]
+    [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));")]
+    public void AnalyzerWithoutGenerator_ShouldRejectAssistedRegistrations(string registration)
+    {
+        var input = CreateCompilation(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                [Inject] public Service([Assisted] int value) { }
+            }
+
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar)
+                {
+                    {{registration}}
+                }
+            }
+            """
+        );
+
+        AssertCompiles(input);
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+    }
+
+    [Test]
+    public void AnalyzerWithoutGenerator_ShouldInspectExternalPrivateConstructors()
+    {
+        var image = EmitAssembly(CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public Service() { }
+                [Inject] private Service([Assisted] int value) { }
+            }
+            """, "ExternalServices"
+        ));
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar) => registrar.RegisterSingleton(new Service());
+            }
+            """, additionalReferences: MetadataReference.CreateFromImage(image)
+        );
+
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+        AssertCompiles(input);
+    }
+
+    [Test]
+    public void GeneratorWithoutAnalyzer_ShouldOmitInvalidFactoryAndLeaveDeclarationReportingToAnalyzer()
+    {
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service { public Service([Tag("main")] string value) { } }
+            public class Valid { }
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar)
+                {
+                    registrar.RegisterTransient<Service>();
+                    registrar.RegisterTransient<Valid>();
+                }
+            }
+            """
+        );
+        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+        var factories = driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service)").And.Contain("typeof(global::Valid)"));
+        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0012" }));
+        AssertCompiles(output);
+    }
+
+    [Test]
+    public void GeneratorWithoutAnalyzer_ShouldReportInvalidConstructionTarget()
+    {
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public abstract class Service { }
+            public class Configuration
+            {
+                public void Configure(IDependencyResolver resolver) => resolver.For<Service>();
+            }
+            """
+        );
+        CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0003" }));
+        Assert.That(Analyze(output), Is.Empty);
+    }
+
+    [Test]
+    public void Analyzer_ShouldInferRegistrationFromGeneratedCreate()
+    {
+        var input = CreateCompilation(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service { [Inject] public Service([Assisted] int value) { } }
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
+                {
+                    registrar.RegisterSingleton(() => resolver.For<Service>().Create(1));
+                }
+            }
+            """
+        );
+        CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+        AssertCompiles(output);
+    }
+}

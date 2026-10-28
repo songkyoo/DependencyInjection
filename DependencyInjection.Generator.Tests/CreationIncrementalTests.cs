@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -26,11 +26,11 @@ public class CreationIncrementalTests
     {
         var use = CSharpSyntaxTree.ParseText(ForUse, InputParseOptions, "Creation.cs");
         var input = CreateCompilation(ServiceDeclaration).AddSyntaxTrees(use);
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
         Assert.That(diagnostics, Is.Empty);
         Assert.That(driver.GetRunResult().Results.Single().GeneratedSources.Length, Is.EqualTo(3));
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.RemoveSyntaxTrees(use), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.RemoveSyntaxTrees(use), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         var sources = driver.GetRunResult().Results.Single().GeneratedSources;
@@ -58,11 +58,11 @@ public class CreationIncrementalTests
         var use = CSharpSyntaxTree.ParseText(ForUse, InputParseOptions, "Creation.cs");
         var input = CreateCompilation(ServiceDeclaration).AddSyntaxTrees(
             CSharpSyntaxTree.ParseText(registration, InputParseOptions, "Registration.cs"), use);
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
         Assert.That(diagnostics, Is.Empty);
         Assert.That(driver.GetRunResult().Results.Single().GeneratedSources.Length, Is.EqualTo(3));
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.RemoveSyntaxTrees(use), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.RemoveSyntaxTrees(use), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         var sources = driver.GetRunResult().Results.Single().GeneratedSources;

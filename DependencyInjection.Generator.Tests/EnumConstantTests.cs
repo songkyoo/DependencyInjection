@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -166,14 +166,14 @@ public class EnumConstantTests
             CSharpSyntaxTree.ParseText(ServiceDeclarations("(Mode)1"), InputParseOptions, "Services.cs")
         );
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<bool>(first), Is.True);
 
         var updated = CSharpSyntaxTree.ParseText(RenamedEnumDeclaration, InputParseOptions, "Enum.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(original, updated),
             out var output,
             out diagnostics
@@ -193,12 +193,12 @@ public class EnumConstantTests
             CSharpSyntaxTree.ParseText(ServiceDeclarations("(Mode)8"), InputParseOptions, "Services.cs")
         );
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
 
         var updated = CSharpSyntaxTree.ParseText(ReorderedEnumDeclaration, InputParseOptions, "Enum.cs");
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
 
 
         Assert.That(diagnostics, Is.Empty);
@@ -225,12 +225,12 @@ public class EnumConstantTests
         var firstReference = MetadataReference.CreateFromImage(firstImage);
         var secondReference = MetadataReference.CreateFromImage(secondImage);
         var input = CreateCompilation(Consumer, additionalReferences: firstReference);
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<bool>(first, firstImage), Is.True);
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceReference(firstReference, secondReference), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceReference(firstReference, secondReference), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         AssertExpressions(driver.GetRunResult().Results.Single().GeneratedSources, "global::@event.@class.Started");

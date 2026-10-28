@@ -1,9 +1,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
-namespace Macaron.DependencyInjection.Generator.Tests;
+namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class TagValueAccessibilityTests
 {
@@ -47,7 +47,7 @@ public class TagValueAccessibilityTests
 
         input = input.AddSyntaxTrees(inaccessible);
 
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(
             input,
             out var withoutFactory,
             out var diagnostics
@@ -62,7 +62,7 @@ public class TagValueAccessibilityTests
             path: "Tag.cs"
         );
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(inaccessible, accessible),
             out var restored,
             out diagnostics
@@ -71,7 +71,7 @@ public class TagValueAccessibilityTests
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string>(restored), Is.EqualTo("resolved"));
 
-        driver.RunGeneratorsAndUpdateCompilation(input, out withoutFactory, out diagnostics);
+        driver.RunGeneratorsAndAnalyze(input, out withoutFactory, out diagnostics);
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0013"]));
         AssertCompiles(withoutFactory);

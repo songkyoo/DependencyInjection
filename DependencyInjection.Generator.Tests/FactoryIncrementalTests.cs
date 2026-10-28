@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -46,11 +46,11 @@ public class FactoryIncrementalTests
         var original = CSharpSyntaxTree.ParseText(SingleRegistration, InputParseOptions, "Configuration.cs");
         var input = CreateCompilation(Types).AddSyntaxTrees(original);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
         Assert.That(diagnostics, Is.Empty);
 
         var updated = CSharpSyntaxTree.ParseText(WithExtraRegistration, InputParseOptions, "Configuration.cs");
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         var result = driver.GetRunResult().Results.Single();
@@ -66,11 +66,11 @@ public class FactoryIncrementalTests
         var original = CSharpSyntaxTree.ParseText(WithExtraRegistration, InputParseOptions, "Configuration.cs");
         var input = CreateCompilation(Types).AddSyntaxTrees(original);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
         Assert.That(diagnostics, Is.Empty);
 
         var updated = CSharpSyntaxTree.ParseText(SingleRegistration, InputParseOptions, "Configuration.cs");
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(original, updated), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         var result = driver.GetRunResult().Results.Single();
@@ -111,11 +111,11 @@ public class FactoryIncrementalTests
             """;
         var uses = CSharpSyntaxTree.ParseText(registrations, InputParseOptions, "Configuration.cs");
         var input = CreateCompilation(consumer).AddSyntaxTrees(uses);
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<bool>(first), Is.True);
 
-        driver.RunGeneratorsAndUpdateCompilation(input.RemoveSyntaxTrees(uses), out var updated, out diagnostics);
+        driver.RunGeneratorsAndAnalyze(input.RemoveSyntaxTrees(uses), out var updated, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<bool>(updated), Is.False);

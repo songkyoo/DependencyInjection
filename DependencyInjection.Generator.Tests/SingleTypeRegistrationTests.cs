@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -234,11 +234,11 @@ public class SingleTypeRegistrationTests
                 }
             }
             """;
-        var driver = CreateDriver(trackIncrementalSteps: true).RunGeneratorsAndUpdateCompilation(CreateCompilation(source), out _, out var diagnostics);
+        var driver = CreateDriver(trackIncrementalSteps: true).RunGeneratorsAndAnalyze(CreateCompilation(source), out _, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             CreateCompilation(source.Replace("RegisterTransient<Service>", "RegisterTransient<Service, Service>")),
             out var output,
             out diagnostics

@@ -30,7 +30,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DependencyInjection.Generator\DependencyInjection.Generator.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\DependencyInjection.Analyzers\DependencyInjection.Analyzers.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" />
     <None Include="..\DependencyInjection.Generator\bin\$(Configuration)\netstandard2.0\Macaron.DependencyInjection.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" />
+    <None Include="..\DependencyInjection.Analyzers\bin\$(Configuration)\netstandard2.0\Macaron.DependencyInjection.Analyzers.dll" Pack="true" PackagePath="analyzers/dotnet/cs" />
   </ItemGroup>
 
 </Project>

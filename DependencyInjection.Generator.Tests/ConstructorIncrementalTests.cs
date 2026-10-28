@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
 namespace Macaron.DependencyInjection.Generator.Tests;
 
@@ -121,7 +121,7 @@ public class ConstructorIncrementalTests
         );
         var input = CreateInput(TaggedInConstructor).AddSyntaxTrees(unrelated);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
 
@@ -131,7 +131,7 @@ public class ConstructorIncrementalTests
             path: "Other.cs"
         );
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(unrelated, updated), out var output, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(unrelated, updated), out var output, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(
@@ -163,13 +163,13 @@ public class ConstructorIncrementalTests
         var invalid = CSharpSyntaxTree.ParseText(invalidSource, InputParseOptions, "Invalid.cs");
         var input = CreateInput(TaggedInConstructor).AddSyntaxTrees(invalid);
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out _, out var firstDiagnostics);
+            .RunGeneratorsAndAnalyze(input, out _, out var firstDiagnostics);
 
         Assert.That(firstDiagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0006", "MADI0006" }));
 
         var moved = CSharpSyntaxTree.ParseText("\n\n" + invalidSource, InputParseOptions, "Invalid.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(invalid, moved), out var output, out var diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(invalid, moved), out var output, out var diagnostics);
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0006", "MADI0006" }));
 
@@ -196,7 +196,7 @@ public class ConstructorIncrementalTests
         var input = CreateInput(constructor);
         var original = input.SyntaxTrees.Single(tree => tree.FilePath == "Tags.cs");
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string[]>(first), Is.EqualTo(new[] { "first", "first", "first" }));
@@ -210,7 +210,7 @@ public class ConstructorIncrementalTests
             path: "Tags.cs"
         );
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(original, updated),
             out var output,
             out diagnostics
@@ -229,14 +229,14 @@ public class ConstructorIncrementalTests
         var input = CreateInput(originalConstructor);
         var original = input.SyntaxTrees.Single(tree => tree.FilePath == "Service.cs");
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string[]>(first), Is.EqualTo(Enumerable.Repeat(originalValue, 3)));
 
         var updated = CSharpSyntaxTree.ParseText(DeclareService(StringConstructor), InputParseOptions, "Service.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(
+        driver = driver.RunGeneratorsAndAnalyze(
             input.ReplaceSyntaxTree(original, updated),
             out var output,
             out diagnostics
@@ -258,14 +258,14 @@ public class ConstructorIncrementalTests
         var input = CreateInput(TaggedInConstructor);
         var original = input.SyntaxTrees.Single(tree => tree.FilePath == "Service.cs");
         var driver = CreateDriver(trackIncrementalSteps: true)
-            .RunGeneratorsAndUpdateCompilation(input, out var first, out var diagnostics);
+            .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string[]>(first), Is.EqualTo(new[] { "first", "first", "first" }));
 
         var invalid = CSharpSyntaxTree.ParseText(DeclareService(constructor), InputParseOptions, "Service.cs");
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(input.ReplaceSyntaxTree(original, invalid), out _, out diagnostics);
+        driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(original, invalid), out _, out diagnostics);
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(Enumerable.Repeat(expectedId, diagnosticCount)));
 
@@ -277,7 +277,7 @@ public class ConstructorIncrementalTests
             Does.Not.Contain("typeof(global::Service)")
         );
 
-        driver.RunGeneratorsAndUpdateCompilation(input, out var restored, out diagnostics);
+        driver.RunGeneratorsAndAnalyze(input, out var restored, out diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(Execute<string[]>(restored), Is.EqualTo(["first", "first", "first"]));

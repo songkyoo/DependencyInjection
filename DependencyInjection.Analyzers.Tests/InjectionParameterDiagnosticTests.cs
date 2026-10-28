@@ -1,8 +1,8 @@
 using Microsoft.CodeAnalysis;
 
-using static Macaron.DependencyInjection.Generator.Tests.GeneratorTestHelper;
+using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
-namespace Macaron.DependencyInjection.Generator.Tests;
+namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class InjectionParameterDiagnosticTests
 {
@@ -31,7 +31,7 @@ public class InjectionParameterDiagnosticTests
 
         input = input.WithOptions(input.Options.WithAllowUnsafe(true));
 
-        CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+        CreateDriver().RunGeneratorsAndAnalyze(input, out var output, out var diagnostics);
 
         var diagnostic = diagnostics.Single();
 

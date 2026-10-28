@@ -142,25 +142,6 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             );
         });
 
-        context.RegisterSourceOutput(
-            source: context
-                .SyntaxProvider
-                .CreateSyntaxProvider(
-                    predicate: static (node, _) => node is AttributeSyntax { Parent.Parent: ParameterSyntax },
-                    transform: InjectionParameterValidation.ValidateDeclaration
-                )
-                .SelectMany(static (diagnostics, _) => diagnostics),
-            action: static (output, diagnostic) =>
-            {
-                output.ReportDiagnostic(diagnostic);
-            }
-        );
-
-        var registrations = context.SyntaxProvider.CreateSyntaxProvider(
-            predicate: static (node, _) => RegistrationValidation.IsCandidate(node),
-            transform: static (syntax, _) => syntax.Node.GetReference()
-        );
-
         var requests = context
             .SyntaxProvider
             .CreateSyntaxProvider(
@@ -195,20 +176,6 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             .SelectMany(static (result, _) => result.Creations)
             .Select(static (definition, _) => (definition.HintName, Source: CreationRenderer.Render(definition)))
             .WithTrackingName("CreationSource");
-
-        context.RegisterSourceOutput(
-            source: registrations
-                .Collect()
-                .Combine(context.CompilationProvider)
-                .Combine(creationSources.Collect())
-                .SelectMany(static (data, cancellationToken) => RegistrationValidation.ValidateRegistrations(
-                    registrations: data.Left.Left,
-                    compilation: (CSharpCompilation)data.Left.Right,
-                    creations: data.Right,
-                    cancellationToken
-                )),
-            action: static (output, diagnostic) => output.ReportDiagnostic(diagnostic)
-        );
 
         context.RegisterSourceOutput(
             source: creationSources,

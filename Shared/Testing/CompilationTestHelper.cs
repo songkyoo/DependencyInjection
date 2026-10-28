@@ -2,10 +2,13 @@ using System.Collections.Immutable;
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
+using Macaron.DependencyInjection.Analyzers;
+using Macaron.DependencyInjection.Generator;
 
-namespace Macaron.DependencyInjection.Generator.Tests;
+namespace Macaron.DependencyInjection.Testing;
 
-internal static class GeneratorTestHelper
+internal static class CompilationTestHelper
 {
     internal static readonly CSharpParseOptions InputParseOptions = new(LanguageVersion.CSharp9);
 
@@ -78,13 +81,36 @@ internal static class GeneratorTestHelper
     internal static (Compilation Compilation, ImmutableArray<GeneratedSourceResult> Sources, ImmutableArray<Diagnostic> Diagnostics)
         GenerateWithDiagnostics(CSharpCompilation compilation)
     {
-        var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(
+        var driver = CreateDriver().RunGeneratorsAndAnalyze(
             compilation,
             out var output,
             out var diagnostics
         );
 
         return (output, driver.GetRunResult().Results.Single().GeneratedSources, diagnostics);
+    }
+
+    internal static ImmutableArray<Diagnostic> Analyze(Compilation compilation)
+    {
+        return compilation.WithAnalyzers([new DependencyInjectionAnalyzer()])
+            .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult()
+            .OrderBy(diagnostic => diagnostic.Location.SourceTree?.FilePath, StringComparer.Ordinal)
+            .ThenBy(diagnostic => diagnostic.Location.SourceSpan.Start)
+            .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    internal static GeneratorDriver RunGeneratorsAndAnalyze(
+        this GeneratorDriver driver,
+        Compilation compilation,
+        out Compilation output,
+        out ImmutableArray<Diagnostic> diagnostics
+    )
+    {
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out output, out var generationDiagnostics);
+        diagnostics = generationDiagnostics.AddRange(Analyze(output));
+
+        return driver;
     }
 
     internal static byte[] EmitAssembly(Compilation compilation)

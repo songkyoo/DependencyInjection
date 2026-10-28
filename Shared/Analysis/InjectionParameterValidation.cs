@@ -4,15 +4,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
-namespace Macaron.DependencyInjection.Generator;
+namespace Macaron.DependencyInjection.Analysis;
 
 internal static class InjectionParameterValidation
 {
-    internal static ImmutableArray<Diagnostic> ValidateDeclaration(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    internal static ImmutableArray<Diagnostic> ValidateDeclaration(
+        AttributeSyntax syntax,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken
+    )
     {
-        var syntax = (AttributeSyntax)context.Node;
         var parameterSyntax = (ParameterSyntax)syntax.Parent!.Parent!;
-        var semanticModel = context.SemanticModel;
         var compilation = semanticModel.Compilation;
 
         if (semanticModel.GetSymbolInfo(syntax, cancellationToken).Symbol is not IMethodSymbol attributeConstructor
@@ -250,5 +252,34 @@ internal static class InjectionParameterValidation
             location,
             messageArgs: [parameter.Name, constructor.ToDisplayString(), attributeName]
         );
+    }
+
+    internal static bool HasAssistedConstructor(ITypeSymbol type, Compilation compilation)
+    {
+        if (type is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        var inject = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
+
+        return named
+            .InstanceConstructors
+            .Any(constructor =>
+            {
+                if (!constructor
+                    .GetAttributes()
+                    .Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inject))
+                )
+                {
+                    return false;
+                }
+
+                return constructor.Parameters.Any(parameter => InjectionParameterValidation.FindAttribute(
+                    parameter,
+                    compilation,
+                    metadataName: "AssistedAttribute"
+                ) is not null);
+            });
     }
 }
