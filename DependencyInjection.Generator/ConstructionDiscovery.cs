@@ -3,7 +3,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using static Macaron.DependencyInjection.Generator.HintNameHelpers;
 using static Macaron.DependencyInjection.Generator.InjectionParameterValidation;
+using static Macaron.DependencyInjection.Generator.KeywordNameHelpers;
 using static Macaron.DependencyInjection.Generator.Result;
 using static Microsoft.CodeAnalysis.MetadataImportOptions;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
@@ -79,7 +81,8 @@ internal static class ConstructionDiscovery
 
         if (HasErrorDiagnostics(semanticModel, binding, cancellationToken)
             || ContainsType(implementation, TypeKind.Error)
-            || (implementation is INamedTypeSymbol named && HasConstructorErrors(named, compilation, cancellationToken))
+            || (implementation is INamedTypeSymbol named && HasConstructorErrors(named, compilation, cancellationToken)
+        )
         )
         {
             return null;
@@ -90,37 +93,35 @@ internal static class ConstructionDiscovery
             : name.GetLocation();
 
         return new ConstructionRequest(implementation, location, name.GetReference(), generateCreate);
+    }
 
-        #region Local Functions
-        static bool HasErrorDiagnostics(
-            SemanticModel semanticModel1,
-            SyntaxNode syntaxNode,
-            CancellationToken cancellationToken
-        )
+    internal static bool HasConstructorErrors(ITypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    {
+        if (type is not INamedTypeSymbol implementation)
         {
-            return semanticModel1
-                .GetDiagnostics(syntaxNode.Span, cancellationToken)
-                .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            return false;
         }
 
-        static bool HasConstructorErrors(
-            INamedTypeSymbol implementation,
-            Compilation compilation,
-            CancellationToken cancellationToken
-        )
+        foreach (var reference in implementation.InstanceConstructors.SelectMany(constructor =>
         {
-            return implementation
-                .InstanceConstructors
-                .SelectMany(constructor => constructor.DeclaringSyntaxReferences)
-                .Any(reference =>
-                {
-                    return compilation
-                        .GetSemanticModel(reference.SyntaxTree)
-                        .GetDiagnostics(reference.Span, cancellationToken)
-                        .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-                });
+            return constructor.DeclaringSyntaxReferences;
+        }))
+        {
+            var declaration = reference.GetSyntax(cancellationToken);
+            var semanticModel = compilation.GetSemanticModel(reference.SyntaxTree);
+            // primary constructor의 구문 참조는 타입 전체를 가리킨다. 다른 멤버의 생성 전 Create 오류가
+            // 생성자 선택을 막지 않도록 특성과 매개변수 선언만 검사한다.
+            var signatures = declaration is TypeDeclarationSyntax
+                ? declaration.ChildNodes().Where(node => node is AttributeListSyntax or ParameterListSyntax)
+                : new[] { declaration };
+
+            if (signatures.Any(node => HasErrorDiagnostics(semanticModel, node, cancellationToken)))
+            {
+                return true;
+            }
         }
-        #endregion
+
+        return false;
     }
 
     internal static FactoryGenerationResult CreateDefinitions(
@@ -129,9 +130,10 @@ internal static class ConstructionDiscovery
         CancellationToken cancellationToken
     )
     {
+        // 외부 DLL의 비공개 생성자도 읽어야 접근 불가와 생성자 부재를 구분할 수 있다.
         compilation = compilation.WithOptions(compilation.Options.WithMetadataImportOptions(All));
 
-        var uniqueTypes = new List<INamedTypeSymbol>();
+        var constructors = new List<(INamedTypeSymbol Type, CreationDefinition Definition)>();
         var definitions = ImmutableArray.CreateBuilder<FactoryDefinition>();
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var creations = ImmutableArray.CreateBuilder<CreationDefinition>();
@@ -147,6 +149,14 @@ internal static class ConstructionDiscovery
                 .Symbol;
 
             if (symbol is not IMethodSymbol methodSymbol)
+            {
+                continue;
+            }
+
+            if (!originalRequest.GenerateCreate && methodSymbol.TypeArguments.Any(type =>
+            {
+                return RegistrationValidation.HasAssistedConstructor(type, compilation);
+            }))
             {
                 continue;
             }
@@ -169,27 +179,30 @@ internal static class ConstructionDiscovery
             }
 
             var implementation = implementationResult.Value;
-
-            var existingIndex = uniqueTypes.FindIndex(type => compilation.ClassifyConversion(type, implementation).IsIdentity);
+            // nullable 참조 표기와 튜플 요소 이름만 다른 타입은 같은 생성자 정의를 공유한다.
+            var existingIndex = constructors.FindIndex(entry =>
+            {
+                return compilation.ClassifyConversion(source: entry.Type, destination: implementation).IsIdentity;
+            });
 
             if (existingIndex >= 0)
             {
-                AddCreation(request, implementation, definitions[existingIndex]);
+                AddCreation(request, constructors[existingIndex].Definition);
 
                 continue;
             }
 
-            var tagDiagnostic = TagAttributeValidation.ValidateConstructors(
+            var declarationDiagnostic = ValidateConstructors(
                 implementation,
                 compilation,
-                registrationLocation: request.Location
+                useLocation: request.Location
             );
 
-            if (tagDiagnostic is not null)
+            if (declarationDiagnostic is not null)
             {
                 if (!implementation.Locations.Any(location => location.IsInSource))
                 {
-                    diagnostics.Add(tagDiagnostic);
+                    diagnostics.Add(declarationDiagnostic);
                 }
 
                 continue;
@@ -204,24 +217,82 @@ internal static class ConstructionDiscovery
                 continue;
             }
 
-            uniqueTypes.Add(implementation);
-            definitions.Add(definition.Value);
-            AddCreation(request, implementation, definition.Value);
+            constructors.Add((implementation, definition.Value));
+
+            // Assisted 인자가 필요한 생성자는 인자 없는 등록용 델리게이트로 호출할 수 없다.
+            if (definition.Value.Parameters.Length == 0)
+            {
+                definitions.Add(definition.Value.Factory);
+            }
+
+            AddCreation(request, definition.Value);
         }
 
         return new FactoryGenerationResult(definitions.ToImmutable(), creations.ToImmutable(), diagnostics.ToImmutable());
 
-        void AddCreation(ConstructionRequest request, INamedTypeSymbol implementation, FactoryDefinition factory)
+        #region Local Functions
+        void AddCreation(ConstructionRequest request, CreationDefinition definition)
         {
-            if (!request.GenerateCreate || creations.Any(creation => creation.Factory == factory))
+            if (request.GenerateCreate && !creations.Contains(definition))
             {
-                return;
+                creations.Add(definition);
+            }
+        }
+        #endregion
+    }
+
+    private static bool HasErrorDiagnostics(SemanticModel semanticModel, SyntaxNode node, CancellationToken cancellationToken)
+    {
+        return semanticModel.GetDiagnostics(node.Span, cancellationToken).Any(diagnostic =>
+        {
+            return diagnostic.Severity == DiagnosticSeverity.Error && !IsPendingCreateDiagnostic(diagnostic);
+        });
+
+        #region Local Functions
+        bool IsPendingCreateDiagnostic(Diagnostic diagnostic)
+        {
+            if (diagnostic.Id is not ("CS1061" or "CS1929" or "CS1501" or "CS1503" or "CS7036" or "CS1739" or "CS0121"))
+            {
+                return false;
             }
 
-            var hintName = HintNameHelper.GetCreationHintName(implementation.Name, implementation.Arity, factory.TypeName);
+            if (!diagnostic.Location.IsInSource)
+            {
+                return false;
+            }
 
-            creations.Add(new CreationDefinition(hintName, factory));
+            var contextType = semanticModel.Compilation.GetTypeByMetadataName(
+                "Macaron.DependencyInjection.InjectionContext`1"
+            );
+            var syntax = node.SyntaxTree.GetRoot(cancellationToken).FindNode(diagnostic.Location.SourceSpan);
+
+            // 발견 단계에는 Create 확장이 없으므로 사용자 팩토리 안의 호출도 생성 후에 바인딩해야 한다.
+            // 해당 호출의 오버로드 오류는 생성이 끝난 뒤 컴파일러가 판정하도록 유예한다.
+            for (var current = syntax; current is not null; current = current.Parent)
+            {
+                var access = current switch
+                {
+                    MemberAccessExpressionSyntax member => member,
+                    InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member } => member,
+                    _ => null,
+                };
+
+                if (access is not { Name.Identifier.ValueText: "Create" })
+                {
+                    continue;
+                }
+
+                if (semanticModel.GetTypeInfo(access.Expression, cancellationToken).Type is INamedTypeSymbol receiver
+                    && SymbolEqualityComparer.Default.Equals(receiver.OriginalDefinition, contextType)
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
+        #endregion
     }
 
     private static Result<INamedTypeSymbol, Diagnostic> ValidateImplementation(
@@ -279,7 +350,7 @@ internal static class ConstructionDiscovery
         return Ok(named);
     }
 
-    private static Result<FactoryDefinition, Diagnostic> CreateDefinition(
+    private static Result<CreationDefinition, Diagnostic> CreateDefinition(
         ConstructionRequest request,
         INamedTypeSymbol implementation,
         Compilation compilation
@@ -307,22 +378,30 @@ internal static class ConstructionDiscovery
 
         var arguments = new List<string>();
         var dependencyStatements = new List<string>();
+        var assistedParameters = new List<string>();
+        var reservedNames = new HashSet<string>(constructor
+            .Parameters
+            .Where(parameter => FindAttribute(parameter, compilation, metadataName: "AssistedAttribute") is not null)
+            .Select(parameter => parameter.Name)
+        );
+        var contextName = GetUniqueName("context");
+        var resolverName = GetUniqueName("resolver");
         var usesInParameters = constructor.Parameters.Any(parameter => parameter.RefKind == RefKind.In);
-        var tagAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.TagAttribute");
 
         foreach (var parameter in constructor.Parameters)
         {
             var parameterType = parameter.Type;
             var parameterTypeName = parameterType.ToDisplayString(FullyQualifiedFormat);
 
-            var tag = parameter.GetAttributes().FirstOrDefault(attribute =>
-            {
-                return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, tagAttribute);
-            });
+            var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
+            var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
+            var attributeName = assisted is not null
+                ? "Assisted"
+                : tag is not null ? "Tag" : "dependency injection";
             var parameterDiagnostic = ValidateShape(
                 parameter,
-                attributeName: tag is null ? "dependency injection" : "Tag",
-                request.Location,
+                attributeName,
+                location: request.Location,
                 additionalLocations: parameter.Locations
             );
 
@@ -341,14 +420,26 @@ internal static class ConstructionDiscovery
                 ));
             }
 
+            if (assisted is not null)
+            {
+                assistedParameters.Add(AssistedParameterRenderer.Render(parameter));
+
+                var name = EscapeName(parameter.Name);
+
+                arguments.Add(parameter.RefKind == RefKind.In ? $"in {name}" : name);
+
+                continue;
+            }
+
             var resolveArguments = tag is { ConstructorArguments.Length: 1 }
                 ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0])}"
                 : "";
-            var resolveExpression = $"resolver.Resolve<{parameterTypeName}>({resolveArguments})";
+            var resolveExpression = $"{resolverName}.Resolve<{parameterTypeName}>({resolveArguments})";
 
+            // 명시적 in 전달에 필요한 지역 변수를 만들면서 전체 DI 인자의 해결 순서도 유지한다.
             if (usesInParameters)
             {
-                var variableName = $"dependency{arguments.Count}";
+                var variableName = GetUniqueName($"dependency{arguments.Count}");
 
                 dependencyStatements.Add($"var {variableName} = {resolveExpression};");
                 arguments.Add(parameter.RefKind == RefKind.In ? $"in {variableName}" : variableName);
@@ -359,9 +450,47 @@ internal static class ConstructionDiscovery
             }
         }
 
-        var creationExpression = $"new {typeName}({string.Join(", ", arguments)})";
+        var signatureTypeName = typeName;
+        var constructedTypeName = typeName;
 
-        return Ok(new FactoryDefinition(typeName, creationExpression, string.Join("\n", dependencyStatements)));
+        if (assistedParameters.Count > 0)
+        {
+            signatureTypeName = implementation.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
+            constructedTypeName = implementation
+                .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                .ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
+        }
+
+        var creationExpression = $"new {constructedTypeName}({string.Join(", ", arguments)})";
+        var factory = new FactoryDefinition(
+            TypeName: signatureTypeName,
+            CreationExpression: creationExpression,
+            DependencyStatements: string.Join("\n", dependencyStatements)
+        );
+        var hintName = GetCreationHintName(implementation.Name, implementation.Arity, typeName);
+
+        return Ok(new CreationDefinition(
+            HintName: hintName,
+            Factory: factory,
+            Parameters: string.Join(", ", assistedParameters),
+            ContextName: contextName,
+            ResolverName: resolverName
+        ));
+
+        #region Local Functions
+        string GetUniqueName(string name)
+        {
+            var candidate = name;
+            var suffix = 1;
+
+            while (!reservedNames.Add(candidate))
+            {
+                candidate = name + suffix++;
+            }
+
+            return candidate;
+        }
+        #endregion
     }
 
     private static Result<IMethodSymbol, Diagnostic> SelectConstructor(

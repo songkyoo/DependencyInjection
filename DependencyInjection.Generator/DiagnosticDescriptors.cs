@@ -122,4 +122,22 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    internal static readonly DiagnosticDescriptor ConflictingParameterAttributes = new(
+        id: "MADI0014",
+        title: "Injection parameter attributes are mutually exclusive",
+        messageFormat: "Parameter '{0}' on '{1}' must not have both Tag and Assisted.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    internal static readonly DiagnosticDescriptor AssistedTypeCannotBeRegistered = new(
+        id: "MADI0015",
+        title: "Assisted constructor cannot be registered",
+        messageFormat: "Type '{0}' has a constructor marked with Inject that requires Assisted arguments and cannot be registered.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

@@ -152,6 +152,7 @@ internal sealed class DependencyContainer(
 
         ThrowIfLifecycleChangeBlocked(nameof(Dispose));
 
+        // 정리 콜백이 재진입해도 조회와 중복 정리를 막도록 먼저 무효화한다.
         _isDisposed = true;
         _parent = null;
         _registry = _registry.Clear();
@@ -207,6 +208,7 @@ internal sealed class DependencyContainer(
 
             foreach (var (key, registration) in registrationContainer._registry)
             {
+                // 자식의 Transient도 부모 공유 등록을 가리므로 초기화 대상 판정 전에 키를 기록한다.
                 if (!visitedKeys.Add(key))
                 {
                     continue;
@@ -280,6 +282,8 @@ internal sealed class DependencyContainer(
         {
             if (_registry.TryGetValue(key, out var typeRegistration))
             {
+                // 등록을 찾은 위치와 요청한 범위를 구분한다. Scoped는 요청 컨테이너의 캐시를,
+                // Singleton은 등록 컨테이너의 캐시를 사용하고 Transient는 요청 resolver에 귀속한다.
                 return typeRegistration switch
                 {
                     TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
@@ -333,6 +337,7 @@ internal sealed class DependencyContainer(
             return instance;
         }
 
+        // 공유 서비스의 의존성은 최초 조회 범위가 아니라 그 서비스를 소유한 컨테이너에 귀속한다.
         var newInstance = CreateInstance(key, factory, cleanup, resolver: this, cleanups: _cleanups);
 
         instances.Add(key, newInstance);
@@ -351,6 +356,7 @@ internal sealed class DependencyContainer(
         var cleanupCollector = new CleanupCollector();
         object instance;
 
+        // 실패한 수집 항목의 정리가 끝날 때까지 범위 생성·해제에 대한 재진입도 막는다.
         _creationDepth += 1;
 
         try
@@ -361,6 +367,7 @@ internal sealed class DependencyContainer(
         }
         catch (Exception exception)
         {
+            // 이 팩토리의 수집 항목만 정리하고 이미 Resolve한 의존성은 기존 귀속 범위에 남긴다.
             CleanupFailedFactory(in cleanupCollector, exception);
 
             throw;
@@ -370,6 +377,7 @@ internal sealed class DependencyContainer(
             _creationDepth -= 1;
         }
 
+        // 역순 정리에서 수집 항목이 서비스보다 먼저 실행되도록 서비스를 먼저 기록한다.
         cleanups.Add(new CleanupEntry(instance, cleanup));
 
         foreach (var entry in cleanupCollector.Entries)
@@ -457,6 +465,7 @@ internal sealed class DependencyContainer(
     {
         var (scope, cleanups) = _transientScopeSlots[index];
 
+        // 정리 콜백 전에 슬롯을 비우고 범위의 컨테이너 참조를 끊어 이전 참조를 무효화한다.
         _transientScopeSlots[index] = default;
         _freeTransientScopeSlotCount += 1;
 
@@ -511,6 +520,7 @@ internal sealed class DependencyContainer(
 
         var index = transientScope.Index;
 
+        // 슬롯 인덱스는 재사용되므로 현재 슬롯을 소유한 범위 객체의 참조까지 확인한다.
         if ((uint)index >= (uint)_transientScopeSlotCount
             || !ReferenceEquals(_transientScopeSlots[index].Scope, transientScope)
            )

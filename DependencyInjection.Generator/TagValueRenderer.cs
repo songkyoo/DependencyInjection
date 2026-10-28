@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
@@ -22,17 +21,9 @@ internal static class TagValueRenderer
         }
 
         var typeName = value.Type!.ToDisplayString(FullyQualifiedFormat);
-        var literal = value.Value switch
-        {
-            float number when float.IsNaN(number) => "float.NaN",
-            float number when float.IsPositiveInfinity(number) => "float.PositiveInfinity",
-            float number when float.IsNegativeInfinity(number) => "float.NegativeInfinity",
-            double number when double.IsNaN(number) => "double.NaN",
-            double number when double.IsPositiveInfinity(number) => "double.PositiveInfinity",
-            double number when double.IsNegativeInfinity(number) => "double.NegativeInfinity",
-            _ => SymbolDisplay.FormatPrimitive(value.Value!, quoteStrings: true, useHexadecimalNumbers: false),
-        };
+        var literal = ConstantValueRenderer.Render(value.Value!);
 
+        // object 태그의 동등성은 boxing 타입도 구분하므로 숫자와 enum의 원래 타입을 유지한다.
         return $"({typeName})({literal})";
     }
 }

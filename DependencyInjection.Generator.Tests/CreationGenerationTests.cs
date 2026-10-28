@@ -265,4 +265,34 @@ public class CreationGenerationTests
         Assert.That(sources, Has.Length.EqualTo(2));
         AssertCompiles(compilation);
     }
+    [Test]
+    public void PrimaryRecordConstructor_ShouldSupportCreateCallsInsideItsDeclaringType()
+    {
+        var (compilation, _) = Generate(
+            """
+            using Macaron.DependencyInjection;
+
+            public sealed record Service(string Value)
+            {
+                public static Service From(IDependencyResolver resolver)
+                {
+                    return resolver.For<Service>().Create();
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: "primary"));
+                    return Service.From(container).Value;
+                }
+            }
+            """
+        );
+
+        Assert.That(Execute<string>(compilation), Is.EqualTo("primary"));
+    }
+
+
 }

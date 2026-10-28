@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Macaron.DependencyInjection.Generator;
 
-internal static class HintNameHelper
+internal static class HintNameHelpers
 {
     internal static string GetAssemblyHintName(string sourceName, string assemblyIdentity)
     {

@@ -4,6 +4,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
+using static Macaron.DependencyInjection.Generator.HintNameHelpers;
+
 namespace Macaron.DependencyInjection.Generator;
 
 [Generator]
@@ -129,7 +131,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
     {
         context.RegisterPostInitializationOutput(static output =>
         {
-            var hintName = HintNameHelper.GetAssemblyHintName(
+            var hintName = GetAssemblyHintName(
                 sourceName: "DependencyRegistrarExtensions",
                 assemblyIdentity: typeof(DependencyInjectionGenerator).Assembly.FullName
             );
@@ -145,13 +147,18 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
                 .SyntaxProvider
                 .CreateSyntaxProvider(
                     predicate: static (node, _) => node is AttributeSyntax { Parent.Parent: ParameterSyntax },
-                    transform: TagAttributeValidation.ValidateDeclaration
+                    transform: InjectionParameterValidation.ValidateDeclaration
                 )
                 .SelectMany(static (diagnostics, _) => diagnostics),
             action: static (output, diagnostic) =>
             {
                 output.ReportDiagnostic(diagnostic);
             }
+        );
+
+        var registrations = context.SyntaxProvider.CreateSyntaxProvider(
+            predicate: static (node, _) => RegistrationValidation.IsCandidate(node),
+            transform: static (syntax, _) => syntax.Node.GetReference()
         );
 
         var requests = context
@@ -190,6 +197,20 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             .WithTrackingName("CreationSource");
 
         context.RegisterSourceOutput(
+            source: registrations
+                .Collect()
+                .Combine(context.CompilationProvider)
+                .Combine(creationSources.Collect())
+                .SelectMany(static (data, cancellationToken) => RegistrationValidation.ValidateRegistrations(
+                    registrations: data.Left.Left,
+                    compilation: (CSharpCompilation)data.Left.Right,
+                    creations: data.Right,
+                    cancellationToken
+                )),
+            action: static (output, diagnostic) => output.ReportDiagnostic(diagnostic)
+        );
+
+        context.RegisterSourceOutput(
             source: creationSources,
             action: static (output, creation) =>
             {
@@ -201,6 +222,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             .CompilationProvider
             .Select(static (compilation, _) => compilation.Assembly.Identity.ToString());
 
+        // 진단 위치가 달라져도 렌더링을 재사용하도록 출력 정의만 값으로 비교한다.
         var definitions = generation
             .Select(static (result, _) => result.Definitions)
             .WithComparer(FactoryDefinitionsComparer.Instance);
@@ -213,7 +235,10 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             source: assemblyIdentity.Combine(factoriesSource),
             action: static (output, data) =>
             {
-                var hintName = HintNameHelper.GetAssemblyHintName(sourceName: "Factories", data.Left);
+                var hintName = GetAssemblyHintName(
+                    sourceName: "Factories",
+                    assemblyIdentity: data.Left
+                );
 
                 output.AddSource(
                     hintName: $"{hintName}.g.cs",

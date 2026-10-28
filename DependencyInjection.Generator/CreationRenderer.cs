@@ -21,9 +21,12 @@ internal static class CreationRenderer
             """
         );
         source.AppendLine($"        internal static {factory.TypeName} Create(");
-        source.AppendLine($"            this global::Macaron.DependencyInjection.InjectionContext<{factory.TypeName}> context)");
+
+        var parameters = definition.Parameters.Length == 0 ? "" : $", {definition.Parameters}";
+
+        source.AppendLine($"            this global::Macaron.DependencyInjection.InjectionContext<{factory.TypeName}> {definition.ContextName}{parameters})");
         source.AppendLine("        {");
-        source.AppendLine("            var resolver = context.Resolver;");
+        source.AppendLine($"            var {definition.ResolverName} = {definition.ContextName}.Resolver;");
 
         if (factory.DependencyStatements.Length > 0)
         {
