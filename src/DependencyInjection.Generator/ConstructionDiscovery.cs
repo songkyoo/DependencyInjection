@@ -349,14 +349,19 @@ internal static class ConstructionDiscovery
             var resolveArguments = tag is { ConstructorArguments.Length: 1 }
                 ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0], compilation)}"
                 : "";
-            var resolveExpression = $"{resolverName}.Resolve<{parameterTypeName}>({resolveArguments})";
+            var resolveExpression = DependencyArgumentRenderer.Render(
+                parameter,
+                resolverName,
+                tagArguments: resolveArguments,
+                compilation
+            );
 
-            // 명시적 in 전달에 필요한 지역 변수를 만들면서 전체 DI 인자의 해결 순서도 유지한다.
             if (usesInParameters)
             {
+                var localTypeName = parameterType.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
                 var variableName = GetUniqueName($"dependency{arguments.Count}");
 
-                dependencyStatements.Add($"var {variableName} = {resolveExpression};");
+                dependencyStatements.Add($"{localTypeName} {variableName} = {resolveExpression};");
                 arguments.Add(parameter.RefKind == RefKind.In ? $"in {variableName}" : variableName);
             }
             else
@@ -365,16 +370,13 @@ internal static class ConstructionDiscovery
             }
         }
 
-        var signatureTypeName = typeName;
-        var constructedTypeName = typeName;
-
-        if (assistedParameters.Count > 0)
-        {
-            signatureTypeName = implementation.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
-            constructedTypeName = implementation
-                .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-                .ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
-        }
+        var signatureType = assistedParameters.Count > 0
+            ? implementation
+            : implementation.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var signatureTypeName = signatureType.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
+        var constructedTypeName = implementation
+            .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            .ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
 
         var creationExpression = $"new {constructedTypeName}({string.Join(", ", arguments)})";
         var factory = new FactoryDefinition(

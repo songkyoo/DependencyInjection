@@ -24,25 +24,7 @@ internal static class AssistedParameterRenderer
             return declaration;
         }
 
-        if (parameter.ExplicitDefaultValue is not { } value)
-        {
-            var defaultExpression = parameter.Type.IsReferenceType
-                || parameter.Type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
-                ? "null"
-                : "default";
-
-            return $"{declaration} = {defaultExpression}";
-        }
-
-        var valueType = parameter.Type is INamedTypeSymbol
-            {
-                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-            } nullableType
-            ? nullableType.TypeArguments[0]
-            : parameter.Type;
-        var expression = valueType is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
-            ? EnumValueRenderer.Render(enumType, value, compilation)
-            : ConstantValueRenderer.Render(value);
+        var expression = ParameterDefaultValueRenderer.Render(parameter, compilation);
 
         return $"{declaration} = {expression}";
     }

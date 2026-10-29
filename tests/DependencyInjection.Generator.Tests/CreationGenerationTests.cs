@@ -165,16 +165,17 @@ public class CreationGenerationTests
     }
 
     [Test]
-    public void MissingOptionalDependency_ShouldFailInsteadOfUsingDefaultValue()
+    public void MissingOptionalDependency_ShouldUseDeclaredDefaultValue()
     {
         var (compilation, _) = Generate(
             """
-            using System;
             using Macaron.DependencyInjection;
 
             public class Service
             {
-                public Service(string value = "fallback") { }
+                public string Value { get; }
+
+                public Service(string value = "fallback") { Value = value; }
             }
 
             public static class Probe
@@ -183,10 +184,7 @@ public class CreationGenerationTests
                 {
                     using var container = DependencyContainerFactory.Create(_ => { });
 
-                    try { container.For<Service>().Create(); }
-                    catch (InvalidOperationException) { return true; }
-
-                    return false;
+                    return container.For<Service>().Create().Value == "fallback";
                 }
             }
             """

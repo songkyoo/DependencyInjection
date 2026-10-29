@@ -166,7 +166,7 @@ public class FactoryTagTests
     }
 
     [Test]
-    public void MissingTag_ShouldNotUseDefaultRegistrationOrOptionalParameterValue()
+    public void MissingRequiredTag_ShouldNotUseDefaultRegistration()
     {
         var (compilation, _) = Generate(
             """
@@ -175,7 +175,7 @@ public class FactoryTagTests
             public sealed class Service
             {
                 [Inject]
-                public Service([Tag("missing")] string value = "optional") { }
+                public Service([Tag("missing")] string value) { }
             }
 
             public static class Probe
