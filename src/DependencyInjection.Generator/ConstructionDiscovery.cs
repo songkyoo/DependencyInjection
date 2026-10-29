@@ -7,7 +7,6 @@ using Macaron.DependencyInjection.Analysis;
 using static Macaron.DependencyInjection.Generator.HintNameHelpers;
 using static Macaron.DependencyInjection.Analysis.InjectionParameterValidation;
 using static Macaron.DependencyInjection.Analysis.CompilationValidation;
-using static Macaron.DependencyInjection.Generator.KeywordNameHelpers;
 using static Macaron.DependencyInjection.Generator.Result;
 using static Microsoft.CodeAnalysis.MetadataImportOptions;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
@@ -291,86 +290,18 @@ internal static class ConstructionDiscovery
             ));
         }
 
-        var arguments = new List<string>();
-        var dependencyStatements = new List<string>();
-        var assistedParameters = new List<string>();
-        var reservedNames = new HashSet<string>(constructor
-            .Parameters
-            .Where(parameter => FindAttribute(parameter, compilation, metadataName: "AssistedAttribute") is not null)
-            .Select(parameter => parameter.Name)
-        );
-        var contextName = GetUniqueName("context");
-        var resolverName = GetUniqueName("resolver");
-        var usesInParameters = constructor.Parameters.Any(parameter => parameter.RefKind == RefKind.In);
+        var argumentBuilder = new InjectionArgumentsBuilder(constructor, compilation);
+        var contextName = argumentBuilder.ReserveName("context");
+        var resolverName = argumentBuilder.ReserveName("resolver");
+        var argumentsResult = argumentBuilder.Build(useLocation: request.Location, resolverName);
 
-        foreach (var parameter in constructor.Parameters)
+        if (argumentsResult.IsError)
         {
-            var parameterType = parameter.Type;
-            var parameterTypeName = parameterType.ToDisplayString(FullyQualifiedFormat);
-
-            var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
-            var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
-            var attributeName = assisted is not null
-                ? "Assisted"
-                : tag is not null ? "Tag" : "dependency injection";
-            var parameterDiagnostic = ValidateShape(
-                parameter,
-                attributeName,
-                location: request.Location,
-                additionalLocations: parameter.Locations
-            );
-
-            if (parameterDiagnostic is not null)
-            {
-                return Error(parameterDiagnostic);
-            }
-
-            if (!compilation.IsSymbolAccessibleWithin(parameterType, compilation.Assembly))
-            {
-                return Error(CreateDiagnostic(
-                    descriptor: DiagnosticDescriptors.DependencyNotAccessible,
-                    request,
-                    additionalLocations: parameter.Locations,
-                    arguments: [parameterTypeName, parameter.Name, typeName]
-                ));
-            }
-
-            if (assisted is not null)
-            {
-                assistedParameters.Add(AssistedParameterRenderer.Render(parameter, compilation));
-
-                var name = EscapeName(parameter.Name);
-
-                arguments.Add(parameter.RefKind == RefKind.In ? $"in {name}" : name);
-
-                continue;
-            }
-
-            var resolveArguments = tag is { ConstructorArguments.Length: 1 }
-                ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0], compilation)}"
-                : "";
-            var resolveExpression = DependencyArgumentRenderer.Render(
-                parameter,
-                resolverName,
-                tagArguments: resolveArguments,
-                compilation
-            );
-
-            if (usesInParameters)
-            {
-                var localTypeName = parameterType.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
-                var variableName = GetUniqueName($"dependency{arguments.Count}");
-
-                dependencyStatements.Add($"{localTypeName} {variableName} = {resolveExpression};");
-                arguments.Add(parameter.RefKind == RefKind.In ? $"in {variableName}" : variableName);
-            }
-            else
-            {
-                arguments.Add(resolveExpression);
-            }
+            return Error(argumentsResult.Error);
         }
 
-        var signatureType = assistedParameters.Count > 0
+        var preparedArguments = argumentsResult.Value;
+        var signatureType = preparedArguments.AssistedParameters.Length > 0
             ? implementation
             : implementation.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
         var signatureTypeName = signatureType.ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
@@ -378,36 +309,21 @@ internal static class ConstructionDiscovery
             .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
             .ToDisplayString(AssistedParameterRenderer.SignatureTypeFormat);
 
-        var creationExpression = $"new {constructedTypeName}({string.Join(", ", arguments)})";
+        var creationExpression = $"new {constructedTypeName}({preparedArguments.Arguments})";
         var factory = new FactoryDefinition(
             TypeName: signatureTypeName,
             CreationExpression: creationExpression,
-            DependencyStatements: string.Join("\n", dependencyStatements)
+            DependencyStatements: preparedArguments.DependencyStatements
         );
         var hintName = GetCreationHintName(implementation.Name, implementation.Arity, typeName);
 
         return Ok(new CreationDefinition(
             HintName: hintName,
             Factory: factory,
-            Parameters: string.Join(", ", assistedParameters),
+            Parameters: preparedArguments.AssistedParameters,
             ContextName: contextName,
             ResolverName: resolverName
         ));
-
-        #region Local Functions
-        string GetUniqueName(string name)
-        {
-            var candidate = name;
-            var suffix = 1;
-
-            while (!reservedNames.Add(candidate))
-            {
-                candidate = name + suffix++;
-            }
-
-            return candidate;
-        }
-        #endregion
     }
 
     private static Result<IMethodSymbol, Diagnostic> SelectConstructor(
