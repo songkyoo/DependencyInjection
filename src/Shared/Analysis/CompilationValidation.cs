@@ -5,17 +5,30 @@ namespace Macaron.DependencyInjection.Analysis;
 
 internal static class CompilationValidation
 {
-    internal static bool HasConstructorErrors(ITypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    internal static bool HasConstructorErrors(
+        ITypeSymbol type,
+        Compilation compilation,
+        CancellationToken cancellationToken
+    )
     {
         if (type is not INamedTypeSymbol implementation)
         {
             return false;
         }
 
-        foreach (var reference in implementation.InstanceConstructors.SelectMany(constructor =>
+        return implementation.InstanceConstructors.Any(constructor =>
         {
-            return constructor.DeclaringSyntaxReferences;
-        }))
+            return HasMemberErrors(constructor, compilation, cancellationToken);
+        });
+    }
+
+    internal static bool HasMemberErrors(
+        IMethodSymbol member,
+        Compilation compilation,
+        CancellationToken cancellationToken
+    )
+    {
+        foreach (var reference in member.DeclaringSyntaxReferences)
         {
             var declaration = reference.GetSyntax(cancellationToken);
             var semanticModel = compilation.GetSemanticModel(reference.SyntaxTree);
@@ -34,7 +47,11 @@ internal static class CompilationValidation
         return false;
     }
 
-    internal static bool HasErrorDiagnostics(SemanticModel semanticModel, SyntaxNode node, CancellationToken cancellationToken)
+    private static bool HasErrorDiagnostics(
+        SemanticModel semanticModel,
+        SyntaxNode node,
+        CancellationToken cancellationToken
+    )
     {
         return semanticModel.GetDiagnostics(node.Span, cancellationToken).Any(diagnostic =>
         {

@@ -90,7 +90,7 @@ internal static class DiagnosticDescriptors
     internal static readonly DiagnosticDescriptor DependencyNotAccessible = new(
         id: "MADI0010",
         title: "Dependency type is inaccessible to generated code",
-        messageFormat: "Dependency type '{0}' of constructor parameter '{1}' on implementation type '{2}' is inaccessible to generated factory code.",
+        messageFormat: "Dependency type '{0}' of {3} parameter '{1}' on implementation type '{2}' is inaccessible to generated {4} code.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
@@ -108,7 +108,7 @@ internal static class DiagnosticDescriptors
     internal static readonly DiagnosticDescriptor RequiresInject = new(
         id: "MADI0012",
         title: "Injection parameter requires Inject",
-        messageFormat: "Constructor '{1}' must be marked with Inject because parameter '{0}' has {2}.",
+        messageFormat: "{3} '{1}' must be marked with Inject because parameter '{0}' has {2}.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
@@ -136,6 +136,33 @@ internal static class DiagnosticDescriptors
         id: "MADI0015",
         title: "Assisted constructor cannot be registered",
         messageFormat: "Type '{0}' has a constructor marked with Inject that requires Assisted arguments and cannot be registered.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    internal static readonly DiagnosticDescriptor MultipleInjectMembers = new(
+        id: "MADI0016",
+        title: "Multiple members have Inject",
+        messageFormat: "Type '{0}' must not have more than one constructor or method marked with Inject.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    internal static readonly DiagnosticDescriptor UnsupportedInjectionMethod = new(
+        id: "MADI0017",
+        title: "Injection method is not supported",
+        messageFormat: "Method '{0}' marked with Inject must be an ordinary, synchronous, non-generic instance method returning void.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    internal static readonly DiagnosticDescriptor InjectionMethodNotAccessible = new(
+        id: "MADI0018",
+        title: "Injection method is inaccessible to generated code",
+        messageFormat: "Selected method '{0}' on type '{1}' is inaccessible to generated injection code.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true

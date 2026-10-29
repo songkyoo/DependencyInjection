@@ -59,7 +59,12 @@ internal static class InjectionParameterValidation
             Add(CreateConflictDiagnostic(parameter, syntax.GetLocation()));
         }
 
-        Add(ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation()));
+        // 메서드 선언의 독립 진단은 Inject 메서드 API를 연결할 때 활성화한다.
+        if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor })
+        {
+            Add(ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation()));
+        }
+
         Add(ValidateShape(parameter, attributeName, parameterSyntax.Identifier.GetLocation()));
 
         return diagnostics.ToImmutable();
@@ -87,6 +92,64 @@ internal static class InjectionParameterValidation
         {
             return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, attributeType);
         });
+    }
+
+    internal static AttributeData? FindInjectAttribute(IMethodSymbol member, Compilation compilation)
+    {
+        var inject = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
+
+        return member.GetAttributes().FirstOrDefault(attribute =>
+        {
+            return inject is not null && SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inject);
+        });
+    }
+
+    internal static Diagnostic? ValidateMemberParameters(
+        IMethodSymbol member,
+        Compilation compilation,
+        Location useLocation
+    )
+    {
+        var isMarked = FindInjectAttribute(member, compilation) is not null;
+
+        foreach (var parameter in member.Parameters)
+        {
+            var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
+            var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
+
+            if (!isMarked && tag is null && assisted is null)
+            {
+                continue;
+            }
+
+            var parameterLocation = parameter.Locations.FirstOrDefault(location => location.IsInSource) ?? useLocation;
+            var attributeSyntax = (tag ?? assisted)?.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
+            var attributeLocation = attributeSyntax?.GetLocation() ?? parameterLocation;
+
+            if (tag is not null && assisted is not null)
+            {
+                return CreateConflictDiagnostic(parameter, attributeLocation);
+            }
+
+            var attributeName = tag is not null ? "Tag" : assisted is not null ? "Assisted" : "dependency injection";
+            var valueLocation = attributeSyntax?.ArgumentList?.Arguments.FirstOrDefault()?.Expression.GetLocation()
+                ?? attributeLocation;
+            var diagnostic = TagAttributeValidation.ValidateParameter(tag, parameter, compilation, valueLocation);
+
+            if (tag is not null || assisted is not null)
+            {
+                diagnostic ??= ValidateInjectRequirement(parameter, compilation, attributeName, attributeLocation);
+            }
+
+            diagnostic ??= ValidateShape(parameter, attributeName, parameterLocation, parameter.Locations);
+
+            if (diagnostic is not null)
+            {
+                return diagnostic;
+            }
+        }
+
+        return null;
     }
 
     internal static Diagnostic? ValidateConstructors(
@@ -232,17 +295,12 @@ internal static class InjectionParameterValidation
         Location location
     )
     {
-        if (parameter.ContainingSymbol is not IMethodSymbol { MethodKind: MethodKind.Constructor } constructor)
+        if (parameter.ContainingSymbol is not IMethodSymbol member)
         {
             return null;
         }
 
-        var injectAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
-
-        if (constructor.GetAttributes().Any(attribute =>
-        {
-            return SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, injectAttribute);
-        }))
+        if (FindInjectAttribute(member, compilation) is not null)
         {
             return null;
         }
@@ -250,7 +308,13 @@ internal static class InjectionParameterValidation
         return Diagnostic.Create(
             descriptor: DiagnosticDescriptors.RequiresInject,
             location,
-            messageArgs: [parameter.Name, constructor.ToDisplayString(), attributeName]
+            messageArgs:
+            [
+                parameter.Name,
+                member.ToDisplayString(),
+                attributeName,
+                member.MethodKind == MethodKind.Constructor ? "Constructor" : "Method",
+            ]
         );
     }
 
