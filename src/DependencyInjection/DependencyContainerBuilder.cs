@@ -59,6 +59,11 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
     #region Methods
     private void AddRegistration(RegistrationKey key, TypeRegistration registration)
     {
+        if (Nullable.GetUnderlyingType(key.Type) is not null)
+        {
+            throw new ArgumentException($"Nullable value types cannot be registered as service types: {key.Type}");
+        }
+
         if (key.IsResolver)
         {
             throw new ArgumentException($"Key is reserved for the current dependency resolver: {key}", paramName: nameof(key));
