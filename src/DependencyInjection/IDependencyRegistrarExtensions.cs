@@ -51,7 +51,6 @@ public static class IDependencyRegistrarExtensions
         );
     }
 
-    #region Transient
     public static void RegisterTransient<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<T> factory,
@@ -67,9 +66,6 @@ public static class IDependencyRegistrarExtensions
         );
     }
 
-    #endregion
-
-    #region Scoped
     public static void RegisterScoped<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<T> factory,
@@ -85,9 +81,6 @@ public static class IDependencyRegistrarExtensions
         );
     }
 
-    #endregion
-
-    #region Singleton
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         Func<T> factory,
@@ -103,9 +96,6 @@ public static class IDependencyRegistrarExtensions
         );
     }
 
-    #endregion
-
-    #region Instance
     public static void RegisterSingleton<T>(
         this IDependencyRegistrar dependencyRegistrar,
         T instance,
@@ -125,5 +115,4 @@ public static class IDependencyRegistrarExtensions
             cleanup
         );
     }
-    #endregion
 }

@@ -50,6 +50,49 @@ public class DependencyResolverCycleTests
     }
 
     [Test]
+    public void FailedFactoryCleanup_ShouldRejectRecursiveCreation_AndAllowRetry([Values] bool useLocalScope)
+    {
+        var failCreation = true;
+        var factoryCalls = 0;
+        var creationFailure = new ArgumentException("Service creation failed.");
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Service>(factory: (resolver, ref collector) =>
+            {
+                factoryCalls++;
+
+                if (failCreation)
+                {
+                    collector.Add(new object(), _ =>
+                    {
+                        failCreation = false;
+                        resolver.Resolve<Service>();
+                    });
+
+                    throw creationFailure;
+                }
+
+                return new Service();
+            });
+        });
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
+
+        var error = Assert.Throws<AggregateException>(() => resolver.Resolve<Service>());
+
+        Assert.That(error!.InnerExceptions, Has.Count.EqualTo(2));
+        Assert.That(error.InnerExceptions[0], Is.SameAs(creationFailure));
+        Assert.That(error.InnerExceptions[1], Is.TypeOf<InvalidOperationException>());
+        Assert.That(error.InnerExceptions[1].Message, Does.Contain("Cyclic dependency detected"));
+        Assert.That(factoryCalls, Is.EqualTo(1));
+
+        var service = resolver.Resolve<Service>();
+
+        Assert.That(service, Is.TypeOf<Service>());
+        Assert.That(factoryCalls, Is.EqualTo(2));
+    }
+
+    [Test]
     public void DifferentDependencyTags_ShouldNotBeDetectedAsCycle()
     {
         using var container = DependencyContainerFactory.Create(registrar =>

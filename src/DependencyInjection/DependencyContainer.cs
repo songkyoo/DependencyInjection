@@ -268,61 +268,44 @@ internal sealed class DependencyContainer(
             return resolver;
         }
 
-        foreach (var resolvingKey in _resolutionStack)
+        if (_registry.TryGetValue(key, out var typeRegistration))
         {
-            if (resolvingKey == key)
+            // 등록을 찾은 위치와 요청한 범위를 구분한다. Scoped는 요청 컨테이너의 캐시를,
+            // Singleton은 등록 컨테이너의 캐시를 사용하고 Transient는 요청 resolver에 귀속한다.
+            return typeRegistration switch
             {
-                throw new InvalidOperationException($"Cyclic dependency detected: {string.Join(" -> ", _resolutionStack.Reverse().Append(key))}");
-            }
+                TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
+                    dependencyContainer.CreateInstance(
+                        key,
+                        factory,
+                        cleanup,
+                        resolver,
+                        dependencyContainer.GetTransientCleanups(resolver)
+                    ),
+                TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
+                    dependencyContainer.GetOrAdd(
+                        scopedInstances,
+                        key,
+                        factory,
+                        cleanup
+                    ),
+                TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
+                    GetOrAdd(
+                        _instances,
+                        key,
+                        factory,
+                        cleanup
+                    ),
+                _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
+            };
         }
 
-        _resolutionStack.Push(key);
-
-        try
+        if (_parent == null)
         {
-            if (_registry.TryGetValue(key, out var typeRegistration))
-            {
-                // 등록을 찾은 위치와 요청한 범위를 구분한다. Scoped는 요청 컨테이너의 캐시를,
-                // Singleton은 등록 컨테이너의 캐시를 사용하고 Transient는 요청 resolver에 귀속한다.
-                return typeRegistration switch
-                {
-                    TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
-                        dependencyContainer.CreateInstance(
-                            key,
-                            factory,
-                            cleanup,
-                            resolver,
-                            dependencyContainer.GetTransientCleanups(resolver)
-                        ),
-                    TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
-                        dependencyContainer.GetOrAdd(
-                            scopedInstances,
-                            key,
-                            factory,
-                            cleanup
-                        ),
-                    TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
-                        GetOrAdd(
-                            _instances,
-                            key,
-                            factory,
-                            cleanup
-                        ),
-                    _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
-                };
-            }
-
-            if (_parent == null)
-            {
-                throw new InvalidOperationException($"Service not found: {key}");
-            }
-
-            return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver);
+            throw new InvalidOperationException($"Service not found: {key}");
         }
-        finally
-        {
-            _resolutionStack.Pop();
-        }
+
+        return _parent.ResolveRecursively(key, scopedInstances, dependencyContainer, resolver);
     }
 
     private object GetOrAdd(
@@ -353,10 +336,22 @@ internal sealed class DependencyContainer(
         List<CleanupEntry> cleanups
     )
     {
+        // 실제로 서비스를 생성하는 컨테이너에서 키를 추적해 서로 다른 Scoped 캐시를 구분한다.
+        foreach (var resolvingKey in _resolutionStack)
+        {
+            if (resolvingKey == key)
+            {
+                var dependencyPath = string.Join(" -> ", _resolutionStack.Reverse().Append(key));
+
+                throw new InvalidOperationException($"Cyclic dependency detected: {dependencyPath}");
+            }
+        }
+
         var cleanupCollector = new CleanupCollector();
         object instance;
 
-        // 실패한 수집 항목의 정리가 끝날 때까지 범위 생성·해제에 대한 재진입도 막는다.
+        // 실패한 수집 항목의 정리가 끝날 때까지 순환 추적과 범위 생성·해제 제한을 유지한다.
+        _resolutionStack.Push(key);
         _creationDepth += 1;
 
         try
@@ -375,6 +370,7 @@ internal sealed class DependencyContainer(
         finally
         {
             _creationDepth -= 1;
+            _resolutionStack.Pop();
         }
 
         // 역순 정리에서 수집 항목이 서비스보다 먼저 실행되도록 서비스를 먼저 기록한다.
@@ -510,7 +506,7 @@ internal sealed class DependencyContainer(
 
         if (_isCleaningLocalScope)
         {
-            throw new InvalidOperationException($"Cannot call {operation} while a LocalScope is being disposed.");
+            throw new InvalidOperationException($"Cannot call {operation} while a local scope is being disposed.");
         }
     }
 
@@ -521,9 +517,7 @@ internal sealed class DependencyContainer(
         var index = localScope.Index;
 
         // 슬롯 인덱스는 재사용되므로 현재 슬롯을 소유한 범위 객체의 참조까지 확인한다.
-        if ((uint)index >= (uint)_localScopeSlotCount
-            || !ReferenceEquals(_localScopeSlots[index].Scope, localScope)
-           )
+        if ((uint)index >= (uint)_localScopeSlotCount || !ReferenceEquals(_localScopeSlots[index].Scope, localScope))
         {
             throw new ObjectDisposedException(nameof(LocalScope));
         }

@@ -76,6 +76,91 @@ public class DependencyContainerChildInitializationTests
     }
 
     [Test]
+    public void InheritedScopedFactory_ShouldResolveCachedParentInstance_AndKeepCleanupOwnership(
+        [Values] bool useDefaultTag
+    )
+    {
+        var tag = useDefaultTag ? null : "resource";
+        IDependencyContainer? parent = null;
+        Resource? parentResourceResolvedDuringCreation = null;
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<Resource>(factory: (_, ref _) =>
+            {
+                parentResourceResolvedDuringCreation = parent?.Resolve<Resource>(tag);
+
+                return new Resource();
+            }, tag: tag);
+        });
+        parent = root;
+
+        var rootResource = root.Resolve<Resource>(tag);
+
+        using var child = root.CreateChild();
+        var childResource = child.Resolve<Resource>(tag);
+
+        Assert.That(parentResourceResolvedDuringCreation, Is.SameAs(rootResource));
+        Assert.That(childResource, Is.Not.SameAs(rootResource));
+        Assert.That(child.Resolve<Resource>(tag), Is.SameAs(childResource));
+        Assert.That(root.Resolve<Resource>(tag), Is.SameAs(rootResource));
+
+        child.Dispose();
+
+        Assert.That(childResource.IsDisposed, Is.True);
+        Assert.That(rootResource.IsDisposed, Is.False);
+        Assert.That(root.Resolve<Resource>(tag), Is.SameAs(rootResource));
+
+        root.Dispose();
+
+        Assert.That(rootResource.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void InheritedScopedCycle_ShouldFailChildCreation_AndAllowRetry([Values] bool useDefaultTag)
+    {
+        var tag = useDefaultTag ? null : "service";
+        var introduceCycle = false;
+        using var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterScoped<Resource>(factory: (resolver, ref _) =>
+            {
+                if (introduceCycle)
+                {
+                    resolver.Resolve<Service>(tag);
+                }
+
+                return new Resource();
+            }, tag: tag);
+            registrar.RegisterScoped<Service>(factory: (resolver, ref _) =>
+            {
+                return new Service(resolver.Resolve<Resource>(tag));
+            }, tag: tag);
+        });
+        var rootService = root.Resolve<Service>(tag);
+
+        introduceCycle = true;
+
+        var error = Assert.Throws<AggregateException>(() => root.CreateChild());
+        var creationError = error!.InnerExceptions.Single();
+
+        Assert.That(creationError, Is.TypeOf<InvalidOperationException>());
+        Assert.That(creationError.Message, Does.Contain("Cyclic dependency detected"));
+        Assert.That(creationError.Message, Does.Contain(typeof(Resource).ToString()));
+        Assert.That(creationError.Message, Does.Contain(typeof(Service).ToString()));
+        Assert.That(root.Resolve<Service>(tag), Is.SameAs(rootService));
+        Assert.That(rootService.Resource.IsDisposed, Is.False);
+
+        introduceCycle = false;
+
+        using var retry = root.CreateChild();
+        var childService = retry.Resolve<Service>(tag);
+
+        Assert.That(childService, Is.Not.SameAs(rootService));
+        Assert.That(childService.Resource, Is.Not.SameAs(rootService.Resource));
+        Assert.That(childService.Resource.IsDisposed, Is.False);
+    }
+
+    [Test]
     public void InheritedScopedInitializationFailure_ShouldRollbackOnlyChild_AndPreserveErrorTree(
         [Values] bool useActionOverload,
         [Values] bool cleanupFails
