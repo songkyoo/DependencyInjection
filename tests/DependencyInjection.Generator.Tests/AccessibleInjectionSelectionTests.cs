@@ -55,9 +55,9 @@ public class AccessibleInjectionSelectionTests
 
                 public Service(int value) { Value = value; }
 
-                private Service([Assisted] ref int value) { }
+                private Service(ref int value) { }
 
-                private static int Initialize([Tag(new[] { 1 }), Assisted] int value) => value;
+                private static int Initialize(int value) => value;
             }
             public static class Probe
             {
@@ -187,9 +187,9 @@ public class AccessibleInjectionSelectionTests
 
                 public Service() { Value = 42; }
 
-                private Service([Assisted] int value) { }
+                private Service(int value) { }
 
-                private void Initialize([Tag(new[] { 1 }), Assisted] int value) { }
+                private void Initialize(int value) { }
             }
             """, assemblyName: "ExternalServices"
         ));

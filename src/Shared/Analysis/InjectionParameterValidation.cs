@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-
+using static Microsoft.CodeAnalysis.MethodKind;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
 namespace Macaron.DependencyInjection.Analysis;
@@ -25,13 +25,6 @@ internal static class InjectionParameterValidation
             return ImmutableArray<Diagnostic>.Empty;
         }
 
-        if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.Ordinary } member
-            && !compilation.IsSymbolAccessibleWithin(member, compilation.Assembly)
-        )
-        {
-            return ImmutableArray<Diagnostic>.Empty;
-        }
-
         var comparer = SymbolEqualityComparer.Default;
         var attributeClass = attributeConstructor.ContainingType;
         var isTag = comparer.Equals(
@@ -48,13 +41,30 @@ internal static class InjectionParameterValidation
             return ImmutableArray<Diagnostic>.Empty;
         }
 
-        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var attributeName = isTag ? "Tag" : "Assisted";
+        var injectRequirement = ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation());
+
+        if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: Constructor or Ordinary } member
+            && !compilation.IsSymbolAccessibleWithin(member, within: compilation.Assembly)
+        )
+        {
+            // Inject 유무는 접근성과 무관한 선언 규칙이며 지정 멤버의 유효성과 별도로 검사한다.
+            return injectRequirement is null
+                ? ImmutableArray<Diagnostic>.Empty
+                : ImmutableArray.Create(injectRequirement);
+        }
+
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
         if (isTag)
         {
             var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
-            var valueLocation = syntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression.GetLocation() ?? syntax.GetLocation();
+            var valueLocation = syntax
+                .ArgumentList?
+                .Arguments
+                .FirstOrDefault()?
+                .Expression
+                .GetLocation() ?? syntax.GetLocation();
 
             Add(TagAttributeValidation.ValidateParameter(tag, parameter, compilation, valueLocation));
         }
@@ -63,8 +73,7 @@ internal static class InjectionParameterValidation
             Add(CreateConflictDiagnostic(parameter, syntax.GetLocation()));
         }
 
-        Add(ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation()));
-
+        Add(injectRequirement);
         Add(ValidateShape(parameter, attributeName, parameterSyntax.Identifier.GetLocation()));
 
         return diagnostics.ToImmutable();
@@ -111,6 +120,7 @@ internal static class InjectionParameterValidation
     )
     {
         var isMarked = FindInjectAttribute(member, compilation) is not null;
+        var isAccessible = compilation.IsSymbolAccessibleWithin(member, compilation.Assembly);
 
         foreach (var parameter in member.Parameters)
         {
@@ -118,7 +128,7 @@ internal static class InjectionParameterValidation
             var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
 
             // 특성 없는 생성자 인자의 형태는 기존 생성 경로에서 사용 위치에 진단한다.
-            if ((!isMarked || member.MethodKind == MethodKind.Constructor) && tag is null && assisted is null)
+            if ((!isMarked || member.MethodKind == Constructor) && tag is null && assisted is null)
             {
                 continue;
             }
@@ -126,22 +136,35 @@ internal static class InjectionParameterValidation
             var parameterLocation = parameter.Locations.FirstOrDefault(location => location.IsInSource) ?? useLocation;
             var attributeSyntax = (tag ?? assisted)?.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
             var attributeLocation = attributeSyntax?.GetLocation() ?? parameterLocation;
+            var attributeName = tag is not null ? "Tag" : assisted is not null ? "Assisted" : "dependency injection";
+            var injectRequirement = tag is not null || assisted is not null
+                ? ValidateInjectRequirement(parameter, compilation, attributeName, attributeLocation)
+                : null;
+
+            if (!isAccessible)
+            {
+                if (injectRequirement is not null)
+                {
+                    return injectRequirement;
+                }
+
+                continue;
+            }
 
             if (tag is not null && assisted is not null)
             {
                 return CreateConflictDiagnostic(parameter, attributeLocation);
             }
 
-            var attributeName = tag is not null ? "Tag" : assisted is not null ? "Assisted" : "dependency injection";
-            var valueLocation = attributeSyntax?.ArgumentList?.Arguments.FirstOrDefault()?.Expression.GetLocation()
-                ?? attributeLocation;
+            var valueLocation = attributeSyntax?
+                .ArgumentList?
+                .Arguments
+                .FirstOrDefault()?
+                .Expression
+                .GetLocation() ?? attributeLocation;
             var diagnostic = TagAttributeValidation.ValidateParameter(tag, parameter, compilation, valueLocation);
 
-            if (tag is not null || assisted is not null)
-            {
-                diagnostic ??= ValidateInjectRequirement(parameter, compilation, attributeName, attributeLocation);
-            }
-
+            diagnostic ??= injectRequirement;
             diagnostic ??= ValidateShape(parameter, attributeName, parameterLocation, parameter.Locations);
 
             if (diagnostic is not null)
@@ -170,7 +193,11 @@ internal static class InjectionParameterValidation
                 location,
                 additionalLocations: additionalLocations?.Where(location => location.IsInSource),
                 properties: null,
-                messageArgs: [type.ToDisplayString(FullyQualifiedFormat), memberName, $"{attributeName} parameter '{parameter.Name}'"]
+                messageArgs: [
+                    type.ToDisplayString(FullyQualifiedFormat),
+                    memberName,
+                    $"{attributeName} parameter '{parameter.Name}'"
+                ]
             );
         }
 
@@ -259,9 +286,7 @@ internal static class InjectionParameterValidation
         Location location
     )
     {
-        if (parameter.ContainingSymbol is not IMethodSymbol
-            { MethodKind: MethodKind.Constructor or MethodKind.Ordinary } member
-        )
+        if (parameter.ContainingSymbol is not IMethodSymbol { MethodKind: Constructor or Ordinary } member)
         {
             return null;
         }
@@ -279,7 +304,7 @@ internal static class InjectionParameterValidation
                 parameter.Name,
                 member.ToDisplayString(),
                 attributeName,
-                member.MethodKind == MethodKind.Constructor ? "Constructor" : "Method",
+                member.MethodKind == Constructor ? "Constructor" : "Method",
             ]
         );
     }
@@ -306,7 +331,7 @@ internal static class InjectionParameterValidation
                     return false;
                 }
 
-                return constructor.Parameters.Any(parameter => InjectionParameterValidation.FindAttribute(
+                return constructor.Parameters.Any(parameter => FindAttribute(
                     parameter,
                     compilation,
                     metadataName: "AssistedAttribute"

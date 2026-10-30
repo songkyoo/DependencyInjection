@@ -34,13 +34,30 @@ internal static class InjectionDeclarationAnalysis
         cancellationToken.ThrowIfCancellationRequested();
 
         // 접근성은 경로를 바꾸지 않는다. T 자체의 모든 Inject 선언으로 경로를 먼저 정한다.
-        var members = type.GetMembers().OfType<IMethodSymbol>().Where(member =>
-        {
-            return FindInjectAttribute(member, compilation) is not null
-                || compilation.IsSymbolAccessibleWithin(member, compilation.Assembly);
-        }).ToArray();
+        var members = type
+            .GetMembers()
+            .OfType<IMethodSymbol>()
+            .Where(member =>
+            {
+                if (FindInjectAttribute(member, compilation) is not null
+                    || compilation.IsSymbolAccessibleWithin(member, within: compilation.Assembly)
+                )
+                {
+                    return true;
+                }
 
-        if (members.Any(member => CompilationValidation.HasMemberDeclarationErrors(member, compilation, cancellationToken)))
+                return member.Parameters.Any(parameter =>
+                {
+                    return FindAttribute(parameter, compilation, metadataName: "TagAttribute") is not null
+                        || FindAttribute(parameter, compilation, metadataName: "AssistedAttribute") is not null;
+                });
+            })
+            .ToArray();
+
+        if (members.Any(member =>
+        {
+            return CompilationValidation.HasMemberDeclarationErrors(member, compilation, cancellationToken);
+        }))
         {
             return new InjectionDeclaration(
                 Member: null,
@@ -81,10 +98,13 @@ internal static class InjectionDeclarationAnalysis
 
         var selected = marked.SingleOrDefault();
 
-        if (selected is not null && !compilation.IsSymbolAccessibleWithin(selected, compilation.Assembly))
+        if (selected is not null && !compilation.IsSymbolAccessibleWithin(selected, within: compilation.Assembly))
         {
             var attribute = FindInjectAttribute(selected, compilation)!;
-            var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation() ?? useLocation;
+            var location = attribute
+                .ApplicationSyntaxReference?
+                .GetSyntax(cancellationToken)
+                .GetLocation() ?? useLocation;
             var diagnostic = Diagnostic.Create(
                 descriptor: DiagnosticDescriptors.InjectionMemberNotAccessible,
                 location,
@@ -172,7 +192,8 @@ internal static class InjectionDeclarationAnalysis
         });
 
         if (method is { MethodKind: MethodKind.Ordinary, IsStatic: false, IsGenericMethod: false }
-            && !isAsync && method.ReturnsVoid
+            && !isAsync
+            && method.ReturnsVoid
         )
         {
             return null;
