@@ -41,20 +41,23 @@ public class AssistedRegistrationTests
         public class Valid { }
         """;
 
-    [TestCase("registrar.RegisterTransient<Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>();", "Service", 1)]
-    [TestCase("registrar.Register<Service>(Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<object, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<object, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<object, Service>();", "Service", 1)]
-    [TestCase("registrar.Register<object, Service>(Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient", 1)]
-    [TestCase("registrar?.RegisterTransient<Service>();", "Service", 1)]
-    [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
-    [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    public void AssistedConstructor_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(string registration, string locationText, int expectedCount)
+    [TestCase("registrar.RegisterTransient<Service>();", "Service")]
+    [TestCase("registrar.RegisterScoped<Service>();", "Service")]
+    [TestCase("registrar.RegisterSingleton<Service>();", "Service")]
+    [TestCase("registrar.Register<Service>(Lifetime.Transient);", "Service")]
+    [TestCase("registrar.RegisterTransient<object, Service>();", "Service")]
+    [TestCase("registrar.RegisterScoped<object, Service>();", "Service")]
+    [TestCase("registrar.RegisterSingleton<object, Service>();", "Service")]
+    [TestCase("registrar.Register<object, Service>(Lifetime.Transient);", "Service")]
+    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service")]
+    [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient")]
+    [TestCase("registrar?.RegisterTransient<Service>();", "Service")]
+    [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service")]
+    [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service")]
+    public void AssistedConstructor_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(
+        string registration,
+        string locationText
+    )
     {
         var consumer =
             $$"""
@@ -95,12 +98,15 @@ public class AssistedRegistrationTests
 
         Assert.That(
             diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo(Enumerable.Repeat("MADI0014", expectedCount))
+            Is.EqualTo(["MADI0014"])
         );
         Assert.That(locationTexts, Is.All.EqualTo(locationText));
         Assert.That(
             sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
-            Does.Contain("typeof(global::Valid)").And.Not.Contain("typeof(global::Service)").And.Not.Contain("typeof(global::Derived)")
+            Does
+                .Contain("typeof(global::Valid)")
+                .And.Not.Contain("typeof(global::Service)")
+                .And.Not.Contain("typeof(global::Derived)")
         );
         Assert.That(Execute<int>(compilation), Is.EqualTo(42));
     }
@@ -206,38 +212,6 @@ public class AssistedRegistrationTests
             compilation.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
             Is.True
         );
-    }
-
-    [Test]
-    public void ExternalPrivateAssistedConstructor_ShouldRejectForWithoutConstructorFallback()
-    {
-        const string declaration =
-            """
-            using Macaron.DependencyInjection;
-
-            public class Service
-            {
-                public Service() { }
-                [Inject] private Service([Assisted] string value) { }
-            }
-            """;
-        var external = EmitAssembly(CreateCompilation(declaration, "ExternalServices"));
-        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
-            """
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                public void Configure(IDependencyResolver resolver)
-                {
-                    resolver.For<Service>();
-                }
-            }
-            """, additionalReferences: MetadataReference.CreateFromImage(external)
-        );
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0018" }));
-        AssertCompiles(compilation);
     }
 
     [TestCase("public Service([Assisted] int value) { }", "MADI0011")]

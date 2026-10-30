@@ -76,40 +76,59 @@ public class MethodInjectionDiagnosticTests
         Assert.That(input.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), Is.True);
     }
 
-    [Test]
-    public void GeneratorWithoutAnalyzer_ShouldBlockInvalidMethodOutput()
+    [TestCase("[Inject] public void Initialize(ref int value) { }", "MADI0008")]
+    [TestCase("[Inject] public static void Initialize() { }", "MADI0015")]
+    [TestCase("[Inject] private void Initialize() { }", "MADI0018")]
+    [TestCase(MarkedMethods, "MADI0005")]
+    public void GeneratorWithoutAnalyzer_ShouldBlockInvalidMethodAndPreserveOtherTargets(
+        string declaration,
+        string expectedId
+    )
     {
         var input = CreateCompilation(
-            """
+            $$"""
             using Macaron.DependencyInjection;
 
             public class Service
             {
-                [Inject] public void Initialize(ref int value) { }
+                {{declaration}}
+            }
+
+            public class Valid
+            {
+                [Inject] public void Initialize() { }
             }
 
             public class Configuration
             {
-                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
+                public void Configure(IDependencyResolver resolver)
+                {
+                    resolver.For<Service>();
+                    resolver.For<Valid>();
+                }
             }
             """
         );
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
 
+        var contextSources = driver
+            .GetRunResult()
+            .Results
+            .Single()
+            .GeneratedSources
+            .Where(source => source.HintName.StartsWith("InjectionContextExtensions."))
+            .ToArray();
+
         Assert.That(diagnostics, Is.Empty);
-        Assert.That(
-            driver.GetRunResult().Results.Single().GeneratedSources.Any(source =>
-            {
-                return source.HintName.StartsWith("InjectionContextExtensions.");
-            }),
-            Is.False
-        );
+        Assert.That(contextSources, Has.Length.EqualTo(1));
+        Assert.That(contextSources.Single().SourceText.ToString(), Does.Contain("InjectionContext<global::Valid>"));
+        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId]));
         AssertCompiles(output);
     }
 
-    [TestCase("public")]
-    [TestCase("public static")]
-    public void ExternalMethodDeclaration_ShouldBeCheckedAtUse(string modifiers)
+    [TestCase("public", "MADI0008")]
+    [TestCase("public static", "MADI0015")]
+    public void ExternalMethodDeclaration_ShouldBeCheckedAtUse(string modifiers, string expectedId)
     {
         var external = EmitAssembly(CreateCompilation(
             $$"""
@@ -135,7 +154,7 @@ public class MethodInjectionDiagnosticTests
 
         Assert.That(
             diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo([modifiers == "public" ? "MADI0008" : "MADI0015"])
+            Is.EqualTo([expectedId])
         );
         Assert.That(diagnostics.Single().AdditionalLocations, Is.Empty);
         Assert.That(

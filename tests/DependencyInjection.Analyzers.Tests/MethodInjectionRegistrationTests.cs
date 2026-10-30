@@ -35,20 +35,20 @@ public class MethodInjectionRegistrationTests
         public class Valid { }
         """;
 
-    [TestCase("registrar.RegisterTransient<Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>();", "Service", 1)]
-    [TestCase("registrar.Register<Service>(Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<object, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<object, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<object, Service>();", "Service", 1)]
-    [TestCase("registrar.Register<object, Service>(Lifetime.Singleton);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 1)]
-    [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient", 1)]
-    [TestCase("registrar?.RegisterTransient<Service>();", "Service", 1)]
-    [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
-    [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    public void MethodPath_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(string registration, string locationText, int count)
+    [TestCase("registrar.RegisterTransient<Service>();", "Service")]
+    [TestCase("registrar.RegisterScoped<Service>();", "Service")]
+    [TestCase("registrar.RegisterSingleton<Service>();", "Service")]
+    [TestCase("registrar.Register<Service>(Lifetime.Transient);", "Service")]
+    [TestCase("registrar.RegisterTransient<object, Service>();", "Service")]
+    [TestCase("registrar.RegisterScoped<object, Service>();", "Service")]
+    [TestCase("registrar.RegisterSingleton<object, Service>();", "Service")]
+    [TestCase("registrar.Register<object, Service>(Lifetime.Singleton);", "Service")]
+    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service")]
+    [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient")]
+    [TestCase("registrar?.RegisterTransient<Service>();", "Service")]
+    [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service")]
+    [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service")]
+    public void MethodPath_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(string registration, string locationText)
     {
         var consumer =
             $$"""
@@ -64,10 +64,14 @@ public class MethodInjectionRegistrationTests
                 }
             }
             """;
-        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(Services, InputParseOptions, "Services.cs"));
+        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            text: Services,
+            options: InputParseOptions,
+            path: "Services.cs"
+        ));
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(input);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(Enumerable.Repeat("MADI0016", count)));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0016"]));
         Assert.That(
             diagnostics.Select(diagnostic =>
             {
@@ -111,7 +115,6 @@ public class MethodInjectionRegistrationTests
             {
                 public static bool Run()
                 {
-                    using var resolver = DependencyContainerFactory.Create(_ => { });
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
                         {{registration}}
@@ -177,37 +180,6 @@ public class MethodInjectionRegistrationTests
     }
 
     [Test]
-    public void ExternalPrivateMethod_ShouldRejectForWithoutConstructorFallback()
-    {
-        var external = EmitAssembly(CreateCompilation(
-            """
-            using Macaron.DependencyInjection;
-
-            public class Service
-            {
-                [Inject] private void Initialize() { }
-            }
-            """,
-            assemblyName: "ExternalServices"
-        ));
-        var input = CreateCompilation(
-            """
-            using Macaron.DependencyInjection;
-
-            public class Configuration
-            {
-                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
-            }
-            """,
-            additionalReferences: MetadataReference.CreateFromImage(external)
-        );
-        var diagnostics = Analyze(input);
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0018"]));
-        AssertCompiles(input);
-    }
-
-    [Test]
     public void GeneratorWithoutAnalyzer_ShouldNotProduceFactoryForMethodPath()
     {
         var input = CreateCompilation(
@@ -226,7 +198,12 @@ public class MethodInjectionRegistrationTests
             """
         );
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
-        var source = driver.GetRunResult().Results.Single().GeneratedSources.Single(source => source.HintName.StartsWith("Factories."));
+        var source = driver
+            .GetRunResult()
+            .Results
+            .Single()
+            .GeneratedSources
+            .Single(source => source.HintName.StartsWith("Factories."));
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(source.SourceText.ToString(), Does.Not.Contain("typeof(global::Service)"));

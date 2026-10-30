@@ -57,7 +57,10 @@ public class MethodInjectionGenerationTests
             }
             """
         );
-        var generated = sources.Single(source => source.HintName.StartsWith("InjectionContextExtensions.")).SourceText.ToString();
+        var generated = sources
+            .Single(source => source.HintName.StartsWith("InjectionContextExtensions."))
+            .SourceText
+            .ToString();
 
         Assert.That(Execute<string>(compilation), Is.EqualTo("chosen|caller|3|42|provided|a,b|1"));
         Assert.That(generated, Does.Contain("void Inject(").And.Contain(".@event(").And.Not.Contain(" Create("));
@@ -296,7 +299,7 @@ public class MethodInjectionGenerationTests
     }
 
     [Test]
-    public void DefaultedDependencies_ShouldUseExplicitDefaultsAndParamsShouldResolveOneArray()
+    public void MissingDefaultedDependencies_ShouldUseExplicitDefaults()
     {
         var (compilation, _) = Generate(
             """
@@ -313,32 +316,55 @@ public class MethodInjectionGenerationTests
                     Value = $"{text}|{value.HasValue}";
                 }
             }
-            public class ArrayService
-            {
-                public int Length;
-
-                [Inject] public void Initialize(params string[] values) { Length = values.Length; }
-            }
 
             public static class Probe
             {
                 public static string Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: new[] { "a", "b" }));
+                    using var container = DependencyContainerFactory.Create(_ => { });
                     var service = new Service();
-                    var array = new ArrayService();
 
                     container.For<Service>().Inject(service);
-                    container.For<ArrayService>().Inject(array);
 
-                    return $"{service.Value}|{array.Length}";
+                    return service.Value;
                 }
             }
             """
         );
 
-        Assert.That(Execute<string>(compilation), Is.EqualTo("fallback|False|2"));
+        Assert.That(Execute<string>(compilation), Is.EqualTo("fallback|False"));
+    }
+
+    [Test]
+    public void ParamsDependency_ShouldResolveRegisteredArray()
+    {
+        var (compilation, _) = Generate(
+            """
+            using Macaron.DependencyInjection;
+
+            public class Service
+            {
+                public int Length;
+                [Inject] public void Initialize(params string[] values) { Length = values.Length; }
+            }
+
+            public static class Probe
+            {
+                public static int Run()
+                {
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                        registrar.RegisterSingleton(instance: new[] { "a", "b" }));
+                    var service = new Service();
+
+                    container.For<Service>().Inject(service);
+
+                    return service.Length;
+                }
+            }
+            """
+        );
+
+        Assert.That(Execute<int>(compilation), Is.EqualTo(2));
     }
 
     [Test]

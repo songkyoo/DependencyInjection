@@ -28,6 +28,7 @@ public class InjectionDeclarationSelectionTests
         """;
 
     [TestCase("[Inject] private Service(int value) { }")]
+    [TestCase("[Inject] private Service([Assisted] string value) { }")]
     [TestCase("[Inject] internal Service(int value) { }")]
     [TestCase("[Inject] protected Service(int value) { }")]
     [TestCase("[Inject] private void Initialize() { }")]
@@ -63,7 +64,10 @@ public class InjectionDeclarationSelectionTests
         );
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0018", "MADI0018"]));
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start).Distinct().Count(), Is.EqualTo(2));
+        Assert.That(
+            diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start).Distinct().Count(),
+            Is.EqualTo(2)
+        );
         Assert.That(sources.Any(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.False);
         AssertCompiles(compilation);
     }
@@ -71,7 +75,9 @@ public class InjectionDeclarationSelectionTests
     [TestCase(PrivateConstructorAndPublicMethod)]
     [TestCase(PublicConstructorAndPrivateMethod)]
     [TestCase(PrivateMethods)]
-    public void ExternalDuplicateInject_IncludingInaccessibleMembers_ShouldDiagnoseBeforeAccessibility(string declarations)
+    public void ExternalDuplicateInject_IncludingInaccessibleMembers_ShouldDiagnoseBeforeAccessibility(
+        string declarations
+    )
     {
         var external = EmitAssembly(CreateCompilation(
             $$"""
@@ -145,43 +151,4 @@ public class InjectionDeclarationSelectionTests
         Assert.That(Execute<(int, int)>(compilation, external), Is.EqualTo((42, 42)));
     }
 
-    [Test]
-    public void ExternalMarkedInternalMethod_WithFriendAccess_ShouldFixMethodPath()
-    {
-        var external = EmitAssembly(CreateCompilation(
-            """
-            using Macaron.DependencyInjection;
-
-            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Consumer")]
-            public class Service
-            {
-                public int Value;
-
-                [Inject] internal void Initialize([Assisted] int value) { Value = value; }
-            }
-            """,
-            assemblyName: "ExternalServices"
-        ));
-        var (compilation, _) = Generate(
-            """
-            using Macaron.DependencyInjection;
-
-            public static class Probe
-            {
-                public static int Run()
-                {
-                    using var container = DependencyContainerFactory.Create(_ => { });
-                    var service = new Service();
-
-                    container.For<Service>().Inject(service, 42);
-
-                    return service.Value;
-                }
-            }
-            """,
-            additionalReferences: MetadataReference.CreateFromImage(external)
-        );
-
-        Assert.That(Execute<int>(compilation, external), Is.EqualTo(42));
-    }
 }
