@@ -151,7 +151,7 @@ public class NullableServiceRegistrationTests
     {
         var factoryCalls = 0;
         using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 7));
-        using var child = parent.CreateScope(registrar =>
+        using var child = parent.CreateChild(registrar =>
         {
             Assert.That(
                 () => registrar.RegisterScoped<int?>(factory: () =>

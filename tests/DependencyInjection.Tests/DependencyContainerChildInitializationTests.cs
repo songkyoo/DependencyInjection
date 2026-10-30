@@ -44,7 +44,7 @@ public class DependencyContainerChildInitializationTests
                 return new object();
             }, tag: rootTag);
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             registrar.RegisterSingleton<object>(factory: () =>
             {
@@ -57,8 +57,8 @@ public class DependencyContainerChildInitializationTests
         Assert.That(scopedInstances, Has.Count.EqualTo(2));
         Assert.That(childSingletonCreations, Is.EqualTo(1));
 
-        using var sibling = root.CreateScope();
-        using var grandchild = child.CreateScope();
+        using var sibling = root.CreateChild();
+        using var grandchild = child.CreateChild();
 
         Assert.That(scopedInstances, Has.Count.EqualTo(4));
         Assert.That(scopedInstances.Values.Distinct().Count(), Is.EqualTo(4));
@@ -116,7 +116,7 @@ public class DependencyContainerChildInitializationTests
                 return new Service(resource);
             });
         });
-        using var sibling = parent.CreateScope();
+        using var sibling = parent.CreateChild();
         var parentService = parent.Resolve<Service>();
         var siblingService = sibling.Resolve<Service>();
         var singleton = parent.Resolve<Resource>(singletonTag);
@@ -124,7 +124,7 @@ public class DependencyContainerChildInitializationTests
 
         var error = Assert.Throws<AggregateException>(() =>
         {
-            using var child = useActionOverload ? parent.CreateScope(_ => { }) : parent.CreateScope();
+            using var child = useActionOverload ? parent.CreateChild(_ => { }) : parent.CreateChild();
         });
 
         Assert.That(error!.InnerExceptions, Has.Count.EqualTo(cleanupFails ? 2 : 1));
@@ -140,7 +140,7 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(scopedResources[failedChild!].IsDisposed, Is.True);
         Assert.That(() => failedChild!.Contains<Service>(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => failedChild!.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => failedChild!.CreateChild(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedChild!.Dispose, Throws.Nothing);
         Assert.That(parent.Resolve<Service>(), Is.SameAs(parentService));
         Assert.That(sibling.Resolve<Service>(), Is.SameAs(siblingService));
@@ -150,7 +150,7 @@ public class DependencyContainerChildInitializationTests
 
         failInitialization = false;
 
-        using var retry = parent.CreateScope();
+        using var retry = parent.CreateChild();
 
         Assert.That(retry.Resolve<Service>().Resource, Is.SameAs(scopedResources[retry]));
         Assert.That(retry.Resolve<Service>(), Is.Not.SameAs(parentService));
@@ -176,7 +176,7 @@ public class DependencyContainerChildInitializationTests
                     return new Resource();
                 }, parentLifetime, tag: tag);
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             registrar.Register<Resource>(factory: () =>
                 {
@@ -188,7 +188,7 @@ public class DependencyContainerChildInitializationTests
 
         Assert.That(childCreations, Is.EqualTo(childLifetime == Lifetime.Transient ? 0 : 1));
 
-        using var grandchild = child.CreateScope();
+        using var grandchild = child.CreateChild();
 
         var expectedChildCreations = childLifetime switch
         {
@@ -217,7 +217,7 @@ public class DependencyContainerChildInitializationTests
             registrar.RegisterSingleton(factory: () => new Resource());
             registrar.RegisterScoped<Service>(factory: (container, ref _) => new Service(container.Resolve<Resource>()));
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             registrar.RegisterTransient(factory: () =>
             {
@@ -240,7 +240,7 @@ public class DependencyContainerChildInitializationTests
         Assert.That(child.Resolve<Service>().Resource, Is.SameAs(childResource));
         Assert.That(child.Resolve<Consumer>().Service, Is.SameAs(child.Resolve<Service>()));
 
-        using var grandchild = child.CreateScope();
+        using var grandchild = child.CreateChild();
 
         Assert.That(transientResources, Has.Count.EqualTo(2));
         Assert.That(grandchild.Resolve<Service>().Resource, Is.SameAs(transientResources[1]));
@@ -272,7 +272,7 @@ public class DependencyContainerChildInitializationTests
 
         failCreation = true;
 
-        var exception = Assert.Throws<AggregateException>(() => root.CreateScope());
+        var exception = Assert.Throws<AggregateException>(() => root.CreateChild());
 
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
         Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
@@ -282,7 +282,7 @@ public class DependencyContainerChildInitializationTests
 
         failCreation = false;
 
-        using var child = root.CreateScope();
+        using var child = root.CreateChild();
 
         Assert.That(child.Resolve<string>(tag), Is.EqualTo("Hello"));
     }

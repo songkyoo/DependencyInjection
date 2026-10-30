@@ -56,7 +56,7 @@ public class DependencyContainerFactoryTests
 
         Assert.That(container.Contains<Foo>(), Is.False);
 
-        using var child = container.CreateScope(registrar => registrar.RegisterScoped<Foo>(factory: () => new Foo()));
+        using var child = container.CreateChild(registrar => registrar.RegisterScoped<Foo>(factory: () => new Foo()));
 
         Assert.That(child.Resolve<Foo>(), Is.Not.Null);
         Assert.That(container.Contains<Foo>(), Is.False);

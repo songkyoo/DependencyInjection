@@ -19,11 +19,11 @@ public class DependencyResolverSelfReferenceTests
     public void DefaultTagAndLookupExtensions_ShouldReturnEachRequestingResolver()
     {
         using var root = DependencyContainerFactory.Create(_ => { });
-        using var child = root.CreateScope();
-        using var grandchild = child.CreateScope(_ => { });
-        using var rootScope = root.CreateTransientScope();
-        using var childScope = child.CreateTransientScope();
-        using var siblingScope = child.CreateTransientScope();
+        using var child = root.CreateChild();
+        using var grandchild = child.CreateChild(_ => { });
+        using var rootScope = root.CreateLocalScope();
+        using var childScope = child.CreateLocalScope();
+        using var siblingScope = child.CreateLocalScope();
         object? tag = null;
         var fallbackCalls = 0;
         Func<IDependencyResolver> fallback = () =>
@@ -77,7 +77,7 @@ public class DependencyResolverSelfReferenceTests
         var error = Assert.Throws<ArgumentException>(() =>
         {
             using var container = registerInChild
-                ? root.CreateScope(RegisterResolver)
+                ? root.CreateChild(RegisterResolver)
                 : DependencyContainerFactory.Create(RegisterResolver);
         });
 
@@ -114,11 +114,11 @@ public class DependencyResolverSelfReferenceTests
         {
             registrar.Register<IDependencyResolver>(() => parentResolver, lifetime, cleanup: _ => cleanupCalls++, tag: tag);
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             registrar.Register<IDependencyResolver>(() => childResolver, lifetime, cleanup: _ => cleanupCalls++, tag: tag);
         });
-        using var scope = child.CreateTransientScope();
+        using var scope = child.CreateLocalScope();
 
         Assert.That(root.Resolve<IDependencyResolver>(tag), Is.SameAs(parentResolver));
         Assert.That(child.Resolve<IDependencyResolver>(tag), Is.SameAs(childResolver));
@@ -158,7 +158,7 @@ public class DependencyResolverSelfReferenceTests
                 registrar.Register(CreateConsumer, lifetime);
             }
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             if (registerInChild)
             {
@@ -174,7 +174,7 @@ public class DependencyResolverSelfReferenceTests
 
         Assert.That(factoryCalls, Is.EqualTo(expectedInitializationCalls));
 
-        using var scope = child.CreateTransientScope();
+        using var scope = child.CreateLocalScope();
         var direct = child.Resolve<Consumer>();
         var fromScope = scope.Resolve<Consumer>();
         var owner = !registerInChild && lifetime == Lifetime.Singleton ? root : child;
@@ -209,9 +209,9 @@ public class DependencyResolverSelfReferenceTests
                 return new Dependency(resolver.Resolve<IDependencyResolver>());
             });
         });
-        using var child = root.CreateScope();
-        using var firstScope = child.CreateTransientScope();
-        using var secondScope = child.CreateTransientScope();
+        using var child = root.CreateChild();
+        using var firstScope = child.CreateLocalScope();
+        using var secondScope = child.CreateLocalScope();
         var firstResolver = firstScope.Resolve<Dependency>().Resolver;
         var secondResolver = secondScope.Resolve<Dependency>().Resolver;
         var first = firstResolver.Resolve<Resource>();
@@ -239,8 +239,8 @@ public class DependencyResolverSelfReferenceTests
     public void DisposedResolvers_ShouldRejectSelfLookupAndFallbacks([Values] bool disposeContainerFirst)
     {
         using var root = DependencyContainerFactory.Create(_ => { });
-        using var child = root.CreateScope();
-        using var scope = child.CreateTransientScope();
+        using var child = root.CreateChild();
+        using var scope = child.CreateLocalScope();
         var capturedResolver = scope.Resolve<IDependencyResolver>();
         object? tag = null;
         var fallbackCalls = 0;
@@ -274,7 +274,7 @@ public class DependencyResolverSelfReferenceTests
             );
         }
 
-        using var replacement = (disposeContainerFirst ? root : child).CreateTransientScope();
+        using var replacement = (disposeContainerFirst ? root : child).CreateLocalScope();
 
         Assert.That(replacement.Resolve<IDependencyResolver>(), Is.SameAs(replacement));
         Assert.That(() => capturedResolver.Resolve<IDependencyResolver>(), Throws.TypeOf<ObjectDisposedException>());

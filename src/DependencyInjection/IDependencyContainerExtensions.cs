@@ -2,11 +2,11 @@ namespace Macaron.DependencyInjection;
 
 public static class IDependencyContainerExtensions
 {
-    public static IDependencyContainer CreateScope(
+    public static IDependencyContainer CreateChild(
         this IDependencyContainer dependencyContainer,
         Action<IDependencyRegistrar> configure
     )
     {
-        return dependencyContainer.CreateScope(new ActionDependencyInstaller(configure));
+        return dependencyContainer.CreateChild(new ActionDependencyInstaller(configure));
     }
 }

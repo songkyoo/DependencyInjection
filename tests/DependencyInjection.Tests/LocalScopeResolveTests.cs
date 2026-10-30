@@ -2,7 +2,7 @@
 // ReSharper disable AccessToDisposedClosure
 namespace Macaron.DependencyInjection.Tests;
 
-public class TransientScopeResolveTests
+public class LocalScopeResolveTests
 {
     private sealed class Resource : IDisposable
     {
@@ -26,11 +26,11 @@ public class TransientScopeResolveTests
             registrar.Register(CreateResource, Lifetime.Scoped, tag: scopedTag);
             registrar.Register(CreateResource, Lifetime.Singleton, tag: singletonTag);
         });
-        using var child = root.CreateScope();
+        using var child = root.CreateChild();
         var container = useChild ? child : root;
         var expectedScoped = container.Resolve<Resource>(scopedTag);
         var expectedSingleton = root.Resolve<Resource>(singletonTag);
-        var scope = container.CreateTransientScope();
+        var scope = container.CreateLocalScope();
 
         Assert.That(creations, Is.EqualTo(3));
         Assert.That(scope.Contains<Resource>(scopedTag), Is.True);
@@ -67,9 +67,9 @@ public class TransientScopeResolveTests
             registrar.Register<Service>(factory: (resolver, ref _) =>
                 new Service(resolver.Resolve<Resource>(), resolver.Resolve<Resource>()), lifetime);
         });
-        using var child = root.CreateScope();
+        using var child = root.CreateChild();
         var container = useChild ? child : root;
-        var scope = container.CreateTransientScope();
+        var scope = container.CreateLocalScope();
         var service = scope.Resolve<Service>();
 
         Assert.That(service, Is.SameAs(container.Resolve<Service>()));
@@ -139,10 +139,10 @@ public class TransientScopeResolveTests
                 }
             );
         });
-        using var child = root.CreateScope();
+        using var child = root.CreateChild();
         var container = useChild ? child : root;
-        var firstScope = container.CreateTransientScope();
-        var secondScope = container.CreateTransientScope();
+        var firstScope = container.CreateLocalScope();
+        var secondScope = container.CreateLocalScope();
         var first = firstScope.Resolve<Service>(serviceTag);
         var second = secondScope.Resolve<Service>(serviceTag);
         var direct = container.Resolve<Service>(serviceTag);
@@ -182,7 +182,7 @@ public class TransientScopeResolveTests
         {
             registrar.RegisterTransient<Resource>(factory: () => new Resource());
         });
-        var scope = container.CreateTransientScope();
+        var scope = container.CreateLocalScope();
         IDependencyResolver? capturedResolver = null;
         Func<IDependencyResolver, FallbackService> factory = resolver =>
         {

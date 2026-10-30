@@ -169,7 +169,7 @@ public class CreationLifetimeTests
                         registrar.RegisterScoped<Scoped>();
                         registrar.RegisterTransient<Nested>();
                     });
-                    using var child = root.CreateScope();
+                    using var child = root.CreateChild();
                     IDependencyResolver resolver = child;
                     var service = resolver.For<Service>().Create();
                     var parentScoped = root.Resolve<Scoped>();
@@ -191,7 +191,7 @@ public class CreationLifetimeTests
     }
 
     [Test]
-    public void TransientScopeCreate_ShouldShareContainerCachesAndCleanOnlyResolvedTransients()
+    public void LocalScopeCreate_ShouldShareContainerCachesAndCleanOnlyResolvedTransients()
     {
         var compilation = CompileConsumer(
             """
@@ -208,8 +208,8 @@ public class CreationLifetimeTests
                         registrar.RegisterScoped<Scoped>();
                         registrar.RegisterTransient<Nested>();
                     });
-                    using var child = root.CreateScope();
-                    using var scope = child.CreateTransientScope();
+                    using var child = root.CreateChild();
+                    using var scope = child.CreateLocalScope();
                     IDependencyResolver resolver = scope;
                     var service = resolver.For<Service>().Create();
                     var correctDependencies = ReferenceEquals(service.Shared, root.Resolve<Shared>())
@@ -333,7 +333,7 @@ public class CreationLifetimeTests
                         });
                         registrar.RegisterSingleton(instance: "last");
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
 
                     try
                     {
@@ -415,7 +415,7 @@ public class CreationLifetimeTests
                             return resource;
                         });
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
 
                     try
                     {

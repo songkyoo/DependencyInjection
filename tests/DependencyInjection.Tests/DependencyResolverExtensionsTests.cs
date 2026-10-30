@@ -4,7 +4,7 @@ namespace Macaron.DependencyInjection.Tests;
 
 [TestFixture(false)]
 [TestFixture(true)]
-public class DependencyResolverExtensionsTests(bool useTransientScope)
+public class DependencyResolverExtensionsTests(bool useLocalScope)
 {
     private sealed class Service;
 
@@ -17,8 +17,8 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
             registrar.RegisterSingleton<Service>(factory: () => new Service());
             registrar.RegisterSingleton<Service>(factory: () => new Service(), tag: "service");
         });
-        using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = useTransientScope ? scope : container;
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
         var expected = container.Resolve<Service>(tag);
 
         Assert.That(resolver.Contains<Service>(tag), Is.True);
@@ -43,8 +43,8 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
                 registrar.RegisterSingleton<Service>(factory: () => new Service());
             }
         });
-        using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = useTransientScope ? scope : container;
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
         var fallback = new Service();
         var factoryCalls = 0;
 
@@ -99,8 +99,8 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
                 factoryCalls++;
                 return null!;
             }, tag));
-        using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = useTransientScope ? scope : container;
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
 
         var error = Assert.Throws<InvalidOperationException>(() => resolver.ResolveOrNull<Service>(tag));
 
@@ -130,8 +130,8 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
             registrar.RegisterSingleton(instance: 7);
             registrar.RegisterSingleton(instance: 42, tag: "answer");
         });
-        using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = useTransientScope ? scope : container;
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
 
         Assert.That(resolver.ResolveOrNull<int>(), Is.EqualTo(7));
         Assert.That(resolver.ResolveOrNull<int>("answer"), Is.EqualTo(42));
@@ -143,10 +143,10 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
     public void DisposedResolver_ShouldRejectExtensionsBeforeCallingFallback()
     {
         using var container = DependencyContainerFactory.Create(_ => { });
-        using var scope = container.CreateTransientScope();
+        using var scope = container.CreateLocalScope();
         var fallbackCalls = 0;
 
-        if (useTransientScope)
+        if (useLocalScope)
         {
             scope.Dispose();
         }
@@ -155,7 +155,7 @@ public class DependencyResolverExtensionsTests(bool useTransientScope)
             container.Dispose();
         }
 
-        IDependencyResolver[] disposedResolvers = useTransientScope ? [scope] : [container, scope];
+        IDependencyResolver[] disposedResolvers = useLocalScope ? [scope] : [container, scope];
 
         foreach (var disposedResolver in disposedResolvers)
         {

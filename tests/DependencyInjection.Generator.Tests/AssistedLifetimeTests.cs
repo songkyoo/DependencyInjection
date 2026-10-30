@@ -44,7 +44,7 @@ public class AssistedLifetimeTests
                     {
                         registrar.RegisterTransient<Resource>(() => new Resource());
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
                     var service = scope.For<Service>().Create(supplied);
                     scope.Dispose();
                     container.Dispose();
@@ -75,7 +75,7 @@ public class AssistedLifetimeTests
     }
 
     [Test]
-    public void RootChildAndTransientScope_ShouldUseSelectedResolverWithoutPropagatingSuppliedArguments()
+    public void RootChildAndLocalScope_ShouldUseSelectedResolverWithoutPropagatingSuppliedArguments()
     {
         var (compilation, _) = Generate(
             """
@@ -110,8 +110,8 @@ public class AssistedLifetimeTests
                         registrar.RegisterSingleton(instance: "root", tag: "label");
                         registrar.RegisterTransient<Nested>();
                     });
-                    using var child = root.CreateScope(registrar => registrar.RegisterSingleton(instance: "child", tag: "label"));
-                    using var scope = child.CreateTransientScope();
+                    using var child = root.CreateChild(registrar => registrar.RegisterSingleton(instance: "child", tag: "label"));
+                    using var scope = child.CreateLocalScope();
                     IDependencyResolver rootResolver = root;
                     IDependencyResolver childResolver = child;
                     IDependencyResolver scopeResolver = scope;
@@ -156,7 +156,7 @@ public class AssistedLifetimeTests
                     {
                         registrar.RegisterTransient<Resource>(() => resolved);
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
 
                     try { scope.For<Service>().Create(supplied); throw new Exception("Creation should fail."); }
                     catch (Exception error) when (ReferenceEquals(error, Failure)) { }
@@ -205,7 +205,7 @@ public class AssistedLifetimeTests
                     {
                         registrar.RegisterTransient<Resource>(() => resolved);
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
 
                     try { scope.For<Service>().Create(supplied); throw new Exception("Resolution should fail."); }
                     catch (InvalidOperationException) { }

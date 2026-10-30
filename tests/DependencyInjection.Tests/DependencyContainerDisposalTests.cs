@@ -22,7 +22,7 @@ public class DependencyContainerDisposalTests
         {
             registrar.Register<Foo>((_, ref _) => new Foo(onDispose: () => disposedInRoot = true), Lifetime.Scoped, tag: tag);
         });
-        var child = root.CreateScope(registrar =>
+        var child = root.CreateChild(registrar =>
         {
             registrar.Register<Foo>((_, ref _) => new Foo(onDispose: () => disposedInChild = true), Lifetime.Scoped, tag: tag);
         });
@@ -54,10 +54,10 @@ public class DependencyContainerDisposalTests
 
         Assert.That(() => container.Resolve<Foo>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.Contains<Foo>(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => container.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => container.CreateScope(_ => configurationCalls++), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => container.CreateScope(installer), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(container.CreateTransientScope, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateChild(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateChild(_ => configurationCalls++), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => container.CreateChild(installer), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateLocalScope, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(configurationCalls, Is.Zero);
     }
 }

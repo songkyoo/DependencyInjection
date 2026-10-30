@@ -109,7 +109,7 @@ public class MethodInjectionLifetimeTests
                         registrar.RegisterScoped<Scoped>();
                         registrar.RegisterSingleton<Shared>();
                     });
-                    using var child = root.CreateScope();
+                    using var child = root.CreateChild();
                     var parentScoped = root.Resolve<Scoped>();
                     var target = new Service();
 
@@ -133,7 +133,7 @@ public class MethodInjectionLifetimeTests
     }
 
     [Test]
-    public void TransientScopeInjection_ShouldOwnTransientsAndShareContainerCaches()
+    public void LocalScopeInjection_ShouldOwnTransientsAndShareContainerCaches()
     {
         var compilation = CompileConsumer(
             """
@@ -149,8 +149,8 @@ public class MethodInjectionLifetimeTests
                         registrar.RegisterScoped<Scoped>();
                         registrar.RegisterSingleton<Shared>();
                     });
-                    using var child = root.CreateScope();
-                    using var scope = child.CreateTransientScope();
+                    using var child = root.CreateChild();
+                    using var scope = child.CreateLocalScope();
                     var target = new Service();
 
                     scope.For<Service>().Inject(target, new Resource());
@@ -194,7 +194,7 @@ public class MethodInjectionLifetimeTests
                     {
                         registrar.RegisterTransient<Resource>(() => resource);
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
                     var target = new Failing();
 
                     try { scope.For<Failing>().Inject(target); }
@@ -245,7 +245,7 @@ public class MethodInjectionLifetimeTests
                     {
                         registrar.RegisterTransient<Resource>(() => resolved);
                     });
-                    using var scope = container.CreateTransientScope();
+                    using var scope = container.CreateLocalScope();
                     var target = new Failing();
 
                     try { scope.For<Failing>().Inject(target, supplied); }

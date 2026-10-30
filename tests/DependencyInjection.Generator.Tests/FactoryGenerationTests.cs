@@ -65,22 +65,22 @@ public class FactoryGenerationTests
                         registrar.RegisterSingleton<IDependency>(() => new Dependency(), tag: "other");
                         registrar.{{registrationMethod}}<{{typeArguments}}>({{requiredArguments}} tag: "service", cleanup: _ => cleanups++);
                     });
-                    using var child = container.CreateScope();
-                    using var transientScope = container.CreateTransientScope();
+                    using var child = container.CreateChild();
+                    using var localScope = container.CreateLocalScope();
                     var first = container.Resolve<{{serviceType}}>("service");
                     var second = container.Resolve<{{serviceType}}>("service");
                     var inherited = child.Resolve<{{serviceType}}>("service");
-                    var scoped = transientScope.Resolve<{{serviceType}}>("service");
+                    var scoped = localScope.Resolve<{{serviceType}}>("service");
                     var injected = object.ReferenceEquals(first.Dependency, container.Resolve<IDependency>());
                     var rootReuse = object.ReferenceEquals(first, second) == {{expectedRootReuse}};
                     var childReuse = object.ReferenceEquals(first, inherited) == {{expectedChildReuse}};
-                    var transientScopeReuse = object.ReferenceEquals(first, scoped) == {{expectedRootReuse}};
+                    var localScopeReuse = object.ReferenceEquals(first, scoped) == {{expectedRootReuse}};
 
-                    transientScope.Dispose();
+                    localScope.Dispose();
                     child.Dispose();
                     container.Dispose();
 
-                    return injected && rootReuse && childReuse && transientScopeReuse && cleanups == {{expectedCleanups}};
+                    return injected && rootReuse && childReuse && localScopeReuse && cleanups == {{expectedCleanups}};
                 }
             }
             """

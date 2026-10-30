@@ -8,12 +8,12 @@ internal sealed class DependencyContainer(
 ) : IDependencyContainer
 {
     #region Types
-    private struct TransientScopeSlot
+    private struct LocalScopeSlot
     {
-        internal TransientScope? Scope;
+        internal LocalScope? Scope;
         internal List<CleanupEntry>? Cleanups;
 
-        internal void Deconstruct(out TransientScope? scope, out List<CleanupEntry>? cleanups)
+        internal void Deconstruct(out LocalScope? scope, out List<CleanupEntry>? cleanups)
         {
             scope = Scope;
             cleanups = Cleanups;
@@ -78,11 +78,11 @@ internal sealed class DependencyContainer(
     private readonly Stack<RegistrationKey> _resolutionStack = new();
     private int _creationDepth;
     private bool _isDisposed;
-    private bool _isCleaningTransientScope;
+    private bool _isCleaningLocalScope;
 
-    private TransientScopeSlot[] _transientScopeSlots = [];
-    private int _transientScopeSlotCount;
-    private int _freeTransientScopeSlotCount;
+    private LocalScopeSlot[] _localScopeSlots = [];
+    private int _localScopeSlotCount;
+    private int _freeLocalScopeSlotCount;
 
     private DependencyContainer? _parent = parent;
     private ImmutableDictionary<RegistrationKey, TypeRegistration> _registry = registry;
@@ -110,18 +110,18 @@ internal sealed class DependencyContainer(
             || (_parent as IDependencyResolver)?.Contains<T>(tag) is true;
     }
 
-    public IDependencyContainer CreateScope()
+    public IDependencyContainer CreateChild()
     {
         ThrowIfDisposed();
-        ThrowIfLifecycleChangeBlocked(nameof(CreateScope));
+        ThrowIfLifecycleChangeBlocked(nameof(CreateChild));
 
         return Create(parent: this, registry: EmptyRegistry);
     }
 
-    public IDependencyContainer CreateScope(IDependencyInstaller installer)
+    public IDependencyContainer CreateChild(IDependencyInstaller installer)
     {
         ThrowIfDisposed();
-        ThrowIfLifecycleChangeBlocked(nameof(CreateScope));
+        ThrowIfLifecycleChangeBlocked(nameof(CreateChild));
 
         var builder = new DependencyContainerBuilder();
 
@@ -130,17 +130,17 @@ internal sealed class DependencyContainer(
         return builder.Build(parent: this);
     }
 
-    public TransientScope CreateTransientScope()
+    public LocalScope CreateLocalScope()
     {
         ThrowIfDisposed();
-        ThrowIfLifecycleChangeBlocked(nameof(CreateTransientScope));
+        ThrowIfLifecycleChangeBlocked(nameof(CreateLocalScope));
 
-        var index = AllocateTransientScopeSlot();
-        var transientScope = new TransientScope(this, index);
+        var index = AllocateLocalScopeSlot();
+        var localScope = new LocalScope(this, index);
 
-        _transientScopeSlots[index].Scope = transientScope;
+        _localScopeSlots[index].Scope = localScope;
 
-        return transientScope;
+        return localScope;
     }
 
     public void Dispose()
@@ -159,16 +159,16 @@ internal sealed class DependencyContainer(
 
         List<Exception>? exceptions = null;
 
-        for (var i = _transientScopeSlotCount - 1; i >= 0; i--)
+        for (var i = _localScopeSlotCount - 1; i >= 0; i--)
         {
-            if (_transientScopeSlots[i].Scope is null)
+            if (_localScopeSlots[i].Scope is null)
             {
                 continue;
             }
 
             try
             {
-                DisposeTransientScopeSlot(i);
+                DisposeLocalScopeSlot(i);
             }
             catch (Exception exception)
             {
@@ -177,9 +177,9 @@ internal sealed class DependencyContainer(
             }
         }
 
-        _transientScopeSlots = [];
-        _transientScopeSlotCount = 0;
-        _freeTransientScopeSlotCount = 0;
+        _localScopeSlots = [];
+        _localScopeSlotCount = 0;
+        _freeLocalScopeSlotCount = 0;
 
         CleanupEntries(_cleanups, ref exceptions);
         _instances.Clear();
@@ -232,26 +232,26 @@ internal sealed class DependencyContainer(
         }
     }
 
-    internal T Resolve<T>(object? tag, TransientScope transientScope)
+    internal T Resolve<T>(object? tag, LocalScope localScope)
     {
-        ThrowIfTransientScopeInvalid(transientScope);
+        ThrowIfLocalScopeInvalid(localScope);
 
-        return (T)ResolveRecursively(new RegistrationKey(typeof(T), tag), _instances, dependencyContainer: this, transientScope);
+        return (T)ResolveRecursively(new RegistrationKey(typeof(T), tag), _instances, dependencyContainer: this, localScope);
     }
 
-    internal bool Contains<T>(object? tag, TransientScope transientScope)
+    internal bool Contains<T>(object? tag, LocalScope localScope)
     {
-        ThrowIfTransientScopeInvalid(transientScope);
+        ThrowIfLocalScopeInvalid(localScope);
 
         return Contains<T>(tag);
     }
 
-    internal void DisposeTransientScope(TransientScope transientScope)
+    internal void DisposeLocalScope(LocalScope localScope)
     {
         ThrowIfLifecycleChangeBlocked(nameof(Dispose));
-        ThrowIfTransientScopeInvalid(transientScope);
+        ThrowIfLocalScopeInvalid(localScope);
 
-        DisposeTransientScopeSlot(transientScope.Index);
+        DisposeLocalScopeSlot(localScope.Index);
     }
 
     private object ResolveRecursively(
@@ -413,65 +413,65 @@ internal sealed class DependencyContainer(
         #endregion
     }
 
-    private int AllocateTransientScopeSlot()
+    private int AllocateLocalScopeSlot()
     {
-        if (_freeTransientScopeSlotCount > 0)
+        if (_freeLocalScopeSlotCount > 0)
         {
-            for (var i = 0; i < _transientScopeSlotCount; i++)
+            for (var i = 0; i < _localScopeSlotCount; i++)
             {
-                if (_transientScopeSlots[i].Scope is null)
+                if (_localScopeSlots[i].Scope is null)
                 {
-                    _freeTransientScopeSlotCount -= 1;
+                    _freeLocalScopeSlotCount -= 1;
 
                     return i;
                 }
             }
         }
 
-        if (_transientScopeSlotCount == _transientScopeSlots.Length)
+        if (_localScopeSlotCount == _localScopeSlots.Length)
         {
-            var capacity = _transientScopeSlots.Length == 0 ? 4 : _transientScopeSlots.Length * 2;
+            var capacity = _localScopeSlots.Length == 0 ? 4 : _localScopeSlots.Length * 2;
 
-            Array.Resize(ref _transientScopeSlots, capacity);
+            Array.Resize(ref _localScopeSlots, capacity);
         }
 
-        var newIndex = _transientScopeSlotCount;
+        var newIndex = _localScopeSlotCount;
 
-        _transientScopeSlotCount += 1;
+        _localScopeSlotCount += 1;
 
         return newIndex;
     }
 
     private List<CleanupEntry> GetTransientCleanups(IDependencyResolver resolver)
     {
-        if (resolver is not TransientScope transientScope)
+        if (resolver is not LocalScope localScope)
         {
             return _cleanups;
         }
 
-        ref var slot = ref GetTransientScopeSlot(transientScope);
+        ref var slot = ref GetLocalScopeSlot(localScope);
 
         return slot.Cleanups ??= [];
     }
 
-    private ref TransientScopeSlot GetTransientScopeSlot(TransientScope transientScope)
+    private ref LocalScopeSlot GetLocalScopeSlot(LocalScope localScope)
     {
-        ThrowIfTransientScopeInvalid(transientScope);
+        ThrowIfLocalScopeInvalid(localScope);
 
-        return ref _transientScopeSlots[transientScope.Index];
+        return ref _localScopeSlots[localScope.Index];
     }
 
-    private void DisposeTransientScopeSlot(int index)
+    private void DisposeLocalScopeSlot(int index)
     {
-        var (scope, cleanups) = _transientScopeSlots[index];
+        var (scope, cleanups) = _localScopeSlots[index];
 
         // 정리 콜백 전에 슬롯을 비우고 범위의 컨테이너 참조를 끊어 이전 참조를 무효화한다.
-        _transientScopeSlots[index] = default;
-        _freeTransientScopeSlotCount += 1;
+        _localScopeSlots[index] = default;
+        _freeLocalScopeSlotCount += 1;
 
         scope!.Invalidate();
 
-        _isCleaningTransientScope = true;
+        _isCleaningLocalScope = true;
 
         List<Exception>? exceptions = null;
 
@@ -484,7 +484,7 @@ internal sealed class DependencyContainer(
         }
         finally
         {
-            _isCleaningTransientScope = false;
+            _isCleaningLocalScope = false;
         }
 
         if (exceptions is not null)
@@ -508,24 +508,24 @@ internal sealed class DependencyContainer(
             throw new InvalidOperationException($"Cannot call {operation} while a service is being created.");
         }
 
-        if (_isCleaningTransientScope)
+        if (_isCleaningLocalScope)
         {
-            throw new InvalidOperationException($"Cannot call {operation} while a TransientScope is being disposed.");
+            throw new InvalidOperationException($"Cannot call {operation} while a LocalScope is being disposed.");
         }
     }
 
-    private void ThrowIfTransientScopeInvalid(TransientScope transientScope)
+    private void ThrowIfLocalScopeInvalid(LocalScope localScope)
     {
         ThrowIfDisposed();
 
-        var index = transientScope.Index;
+        var index = localScope.Index;
 
         // 슬롯 인덱스는 재사용되므로 현재 슬롯을 소유한 범위 객체의 참조까지 확인한다.
-        if ((uint)index >= (uint)_transientScopeSlotCount
-            || !ReferenceEquals(_transientScopeSlots[index].Scope, transientScope)
+        if ((uint)index >= (uint)_localScopeSlotCount
+            || !ReferenceEquals(_localScopeSlots[index].Scope, localScope)
            )
         {
-            throw new ObjectDisposedException(nameof(TransientScope));
+            throw new ObjectDisposedException(nameof(LocalScope));
         }
     }
     #endregion

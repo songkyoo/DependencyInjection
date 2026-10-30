@@ -43,8 +43,8 @@ public class DependencyInstallerTests
         using var parent = DependencyContainerFactory.Create(_ => { });
         using var container = (createChild, useActionOverload) switch
         {
-            (true, true) => parent.CreateScope(Configure),
-            (true, false) => parent.CreateScope(new Installer(Configure)),
+            (true, true) => parent.CreateChild(Configure),
+            (true, false) => parent.CreateChild(new Installer(Configure)),
             (false, true) => DependencyContainerFactory.Create(Configure),
             (false, false) => DependencyContainerFactory.Create(new Installer(Configure))
         };
@@ -83,8 +83,8 @@ public class DependencyInstallerTests
         {
             using var container = (createChild, useActionOverload) switch
             {
-                (true, true) => parent.CreateScope(Configure),
-                (true, false) => parent.CreateScope(new Installer(Configure)),
+                (true, true) => parent.CreateChild(Configure),
+                (true, false) => parent.CreateChild(new Installer(Configure)),
                 (false, true) => DependencyContainerFactory.Create(Configure),
                 (false, false) => DependencyContainerFactory.Create(new Installer(Configure))
             };
@@ -124,8 +124,8 @@ public class DependencyInstallerTests
             registrar.Register<Resource>(factory: () => new Resource(), lifetime, tag: tag);
         });
         using var parent = DependencyContainerFactory.Create(_ => { });
-        var first = createChild ? parent.CreateScope(installer) : DependencyContainerFactory.Create(installer);
-        var second = createChild ? parent.CreateScope(installer) : DependencyContainerFactory.Create(installer);
+        var first = createChild ? parent.CreateChild(installer) : DependencyContainerFactory.Create(installer);
+        var second = createChild ? parent.CreateChild(installer) : DependencyContainerFactory.Create(installer);
         var firstResource = first.Resolve<Resource>(tag);
         var secondResource = second.Resolve<Resource>(tag);
 
@@ -166,7 +166,7 @@ public class DependencyInstallerTests
         var error = Assert.Throws<AggregateException>(() =>
         {
             using var container = createChild
-                ? parent.CreateScope(installer)
+                ? parent.CreateChild(installer)
                 : DependencyContainerFactory.Create(installer);
         });
 
@@ -185,7 +185,7 @@ public class DependencyInstallerTests
             registrar.RegisterSingleton<Resource>(factory: () => new Resource());
         }));
         var resource = parent.Resolve<Resource>();
-        var child = useActionOverload ? parent.CreateScope(_ => { }) : parent.CreateScope();
+        var child = useActionOverload ? parent.CreateChild(_ => { }) : parent.CreateChild();
 
         Assert.That(child.Resolve<Resource>(), Is.SameAs(resource));
         Assert.That(child.Contains<Service>(), Is.False);

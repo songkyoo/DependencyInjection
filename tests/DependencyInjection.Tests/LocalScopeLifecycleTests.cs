@@ -1,7 +1,7 @@
 // ReSharper disable AccessToModifiedClosure
 namespace Macaron.DependencyInjection.Tests;
 
-public class TransientScopeLifecycleTests
+public class LocalScopeLifecycleTests
 {
     private sealed class Resource;
 
@@ -15,8 +15,8 @@ public class TransientScopeLifecycleTests
         var cleanupCalls = 0;
         var installerCalls = 0;
         IDependencyContainer? container = null;
-        TransientScope active = null!;
-        TransientScope sibling = null!;
+        LocalScope active = null!;
+        LocalScope sibling = null!;
 
         container = DependencyContainerFactory.Create(registrar =>
         {
@@ -66,8 +66,8 @@ public class TransientScopeLifecycleTests
 
         using (container)
         {
-            active = container.CreateTransientScope();
-            sibling = container.CreateTransientScope();
+            active = container.CreateLocalScope();
+            sibling = container.CreateLocalScope();
 
             var exception = Assert.Throws<ArgumentException>(() => active.Resolve<Service>(null));
 
@@ -84,8 +84,8 @@ public class TransientScopeLifecycleTests
             active.Dispose();
             sibling.Dispose();
 
-            using var replacement = container.CreateTransientScope();
-            using var child = container.CreateScope(_ => installerCalls++);
+            using var replacement = container.CreateLocalScope();
+            using var child = container.CreateChild(_ => installerCalls++);
 
             Assert.That(installerCalls, Is.EqualTo(1));
         }
@@ -93,9 +93,9 @@ public class TransientScopeLifecycleTests
         #region Local Functions
         void AssertChangesRejected()
         {
-            Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
-            Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-            Assert.That(() => container.CreateScope(_ => installerCalls++), Throws.InvalidOperationException);
+            Assert.That(container!.CreateLocalScope, Throws.InvalidOperationException);
+            Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+            Assert.That(() => container.CreateChild(_ => installerCalls++), Throws.InvalidOperationException);
             Assert.That(container.Dispose, Throws.InvalidOperationException);
             Assert.That(active.Dispose, Throws.InvalidOperationException);
             Assert.That(sibling.Dispose, Throws.InvalidOperationException);
@@ -107,9 +107,9 @@ public class TransientScopeLifecycleTests
     [Test]
     public void ScopeCleanup_ShouldRejectOtherLifecycleChanges_AndAllowRepeatedOwnDisposal([Values] bool cleanupFails)
     {
-        TransientScope active = null!;
-        TransientScope sibling = null!;
-        TransientScope ended = null!;
+        LocalScope active = null!;
+        LocalScope sibling = null!;
+        LocalScope ended = null!;
         IDependencyContainer? container = null;
         var cleanupCalls = 0;
         var installerCalls = 0;
@@ -125,9 +125,9 @@ public class TransientScopeLifecycleTests
                 Assert.That(active.Dispose, Throws.Nothing);
                 Assert.That(ended.Dispose, Throws.Nothing);
                 Assert.That(() => active.Contains<object>(null), Throws.TypeOf<ObjectDisposedException>());
-                Assert.That(container!.CreateTransientScope, Throws.InvalidOperationException);
-                Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-                Assert.That(() => container.CreateScope(_ => installerCalls++), Throws.InvalidOperationException);
+                Assert.That(container!.CreateLocalScope, Throws.InvalidOperationException);
+                Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                Assert.That(() => container.CreateChild(_ => installerCalls++), Throws.InvalidOperationException);
                 Assert.That(container.Dispose, Throws.InvalidOperationException);
                 Assert.That(sibling.Dispose, Throws.InvalidOperationException);
                 Assert.That(sibling.Resolve<Resource>(null), Is.SameAs(container.Resolve<Resource>()));
@@ -141,9 +141,9 @@ public class TransientScopeLifecycleTests
 
         using (container)
         {
-            active = container.CreateTransientScope();
-            sibling = container.CreateTransientScope();
-            ended = container.CreateTransientScope();
+            active = container.CreateLocalScope();
+            sibling = container.CreateLocalScope();
+            ended = container.CreateLocalScope();
             ended.Dispose();
             active.Resolve<object>(null);
 
@@ -164,8 +164,8 @@ public class TransientScopeLifecycleTests
 
             sibling.Dispose();
 
-            using var replacement = container.CreateTransientScope();
-            using var child = container.CreateScope(_ => installerCalls++);
+            using var replacement = container.CreateLocalScope();
+            using var child = container.CreateChild(_ => installerCalls++);
 
             Assert.That(installerCalls, Is.EqualTo(1));
         }

@@ -48,8 +48,8 @@ public class OptionalDependencyFailureTests
                         registrar.RegisterTransient<Broken>(() => throw failure);
                         registrar.RegisterTransient<Service>();
                     });
-                    using var child = root.CreateScope();
-                    using var scope = child.CreateTransientScope();
+                    using var child = root.CreateChild();
+                    using var scope = child.CreateLocalScope();
                     IDependencyResolver resolver = {{resolverName}};
 
                     try { resolver.Resolve<Service>(); return false; }

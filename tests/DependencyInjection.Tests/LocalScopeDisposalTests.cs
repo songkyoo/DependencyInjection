@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace Macaron.DependencyInjection.Tests;
 
-public class TransientScopeDisposalTests
+public class LocalScopeDisposalTests
 {
     private sealed class Resource : IDisposable
     {
@@ -28,7 +28,7 @@ public class TransientScopeDisposalTests
                 return new Resource();
             });
         });
-        var first = container.CreateTransientScope();
+        var first = container.CreateLocalScope();
         var alias = first;
         var firstResource = first.Resolve<Resource>(null);
         var oldResolver = capturedResolver!;
@@ -37,7 +37,7 @@ public class TransientScopeDisposalTests
 
         first.Dispose();
 
-        using var second = container.CreateTransientScope();
+        using var second = container.CreateLocalScope();
         var secondResource = second.Resolve<Resource>(null);
 
         Assert.That(alias.Dispose, Throws.Nothing);
@@ -57,12 +57,12 @@ public class TransientScopeDisposalTests
         {
             registrar.RegisterTransient<Resource>(factory: () => new Resource());
         });
-        var scopes = new List<TransientScope>();
+        var scopes = new List<LocalScope>();
         var resources = new List<Resource>();
 
         for (var i = 0; i < 12; i++)
         {
-            var scope = container.CreateTransientScope();
+            var scope = container.CreateLocalScope();
 
             scopes.Add(scope);
             resources.Add(scope.Resolve<Resource>(null));
@@ -75,7 +75,7 @@ public class TransientScopeDisposalTests
 
         for (var i = 0; i < 6; i++)
         {
-            var scope = container.CreateTransientScope();
+            var scope = container.CreateLocalScope();
 
             scopes.Add(scope);
             resources.Add(scope.Resolve<Resource>(null));
@@ -131,7 +131,7 @@ public class TransientScopeDisposalTests
                 }
             });
         });
-        var scope = container.CreateTransientScope();
+        var scope = container.CreateLocalScope();
 
         scope.Resolve<object>(null);
 
@@ -145,7 +145,7 @@ public class TransientScopeDisposalTests
         Assert.That(() => capturedResolver!.Resolve<object>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => scope.Contains<object>(null), Throws.TypeOf<ObjectDisposedException>());
 
-        using var replacement = container.CreateTransientScope();
+        using var replacement = container.CreateLocalScope();
 
         Assert.That(replacement.Contains<object>(null), Is.True);
     }
@@ -184,8 +184,8 @@ public class TransientScopeDisposalTests
                     }
                 });
         });
-        var first = container.CreateTransientScope();
-        var second = container.CreateTransientScope();
+        var first = container.CreateLocalScope();
+        var second = container.CreateLocalScope();
 
         first.Resolve<Service>(null);
         second.Resolve<Service>(null);
@@ -222,7 +222,7 @@ public class TransientScopeDisposalTests
         Assert.That(container.Dispose, Throws.Nothing);
         Assert.That(() => first.Resolve<Service>(null), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => second.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(container.CreateTransientScope, Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateLocalScope, Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
@@ -230,8 +230,8 @@ public class TransientScopeDisposalTests
     {
         var resource = new Resource();
         using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient(() => resource));
-        var first = container.CreateTransientScope();
-        var second = container.CreateTransientScope();
+        var first = container.CreateLocalScope();
+        var second = container.CreateLocalScope();
 
         first.Resolve<Resource>(null);
         first.Resolve<Resource>(null);
@@ -294,7 +294,7 @@ public class TransientScopeDisposalTests
                 cleanup: _ => events.Add("service")
             );
         });
-        var scope = container.CreateTransientScope();
+        var scope = container.CreateLocalScope();
         var exception = Assert.Catch(() => scope.Resolve<Service>(null));
 
         if (cleanupFails)
@@ -344,7 +344,7 @@ public class TransientScopeDisposalTests
 
         #region Local Functions
         [MethodImpl(MethodImplOptions.NoInlining)]
-        static (TransientScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
+        static (LocalScope, IDependencyResolver, WeakReference[]) CreateDisposedScope(
             bool disposeContainerFirst,
             bool cleanupFails
         )
@@ -369,7 +369,7 @@ public class TransientScopeDisposalTests
                     return new Resource();
                 });
             });
-            var scope = container.CreateTransientScope();
+            var scope = container.CreateLocalScope();
             var resource = scope.Resolve<Resource>(null);
             var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
 

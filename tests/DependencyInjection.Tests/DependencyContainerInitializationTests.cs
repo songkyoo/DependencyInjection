@@ -170,7 +170,7 @@ public class DependencyContainerInitializationTests
         {
             if (createChild)
             {
-                parent.CreateScope(Configure);
+                parent.CreateChild(Configure);
             }
             else
             {

@@ -4,8 +4,8 @@ namespace Macaron.DependencyInjection.Tests;
 
 [TestFixture("root")]
 [TestFixture("child")]
-[TestFixture("transient")]
-[TestFixture("childTransient")]
+[TestFixture("localScope")]
+[TestFixture("childLocalScope")]
 public class NullableServiceResolutionTests(string resolverKind)
 {
     [TestCase(null)]
@@ -13,10 +13,10 @@ public class NullableServiceResolutionTests(string resolverKind)
     public void NullableServiceType_ShouldRemainMissingWhenUnderlyingTypeIsRegistered(string? tag)
     {
         using var root = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 42, tag));
-        using var child = root.CreateScope();
-        using var transient = root.CreateTransientScope();
-        using var childTransient = child.CreateTransientScope();
-        var resolver = SelectResolver(root, child, transient, childTransient);
+        using var child = root.CreateChild();
+        using var localScope = root.CreateLocalScope();
+        using var childLocalScope = child.CreateLocalScope();
+        var resolver = SelectResolver(root, child, localScope, childLocalScope);
         var fallbackCalls = 0;
 
         var resolveError = Assert.Throws<InvalidOperationException>(() => resolver.Resolve<int?>(tag));
@@ -60,10 +60,10 @@ public class NullableServiceResolutionTests(string resolverKind)
     public void MissingNullableServiceType_ShouldUseNormalMissingServiceBehavior()
     {
         using var root = DependencyContainerFactory.Create(_ => { });
-        using var child = root.CreateScope();
-        using var transient = root.CreateTransientScope();
-        using var childTransient = child.CreateTransientScope();
-        var resolver = SelectResolver(root, child, transient, childTransient);
+        using var child = root.CreateChild();
+        using var localScope = root.CreateLocalScope();
+        using var childLocalScope = child.CreateLocalScope();
+        var resolver = SelectResolver(root, child, localScope, childLocalScope);
 
         Assert.That(() => resolver.Resolve<int?>(), Throws.TypeOf<InvalidOperationException>());
         Assert.That(resolver.Contains<int?>(), Is.False);
@@ -80,10 +80,10 @@ public class NullableServiceResolutionTests(string resolverKind)
     public void DisposedResolver_ShouldRejectNullableQueriesBeforeCallingFallback()
     {
         using var root = DependencyContainerFactory.Create(_ => { });
-        using var child = root.CreateScope();
-        using var transient = root.CreateTransientScope();
-        using var childTransient = child.CreateTransientScope();
-        var resolver = SelectResolver(root, child, transient, childTransient);
+        using var child = root.CreateChild();
+        using var localScope = root.CreateLocalScope();
+        using var childLocalScope = child.CreateLocalScope();
+        var resolver = SelectResolver(root, child, localScope, childLocalScope);
         var fallbackCalls = 0;
 
         ((IDisposable)resolver).Dispose();
@@ -121,10 +121,10 @@ public class NullableServiceResolutionTests(string resolverKind)
             registrar.RegisterSingleton(instance: values);
             registrar.RegisterSingleton(instance: "value", tag: 42);
         });
-        using var child = root.CreateScope();
-        using var transient = root.CreateTransientScope();
-        using var childTransient = child.CreateTransientScope();
-        var resolver = SelectResolver(root, child, transient, childTransient);
+        using var child = root.CreateChild();
+        using var localScope = root.CreateLocalScope();
+        using var childLocalScope = child.CreateLocalScope();
+        var resolver = SelectResolver(root, child, localScope, childLocalScope);
         int? tag = 42;
 
         Assert.That(resolver.Resolve<List<int?>>(), Is.SameAs(values));
@@ -137,16 +137,16 @@ public class NullableServiceResolutionTests(string resolverKind)
     private IDependencyResolver SelectResolver(
         IDependencyContainer root,
         IDependencyContainer child,
-        TransientScope transient,
-        TransientScope childTransient
+        LocalScope localScope,
+        LocalScope childLocalScope
     )
     {
         return resolverKind switch
         {
             "root" => root,
             "child" => child,
-            "transient" => transient,
-            "childTransient" => childTransient,
+            "localScope" => localScope,
+            "childLocalScope" => childLocalScope,
             _ => throw new ArgumentOutOfRangeException(nameof(resolverKind))
         };
     }

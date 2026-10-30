@@ -51,7 +51,7 @@ public class DependencyContainerFactoryDisposalTests
             );
         }))
         {
-            using var child = root.CreateScope();
+            using var child = root.CreateChild();
             var requestingContainer = resolveFromChild ? child : root;
             var owningContainer = lifetime == Lifetime.Singleton ? root : requestingContainer;
             var dependency = owningContainer.Resolve<Dependency>();
@@ -66,7 +66,7 @@ public class DependencyContainerFactoryDisposalTests
 
             Assert.That(factoryCalls, Is.EqualTo(expectedCreations));
 
-            using var scope = owningContainer.CreateScope();
+            using var scope = owningContainer.CreateChild();
 
             Assert.That(scope.Contains<Service>(), Is.True);
         }
@@ -92,8 +92,8 @@ public class DependencyContainerFactoryDisposalTests
                     var container = (IDependencyContainer)resolver;
 
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
-                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-                    Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateLocalScope, Throws.InvalidOperationException);
 
                     if (failDependency)
                     {
@@ -118,15 +118,15 @@ public class DependencyContainerFactoryDisposalTests
 
                         Assert.That(exception, Is.SameAs(dependencyFailure));
                         Assert.That(container.Dispose, Throws.InvalidOperationException);
-                        Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-                        Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
+                        Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                        Assert.That(container.CreateLocalScope, Throws.InvalidOperationException);
                     }
 
                     var dependency = container.Resolve<Dependency>();
 
                     Assert.That(container.Dispose, Throws.InvalidOperationException);
-                    Assert.That(() => container.CreateScope(), Throws.InvalidOperationException);
-                    Assert.That(container.CreateTransientScope, Throws.InvalidOperationException);
+                    Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateLocalScope, Throws.InvalidOperationException);
 
                     return new Service(dependency);
                 },
@@ -137,7 +137,7 @@ public class DependencyContainerFactoryDisposalTests
 
         Assert.That(service.Dependency, Is.Not.Null);
 
-        using var scope = container.CreateScope();
+        using var scope = container.CreateChild();
 
         Assert.That(scope.Contains<Service>(), Is.True);
     }
@@ -193,7 +193,7 @@ public class DependencyContainerFactoryDisposalTests
             );
         }))
         {
-            using var child = root.CreateScope();
+            using var child = root.CreateChild();
             var requestingContainer = resolveFromChild ? child : root;
             var owningContainer = requestingContainer;
 
@@ -221,7 +221,7 @@ public class DependencyContainerFactoryDisposalTests
             Assert.That(serviceCleanups, Is.Zero);
             Assert.That(collectedCleanups, Is.EqualTo(1));
 
-            using var scope = owningContainer.CreateScope();
+            using var scope = owningContainer.CreateChild();
 
             if (retryCreation)
             {

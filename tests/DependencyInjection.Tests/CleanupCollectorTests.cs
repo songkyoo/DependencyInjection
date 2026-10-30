@@ -149,7 +149,7 @@ public class CleanupCollectorTests
                 cleanup: _ => serviceCleanupCount++
             );
         });
-        using var child = root.CreateScope();
+        using var child = root.CreateChild();
 
         var error = Assert.Throws<InvalidOperationException>(() => child.Resolve<string>(tag));
 

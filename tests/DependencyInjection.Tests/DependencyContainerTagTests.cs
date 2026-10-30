@@ -45,7 +45,7 @@ public class DependencyContainerTagTests
                 return new Service();
             }, lifetime, tag: registeredTag);
         });
-        using var scope = container.CreateTransientScope();
+        using var scope = container.CreateLocalScope();
         var first = container.Resolve<Service>(registeredTag);
         var second = container.Resolve<Service>(lookupTag);
         var third = scope.Resolve<Service>(lookupTag);
@@ -157,7 +157,7 @@ public class DependencyContainerTagTests
                 return new Service();
             }, parentLifetime, tag: parentTag);
         });
-        using var child = root.CreateScope(registrar =>
+        using var child = root.CreateChild(registrar =>
         {
             registrar.Register(() =>
             {

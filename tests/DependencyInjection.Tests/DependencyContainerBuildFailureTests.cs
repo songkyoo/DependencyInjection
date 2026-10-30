@@ -38,7 +38,7 @@ public class DependencyContainerBuildFailureTests
         {
             if (createChild)
             {
-                parent.CreateScope(Configure);
+                parent.CreateChild(Configure);
             }
             else
             {
@@ -97,7 +97,7 @@ public class DependencyContainerBuildFailureTests
         {
             if (createChild)
             {
-                parent.CreateScope(Configure);
+                parent.CreateChild(Configure);
             }
             else
             {
@@ -158,7 +158,7 @@ public class DependencyContainerBuildFailureTests
                 }, tag: parentScopedTag);
             registrar.RegisterSingleton<Resource>(factory: () => new Resource(), tag: parentSingletonTag);
         });
-        using var sibling = parent.CreateScope();
+        using var sibling = parent.CreateChild();
         var parentResource = scopedInstances[parent];
         var siblingResource = scopedInstances[sibling];
         var sharedResource = parent.Resolve<Resource>(parentSingletonTag);
@@ -173,7 +173,7 @@ public class DependencyContainerBuildFailureTests
         var exception = Assert.Throws<AggregateException>(() =>
         {
             result = createChild
-                ? parent.CreateScope(Configure)
+                ? parent.CreateChild(Configure)
                 : DependencyContainerFactory.Create(Configure);
         });
 
@@ -206,7 +206,7 @@ public class DependencyContainerBuildFailureTests
         }));
         Assert.That(() => failedContainer!.Contains<Service>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => failedContainer!.Resolve<Service>(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => failedContainer!.CreateScope(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => failedContainer!.CreateChild(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(failedContainer!.Dispose, Throws.Nothing);
         Assert.That(cleanups, Has.Count.EqualTo(5));
         Assert.That(parent.Resolve<Resource>(parentScopedTag), Is.SameAs(parentResource));
@@ -220,7 +220,7 @@ public class DependencyContainerBuildFailureTests
             Assert.That(scopedInstances[failedContainer!].DisposeCount, Is.EqualTo(1));
         }
 
-        using var retry = parent.CreateScope();
+        using var retry = parent.CreateChild();
 
         Assert.That(retry.Resolve<Resource>(parentSingletonTag), Is.SameAs(sharedResource));
 
@@ -301,7 +301,7 @@ public class DependencyContainerBuildFailureTests
         {
             if (createChild)
             {
-                parent.CreateScope(Configure);
+                parent.CreateChild(Configure);
             }
             else
             {
@@ -400,7 +400,7 @@ public class DependencyContainerBuildFailureTests
             {
                 using var result = parent is null
                     ? DependencyContainerFactory.Create(Configure)
-                    : parent.CreateScope(Configure);
+                    : parent.CreateChild(Configure);
             }
             catch (AggregateException)
             {

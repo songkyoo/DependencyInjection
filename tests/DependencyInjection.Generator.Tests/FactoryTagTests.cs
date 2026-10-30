@@ -51,9 +51,9 @@ public class FactoryTagTests
                     registrar.RegisterTransient<Service<string>>(tag: "service");
                     registrar.RegisterTransient<IService, Service<string>>(tag: "service");
                 });
-                using var child = container.CreateScope(registrar =>
+                using var child = container.CreateChild(registrar =>
                     registrar.RegisterSingleton(instance: "child", tag: "dependency"));
-                using var scope = child.CreateTransientScope();
+                using var scope = child.CreateLocalScope();
 
                 return new[]
                 {

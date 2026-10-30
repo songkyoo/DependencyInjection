@@ -17,7 +17,7 @@ public class DependencyResolverCycleTests
     private sealed record ValueTag(string Value);
 
     [Test]
-    public void CyclicDependency_ShouldReportResolutionPathAndAllowRetry([Values] bool useTransientScope)
+    public void CyclicDependency_ShouldReportResolutionPathAndAllowRetry([Values] bool useLocalScope)
     {
         var cycle = true;
         using var container = DependencyContainerFactory.Create(registrar =>
@@ -34,8 +34,8 @@ public class DependencyResolverCycleTests
                 return new C();
             });
         });
-        using var scope = container.CreateTransientScope();
-        IDependencyResolver resolver = useTransientScope ? scope : container;
+        using var scope = container.CreateLocalScope();
+        IDependencyResolver resolver = useLocalScope ? scope : container;
 
         var error = Assert.Throws<InvalidOperationException>(() => resolver.Resolve<A>());
 
@@ -99,7 +99,7 @@ public class DependencyResolverCycleTests
                 tag: new ValueTag("service")
             );
         });
-        using var scope = container.CreateTransientScope();
+        using var scope = container.CreateLocalScope();
 
         var error = Assert.Throws<InvalidOperationException>(() => scope.Resolve<Service>(new ValueTag("service")));
 

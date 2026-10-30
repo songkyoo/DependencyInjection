@@ -12,8 +12,8 @@ public class InjectionContextTests
     public void For_ShouldPreserveSelectedResolver()
     {
         using var container = DependencyContainerFactory.Create(_ => { });
-        using var scope = container.CreateTransientScope();
-        using var child = container.CreateScope();
+        using var scope = container.CreateLocalScope();
+        using var child = container.CreateChild();
 
         Assert.That(container.For<object>().Resolver, Is.SameAs(container));
         Assert.That(child.For<object>().Resolver, Is.SameAs(child));

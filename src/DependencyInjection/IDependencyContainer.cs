@@ -2,9 +2,9 @@ namespace Macaron.DependencyInjection;
 
 public interface IDependencyContainer : IDependencyResolver, IDisposable
 {
-    IDependencyContainer CreateScope();
+    IDependencyContainer CreateChild();
 
-    IDependencyContainer CreateScope(IDependencyInstaller installer);
+    IDependencyContainer CreateChild(IDependencyInstaller installer);
 
-    TransientScope CreateTransientScope();
+    LocalScope CreateLocalScope();
 }
