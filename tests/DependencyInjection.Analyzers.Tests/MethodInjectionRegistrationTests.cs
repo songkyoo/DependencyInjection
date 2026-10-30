@@ -43,25 +43,12 @@ public class MethodInjectionRegistrationTests
     [TestCase("registrar.RegisterScoped<object, Service>();", "Service", 1)]
     [TestCase("registrar.RegisterSingleton<object, Service>();", "Service", 1)]
     [TestCase("registrar.Register<object, Service>(Lifetime.Singleton);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 2)]
-    [TestCase("registrar.RegisterTransient<Service, Derived>();", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service>(() => new Service());", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<Service>(() => new Service());", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>(() => new Service());", "Service", 1)]
-    [TestCase("registrar.Register<Service>(() => new Service(), Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>(new Service());", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton(new Service());", "RegisterSingleton", 1)]
-    [TestCase("registrar.RegisterTransient(() => new Service());", "RegisterTransient", 1)]
-    [TestCase("registrar.RegisterScoped(() => new Service());", "RegisterScoped", 1)]
-    [TestCase("registrar.RegisterSingleton(() => new Service());", "RegisterSingleton", 1)]
+    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 1)]
     [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient", 1)]
     [TestCase("registrar?.RegisterTransient<Service>();", "Service", 1)]
     [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
-    [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service());", "Service", 1)]
     [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    [TestCase(ResolverTransientRegistration, "RegisterTransient", 1)]
-    [TestCase(ResolverLifetimeRegistration, "Service", 1)]
-    public void MethodPath_ShouldBeRejectedAtEveryRegistrationApi(string registration, string locationText, int count)
+    public void MethodPath_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(string registration, string locationText, int count)
     {
         var consumer =
             $$"""
@@ -99,6 +86,51 @@ public class MethodInjectionRegistrationTests
                 .And.Not.Contain("typeof(global::Derived)")
         );
         AssertCompiles(compilation);
+    }
+
+    [TestCase("registrar.RegisterTransient<Service>(() => new Service());")]
+    [TestCase("registrar.RegisterScoped<Service>(() => new Service());")]
+    [TestCase("registrar.RegisterSingleton<Service>(() => new Service());")]
+    [TestCase("registrar.Register<Service>(() => new Service(), Lifetime.Transient);")]
+    [TestCase("registrar.RegisterSingleton<Service>(new Service());")]
+    [TestCase("registrar.RegisterSingleton(new Service());")]
+    [TestCase("registrar.RegisterTransient(() => new Service());")]
+    [TestCase("registrar.RegisterScoped(() => new Service());")]
+    [TestCase("registrar.RegisterSingleton(() => new Service());")]
+    [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service());")]
+    [TestCase(ResolverTransientRegistration)]
+    [TestCase(ResolverLifetimeRegistration)]
+    public void MethodPath_ShouldAllowExplicitFactoryAndInstanceRegistrations(string registration)
+    {
+        var consumer =
+            $$"""
+            using System;
+            using Macaron.DependencyInjection;
+
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    using var resolver = DependencyContainerFactory.Create(_ => { });
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        {{registration}}
+                    });
+
+                    return container.Resolve<Service>() is Service;
+                }
+            }
+            """;
+        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            text: Services,
+            options: InputParseOptions,
+            path: "Services.cs"
+        ));
+        var (compilation, sources) = Generate(input);
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service)"));
+        Assert.That(Execute<bool>(compilation), Is.True);
     }
 
     [Test]

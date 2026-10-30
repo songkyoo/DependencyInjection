@@ -32,7 +32,7 @@ public class AnalyzerSeparationTests
     [TestCase("registrar.RegisterTransient(() => new Service(1));")]
     [TestCase("registrar.RegisterTransient<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1));")]
     [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));")]
-    public void AnalyzerWithoutGenerator_ShouldRejectAssistedRegistrations(string registration)
+    public void AnalyzerWithoutGenerator_ShouldAllowExplicitAssistedRegistrations(string registration)
     {
         var input = CreateCompilation(
             $$"""
@@ -54,7 +54,7 @@ public class AnalyzerSeparationTests
         );
 
         AssertCompiles(input);
-        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
+        Assert.That(Analyze(input), Is.Empty);
     }
 
     [Test]
@@ -144,7 +144,7 @@ public class AnalyzerSeparationTests
     }
 
     [Test]
-    public void Analyzer_ShouldInferRegistrationFromGeneratedCreate()
+    public void Analyzer_ShouldAllowExplicitFactoryUsingGeneratedCreate()
     {
         var input = CreateCompilation(
             """
@@ -167,7 +167,7 @@ public class AnalyzerSeparationTests
         CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
-        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
+        Assert.That(Analyze(output), Is.Empty);
         AssertCompiles(output);
     }
 }

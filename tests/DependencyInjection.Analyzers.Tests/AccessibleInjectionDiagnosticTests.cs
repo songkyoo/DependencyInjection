@@ -51,7 +51,7 @@ public class AccessibleInjectionDiagnosticTests
     }
 
     [Test]
-    public void ExternalInternalInjectMethod_WithFriendAccess_ShouldRejectExplicitRegistrationUsingDefaultMetadata()
+    public void ExternalInternalInjectMethod_WithFriendAccess_ShouldAllowExplicitRegistrationUsingDefaultMetadata()
     {
         var external = EmitAssembly(CreateCompilation(
             """
@@ -79,7 +79,7 @@ public class AccessibleInjectionDiagnosticTests
         );
         var diagnostics = Analyze(input);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0016"]));
+        Assert.That(diagnostics, Is.Empty);
         AssertCompiles(input);
     }
 
@@ -102,15 +102,18 @@ public class AccessibleInjectionDiagnosticTests
                 {
                     await Task.Yield();
 
-                    registrar.RegisterSingleton(new Service());
+                    registrar.RegisterTransient<Service>();
                 }
             }
             """
         );
 
-        AssertCompiles(input);
+        CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var generationDiagnostics);
 
-        var diagnostics = Analyze(input);
+        Assert.That(generationDiagnostics, Is.Empty);
+        AssertCompiles(output);
+
+        var diagnostics = Analyze(output);
 
         Assert.That(
             diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0016"]),

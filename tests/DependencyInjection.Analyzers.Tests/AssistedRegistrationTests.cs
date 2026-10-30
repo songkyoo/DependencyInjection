@@ -49,28 +49,12 @@ public class AssistedRegistrationTests
     [TestCase("registrar.RegisterScoped<object, Service>();", "Service", 1)]
     [TestCase("registrar.RegisterSingleton<object, Service>();", "Service", 1)]
     [TestCase("registrar.Register<object, Service>(Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 2)]
-    [TestCase("registrar.RegisterTransient<Service, Derived>();", "Service", 1)]
-    [TestCase("registrar.RegisterTransient<Service>(() => new Service(1));", "Service", 1)]
-    [TestCase("registrar.RegisterScoped<Service>(() => new Service(1));", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>(() => new Service(1));", "Service", 1)]
-    [TestCase("registrar.Register<Service>(() => new Service(1), Lifetime.Transient);", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>(new Service(1));", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton(new Service(1));", "RegisterSingleton", 1)]
-    [TestCase("registrar.RegisterTransient(() => new Service(1));", "RegisterTransient", 1)]
-    [TestCase("registrar.RegisterScoped(() => new Service(1));", "RegisterScoped", 1)]
-    [TestCase("registrar.RegisterSingleton(() => new Service(1));", "RegisterSingleton", 1)]
+    [TestCase("registrar.RegisterTransient<Service, Service>();", "Service", 1)]
     [TestCase("registrar.RegisterTransient(cleanup: (Service value) => { });", "RegisterTransient", 1)]
     [TestCase("registrar?.RegisterTransient<Service>();", "Service", 1)]
     [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
-    [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service(1));", "Service", 1)]
     [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    [TestCase(ResolverTransientRegistration, "RegisterTransient", 1)]
-    [TestCase(ResolverLifetimeRegistration, "Service", 1)]
-    [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));", "RegisterSingleton", 1)]
-    [TestCase("registrar.RegisterSingleton<Service>(() => resolver.For<Service>().Create(1));", "Service", 1)]
-    [TestCase("registrar.RegisterSingleton(() => resolver.For<Service>().Create(1));", "RegisterSingleton", 1)]
-    public void AssistedConstructor_ShouldBeRejectedAtEachRegistrationApi(string registration, string locationText, int expectedCount)
+    public void AssistedConstructor_ShouldBeRejectedOnlyAtAutomaticRegistrationApis(string registration, string locationText, int expectedCount)
     {
         var consumer =
             $$"""
@@ -91,13 +75,16 @@ public class AssistedRegistrationTests
                 public static int Run()
                 {
                     using var container = DependencyContainerFactory.Create(_ => { });
+
                     return container.For<Service>().Create(42).Value;
                 }
             }
             """;
-        var input = CreateCompilation(consumer).AddSyntaxTrees(
-            CSharpSyntaxTree.ParseText(ServiceDeclaration, InputParseOptions, path: "Service.cs")
-        );
+        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            text: ServiceDeclaration,
+            options: InputParseOptions,
+            path: "Service.cs"
+        ));
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(input);
         var locationTexts = diagnostics.Select(diagnostic =>
         {
@@ -118,10 +105,58 @@ public class AssistedRegistrationTests
         Assert.That(Execute<int>(compilation), Is.EqualTo(42));
     }
 
+    [TestCase("registrar.RegisterTransient<Service>(() => new Service(1));")]
+    [TestCase("registrar.RegisterScoped<Service>(() => new Service(1));")]
+    [TestCase("registrar.RegisterSingleton<Service>(() => new Service(1));")]
+    [TestCase("registrar.Register<Service>(() => new Service(1), Lifetime.Transient);")]
+    [TestCase("registrar.RegisterSingleton<Service>(new Service(1));")]
+    [TestCase("registrar.RegisterSingleton(new Service(1));")]
+    [TestCase("registrar.RegisterTransient(() => new Service(1));")]
+    [TestCase("registrar.RegisterScoped(() => new Service(1));")]
+    [TestCase("registrar.RegisterSingleton(() => new Service(1));")]
+    [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service(1));")]
+    [TestCase(ResolverTransientRegistration)]
+    [TestCase(ResolverLifetimeRegistration)]
+    [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));")]
+    [TestCase("registrar.RegisterSingleton<Service>(() => resolver.For<Service>().Create(1));")]
+    [TestCase("registrar.RegisterSingleton(() => resolver.For<Service>().Create(1));")]
+    public void AssistedConstructor_ShouldAllowExplicitFactoryAndInstanceRegistrations(string registration)
+    {
+        var consumer =
+            $$"""
+            using System;
+            using Macaron.DependencyInjection;
+
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    using var resolver = DependencyContainerFactory.Create(_ => { });
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        {{registration}}
+                    });
+
+                    return container.Resolve<Service>().Value == 1;
+                }
+            }
+            """;
+        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            text: ServiceDeclaration,
+            options: InputParseOptions,
+            path: "Services.cs"
+        ));
+        var (compilation, sources) = Generate(input);
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service)"));
+        Assert.That(Execute<bool>(compilation), Is.True);
+    }
+
     [TestCase("RegisterTransient")]
     [TestCase("RegisterScoped")]
     [TestCase("RegisterSingleton")]
-    public void CoreFactoryRegistration_ShouldRejectAssistedType(string method)
+    public void CoreFactoryRegistration_ShouldAllowAssistedType(string method)
     {
         var consumer =
             $$"""
@@ -135,11 +170,14 @@ public class AssistedRegistrationTests
                 }
             }
             """;
-        var input = CreateCompilation(consumer)
-            .AddSyntaxTrees(CSharpSyntaxTree.ParseText(ServiceDeclaration, InputParseOptions, "Service.cs"));
+        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            text: ServiceDeclaration,
+            options: InputParseOptions,
+            path: "Service.cs"
+        ));
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(input);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
+        Assert.That(diagnostics, Is.Empty);
         AssertCompiles(compilation);
     }
 
@@ -205,7 +243,10 @@ public class AssistedRegistrationTests
     [TestCase("public Service([Assisted] int value) { }", "MADI0011")]
     [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0008")]
     [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0013")]
-    public void ExternalDeclarationErrors_ShouldBeCheckedDuringExplicitRegistration(string constructor, params string[] expectedIds)
+    public void ExternalDeclarationErrors_ShouldBeCheckedDuringAutomaticRegistration(
+        string constructor,
+        params string[] expectedIds
+    )
     {
         var external = EmitAssembly(CreateCompilation(
             $$"""
@@ -228,7 +269,7 @@ public class AssistedRegistrationTests
             {
                 public void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterSingleton(new Service());
+                    registrar.RegisterSingleton<Service>();
                 }
             }
             """,

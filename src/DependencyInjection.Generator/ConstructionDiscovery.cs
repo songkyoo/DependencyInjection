@@ -22,62 +22,35 @@ internal static class ConstructionDiscovery
             return false;
         }
 
-        if (simpleNameSyntax is not
-        {
-            Identifier.ValueText: "For" or "Register" or "RegisterTransient" or "RegisterScoped" or "RegisterSingleton",
-        })
-        {
-            return false;
-        }
-
-        return simpleNameSyntax is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count is 1 or 2;
+        return GenerationApiSelection.IsCandidate(simpleNameSyntax);
     }
 
     internal static ConstructionRequest? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         var semanticModel = context.SemanticModel;
+        var name = (SimpleNameSyntax)context.Node;
 
-        if (semanticModel.GetSymbolInfo(context.Node, cancellationToken).Symbol is not IMethodSymbol method)
+        if (GenerationApiSelection.GetBoundMethod(name, semanticModel, cancellationToken) is not { } method)
         {
             return null;
         }
 
         var compilation = semanticModel.Compilation;
-        var isForUse = method.Name == "For";
-        var extensions = isForUse
-            ? compilation
-                .GetTypeByMetadataName("Macaron.DependencyInjection.IDependencyResolver")?
-                .ContainingAssembly
-                .GetTypeByMetadataName("Macaron.DependencyInjection.IDependencyResolverExtensions")
-            : compilation.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions");
+        var implementationIndex = GenerationApiSelection.GetTargetTypeArgumentIndex(method, compilation);
         var definition = (method.ReducedFrom ?? method).OriginalDefinition;
         var comparer = SymbolEqualityComparer.Default;
 
-        if (!comparer.Equals(definition.ContainingType, extensions)
-            || (isForUse
-                ? method.TypeArguments.Length != 1
-                : method.TypeArguments.Length is not (1 or 2)
-            )
+        if (implementationIndex < 0
             || comparer.Equals(
                 semanticModel.GetEnclosingSymbol(context.Node.SpanStart, cancellationToken)?.ContainingType,
-                extensions
+                definition.ContainingType
             )
         )
         {
             return null;
         }
 
-        var name = (SimpleNameSyntax)context.Node;
-        var binding = name.Parent is MemberAccessExpressionSyntax or MemberBindingExpressionSyntax
-            ? name.Parent
-            : name;
-
-        if (binding.Parent is InvocationExpressionSyntax invocation)
-        {
-            binding = invocation;
-        }
-
-        var implementationIndex = method.TypeArguments.Length - 1;
+        var binding = GenerationApiSelection.GetBinding(name);
         var implementation = method.TypeArguments[implementationIndex];
 
         if (HasErrorDiagnostics(semanticModel, binding, cancellationToken)
@@ -94,7 +67,7 @@ internal static class ConstructionDiscovery
             ? genericName.TypeArgumentList.Arguments[implementationIndex].GetLocation()
             : name.GetLocation();
 
-        return new ConstructionRequest(implementation, location, name.GetReference(), isForUse);
+        return new ConstructionRequest(implementation, location, name.GetReference(), IsForUse: method.Name == "For");
     }
 
     internal static FactoryGenerationResult CreateDefinitions(
@@ -118,25 +91,31 @@ internal static class ConstructionDiscovery
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var name = originalRequest.NameReference.GetSyntax(cancellationToken);
+            var name = (SimpleNameSyntax)originalRequest.NameReference.GetSyntax(cancellationToken);
             var model = compilation.GetSemanticModel(name.SyntaxTree);
-            var symbol = model.GetSymbolInfo(name, cancellationToken).Symbol;
 
-            if (symbol is not IMethodSymbol methodSymbol)
+            if (GenerationApiSelection.GetBoundMethod(name, model, cancellationToken) is not { } methodSymbol)
             {
                 continue;
             }
 
-            if (!originalRequest.IsForUse && methodSymbol.TypeArguments.Any(type =>
-            {
-                return HasAssistedConstructor(type, compilation)
-                    || InjectionDeclarationAnalysis.HasMethodInjection(type, compilation);
-            }))
+            var implementationIndex = GenerationApiSelection.GetTargetTypeArgumentIndex(methodSymbol, compilation);
+
+            if (implementationIndex < 0)
             {
                 continue;
             }
 
-            var implementationType = methodSymbol.TypeArguments[^1];
+            var implementationType = methodSymbol.TypeArguments[implementationIndex];
+
+            if (!originalRequest.IsForUse
+                && (HasAssistedConstructor(implementationType, compilation)
+                    || InjectionDeclarationAnalysis.HasMethodInjection(implementationType, compilation)
+                )
+            )
+            {
+                continue;
+            }
 
             if (ContainsType(implementationType, TypeKind.Error))
             {

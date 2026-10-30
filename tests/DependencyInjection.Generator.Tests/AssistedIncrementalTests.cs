@@ -171,7 +171,7 @@ public class AssistedIncrementalTests
             );
         var driver = CreateDriver().RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014", "MADI0014"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
         Assert.That(Execute<string>(first), Is.EqualTo("first"));
 
         var updated = CSharpSyntaxTree.ParseText(DiDeclaration, InputParseOptions, "Service.cs");
@@ -198,7 +198,7 @@ public class AssistedIncrementalTests
 
         driver = driver.RunGeneratorsAndAnalyze(input, out var restored, out diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014", "MADI0014"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
         Assert.That(Execute<string>(restored), Is.EqualTo("first"));
         Assert.That(
             driver
