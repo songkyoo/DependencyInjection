@@ -6,17 +6,34 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class TagDiagnosticTests
 {
+    private const string UnmarkedTaggedAndDefaultConstructors =
+        """
+        public Service([Tag("tagged")] string value) { }
+
+        public Service() { }
+        """;
+
+    private const string UnmarkedInternalTaggedAndMarkedDefaultConstructors =
+        """
+        internal Service([Tag("tagged")] string value) { }
+
+        [Inject] public Service() { }
+        """;
+
     [TestCase("public Service([Tag] string value) { }")]
     [TestCase("internal Service([Tag(null)] string value) { }")]
-    [TestCase("public Service([Tag(\"tagged\")] string value) { } public Service() { }")]
-    [TestCase("internal Service([Tag(\"tagged\")] string value) { } [Inject] public Service() { }")]
+    [TestCase(UnmarkedTaggedAndDefaultConstructors)]
+    [TestCase(UnmarkedInternalTaggedAndMarkedDefaultConstructors)]
     public void UnusedTaggedConstructorWithoutInject_ShouldReportAtTag(string constructors)
     {
         var source =
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service<T> { {{constructors}} }
+            public class Service<T>
+            {
+                {{constructors}}
+            }
             """;
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
@@ -86,10 +103,15 @@ public class TagDiagnosticTests
             }
             """;
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
+        var attributeTexts = diagnostics.Select(diagnostic =>
+        {
+            var span = diagnostic.Location.SourceSpan;
+
+            return source.Substring(span.Start, span.Length);
+        });
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011", "MADI0011"]));
-        Assert.That(diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
-            Is.EquivalentTo(["Tag(\"first\")", "Tag(\"second\")"]));
+        Assert.That(attributeTexts, Is.EquivalentTo(["Tag(\"first\")", "Tag(\"second\")"]));
         AssertCompiles(compilation);
     }
 
@@ -206,7 +228,10 @@ public class TagDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service<T> { {{member}} }
+            public class Service<T>
+            {
+                {{member}}
+            }
             """
         );
 

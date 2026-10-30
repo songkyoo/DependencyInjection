@@ -154,13 +154,31 @@ public class DependencyContainerSharedInstanceTests
     }
 
     [Test]
-    public void TransientFactoryReturningSameReference_ShouldRecordEachResolution([Values] bool customCleanup)
+    public void TransientFactoryReturningSameReference_WithoutCleanup_ShouldDisposeForEachResolution()
+    {
+        var resource = new Resource();
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient(factory: () => resource, cleanup: null);
+        });
+
+        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
+        Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
+        Assert.That(resource.DisposeCount, Is.Zero);
+
+        container.Dispose();
+
+        Assert.That(resource.DisposeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void TransientFactoryReturningSameReference_WithCustomCleanup_ShouldCleanForEachResolution()
     {
         var resource = new Resource();
         var cleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient(factory: () => resource, cleanup: customCleanup ? _ => cleanupCount++ : null);
+            registrar.RegisterTransient(factory: () => resource, cleanup: _ => cleanupCount++);
         });
 
         Assert.That(container.Resolve<Resource>(), Is.SameAs(resource));
@@ -170,8 +188,8 @@ public class DependencyContainerSharedInstanceTests
 
         container.Dispose();
 
-        Assert.That(cleanupCount, Is.EqualTo(customCleanup ? 2 : 0));
-        Assert.That(resource.DisposeCount, Is.EqualTo(customCleanup ? 0 : 2));
+        Assert.That(cleanupCount, Is.EqualTo(2));
+        Assert.That(resource.DisposeCount, Is.Zero);
     }
 
     [Test]

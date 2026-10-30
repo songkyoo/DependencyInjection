@@ -31,10 +31,15 @@ public class InjectRequirementTests
             """
         );
         var diagnostics = Analyze(input);
+        var attributeNames = diagnostics.Select(diagnostic =>
+        {
+            var location = diagnostic.Location;
+
+            return location.SourceTree!.GetText().ToString(location.SourceSpan);
+        });
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0011", "MADI0011" }));
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan)),
-            Is.All.EqualTo(attribute));
+        Assert.That(attributeNames, Is.All.EqualTo(attribute));
         AssertCompiles(input);
     }
 

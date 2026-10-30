@@ -74,11 +74,13 @@ public class AssistedGenerationTests
             .GetMembers("Create")
             .OfType<IMethodSymbol>()
             .Single();
+        var parameterNames = create.Parameters.Skip(1).Select(parameter => parameter.Name);
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
 
-        Assert.That(create.Parameters.Skip(1).Select(parameter => parameter.Name), Is.EqualTo(new[] { "context", "resolver", "dependency0", "event" }));
+        Assert.That(parameterNames, Is.EqualTo(["context", "resolver", "dependency0", "event"]));
         Assert.That(create.Parameters[2].RefKind, Is.EqualTo(RefKind.In));
         Assert.That(create.Parameters.SelectMany(parameter => parameter.GetAttributes()), Is.Empty);
-        Assert.That(sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(), Does.Not.Contain("typeof(global::Service<int>)"));
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service<int>)"));
     }
 
     [Test]
@@ -121,7 +123,12 @@ public class AssistedGenerationTests
                     using var container = DependencyContainerFactory.Create(_ => { });
                     var first = container.For<Service>().Create();
                     var second = container.For<Service>().Create();
-                    var supplied = container.For<Service>().Create(day: DayOfWeek.Monday, text: "named", scale: 2M, values: new[] { "a", "b" });
+                    var supplied = container.For<Service>().Create(
+                        day: DayOfWeek.Monday,
+                        text: "named",
+                        scale: 2M,
+                        values: new[] { "a", "b" }
+                    );
                     var expanded = container.For<Service>().Create("params", 3M, DayOfWeek.Tuesday, "a", "b", "c");
 
                     return !ReferenceEquals(first, second) && first.Value == "null|1.25|Friday|0"

@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -6,6 +6,13 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class ConstructorDiagnosticTests
 {
+    private const string DuplicateConstructorDeclarations =
+        """
+        [Inject] public Service() { }
+
+        [Inject] public Service() { }
+        """;
+
     private const string MultipleInjectConstructors =
         """
         public class Service
@@ -147,7 +154,7 @@ public class ConstructorDiagnosticTests
 
     [TestCase("public Service(Missing value) { }")]
     [TestCase("[Inject, Inject] public Service(in int value) { }")]
-    [TestCase("[Inject] public Service() { } [Inject] public Service() { }")]
+    [TestCase(DuplicateConstructorDeclarations)]
     [TestCase("[Inject] public Service([Tag, Tag] int value) { }")]
     public void CompilerRejectedConstructor_ShouldNotProduceConstructionDiagnostics(string constructor)
     {

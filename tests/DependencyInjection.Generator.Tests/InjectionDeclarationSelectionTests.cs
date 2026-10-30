@@ -6,6 +6,27 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class InjectionDeclarationSelectionTests
 {
+    private const string PrivateConstructorAndPublicMethod =
+        """
+        [Inject] private Service(int value) { }
+
+        [Inject] public void Initialize() { }
+        """;
+
+    private const string PublicConstructorAndPrivateMethod =
+        """
+        [Inject] public Service(int value) { }
+
+        [Inject] private void Initialize() { }
+        """;
+
+    private const string PrivateMethods =
+        """
+        [Inject] private void First() { }
+
+        [Inject] private void Second() { }
+        """;
+
     [TestCase("[Inject] private Service(int value) { }")]
     [TestCase("[Inject] internal Service(int value) { }")]
     [TestCase("[Inject] protected Service(int value) { }")]
@@ -47,9 +68,9 @@ public class InjectionDeclarationSelectionTests
         AssertCompiles(compilation);
     }
 
-    [TestCase("[Inject] private Service(int value) { } [Inject] public void Initialize() { }")]
-    [TestCase("[Inject] public Service(int value) { } [Inject] private void Initialize() { }")]
-    [TestCase("[Inject] private void First() { } [Inject] private void Second() { }")]
+    [TestCase(PrivateConstructorAndPublicMethod)]
+    [TestCase(PublicConstructorAndPrivateMethod)]
+    [TestCase(PrivateMethods)]
     public void ExternalDuplicateInject_IncludingInaccessibleMembers_ShouldDiagnoseBeforeAccessibility(string declarations)
     {
         var external = EmitAssembly(CreateCompilation(

@@ -40,7 +40,10 @@ public class AssistedLifetimeTests
                 public static (bool, int, int, int, int, int) Run()
                 {
                     var supplied = new Resource();
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(() => new Resource()));
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterTransient<Resource>(() => new Resource());
+                    });
                     using var scope = container.CreateTransientScope();
                     var service = scope.For<Service>().Create(supplied);
                     scope.Dispose();
@@ -59,10 +62,16 @@ public class AssistedLifetimeTests
         ).AddSyntaxTrees(CSharpSyntaxTree.ParseText(ResourceDeclaration, InputParseOptions, "Resource.cs"));
         var (compilation, _) = Generate(input);
 
-        Assert.That(
-            Execute<(bool SameResource, int SuppliedBefore, int ResultBefore, int Resolved, int SuppliedAfter, int ResultAfter)>(compilation),
-            Is.EqualTo((true, 0, 0, 1, 1, 1))
-        );
+        var result = Execute<(
+            bool SameResource,
+            int SuppliedBefore,
+            int ResultBefore,
+            int Resolved,
+            int SuppliedAfter,
+            int ResultAfter
+        )>(compilation);
+
+        Assert.That(result, Is.EqualTo((true, 0, 0, 1, 1, 1)));
     }
 
     [Test]
@@ -143,7 +152,10 @@ public class AssistedLifetimeTests
                 {
                     var supplied = new Resource();
                     var resolved = new Resource();
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(() => resolved));
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterTransient<Resource>(() => resolved);
+                    });
                     using var scope = container.CreateTransientScope();
 
                     try { scope.For<Service>().Create(supplied); throw new Exception("Creation should fail."); }
@@ -189,7 +201,10 @@ public class AssistedLifetimeTests
                 {
                     var supplied = new Resource();
                     var resolved = new Resource();
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(() => resolved));
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterTransient<Resource>(() => resolved);
+                    });
                     using var scope = container.CreateTransientScope();
 
                     try { scope.For<Service>().Create(supplied); throw new Exception("Resolution should fail."); }

@@ -7,6 +7,14 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class SingleTypeRegistrationTests
 {
+    private const string RegistrationMethodGroup =
+        """
+        System.Action<IDependencyRegistrar, object, System.Action<Service>> register =
+            Registrar.RegisterTransient<Service>;
+
+        register(registrar, null, null);
+        """;
+
     [TestCase("Register", "Lifetime.Transient")]
     [TestCase("RegisterTransient", "")]
     [TestCase("RegisterScoped", "")]
@@ -48,7 +56,7 @@ public class SingleTypeRegistrationTests
     [TestCase("registrar.RegisterTransient<Service>();")]
     [TestCase("Registrar.RegisterTransient<Service>(registrar);")]
     [TestCase("registrar?.RegisterTransient<Service>();")]
-    [TestCase("System.Action<IDependencyRegistrar, object, System.Action<Service>> register = Registrar.RegisterTransient<Service>; register(registrar, null, null);")]
+    [TestCase(RegistrationMethodGroup)]
     [TestCase("System.Action<object, System.Action<Service>> register = registrar.RegisterTransient<Service>; register(null, null);")]
     [TestCase("registrar.RegisterTransient(cleanup: (Service service) => { });")]
     public void RegistrationSyntax_ShouldDiscoverClosedTypeAndBindGeneratedOverload(string registration)
@@ -114,7 +122,10 @@ public class SingleTypeRegistrationTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { private Service() { } }
+            public class Service
+            {
+                private Service() { }
+            }
 
             public static class Configuration
             {
@@ -126,9 +137,11 @@ public class SingleTypeRegistrationTests
             """;
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
+        var span = diagnostic.Location.SourceSpan;
+        var locationText = source.Substring(span.Start, span.Length);
 
         Assert.That(diagnostic.Id, Is.EqualTo("MADI0006"));
-        Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo("RegisterTransient"));
+        Assert.That(locationText, Is.EqualTo("RegisterTransient"));
         AssertCompiles(compilation);
     }
 
@@ -139,7 +152,10 @@ public class SingleTypeRegistrationTests
             """
             using Macaron.DependencyInjection;
 
-            public interface IService { string Value { get; } }
+            public interface IService
+            {
+                string Value { get; }
+            }
 
             public sealed class Service : IService
             {
@@ -181,7 +197,10 @@ public class SingleTypeRegistrationTests
 
             public interface IService { }
 
-            public sealed class Service : IService { public Service(int value) { } }
+            public sealed class Service : IService
+            {
+                public Service(int value) { }
+            }
 
             public static class Probe
             {
@@ -196,7 +215,10 @@ public class SingleTypeRegistrationTests
                     {
                         Install<IService>(registrar, () => new Service(1));
                         registrar.RegisterSingleton(instance: new Service(2), tag: "instance");
-                        registrar.RegisterScoped<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(3), tag: "scoped");
+                        registrar.RegisterScoped<Service>(
+                            (IDependencyResolver resolver, ref CleanupCollector collector) => new Service(3),
+                            tag: "scoped"
+                        );
                         registrar.RegisterTransient<Service>(() => new Service(4));
                     });
 
@@ -211,9 +233,10 @@ public class SingleTypeRegistrationTests
             .Select(invocation => semanticModel.GetSymbolInfo(invocation).Symbol)
             .OfType<IMethodSymbol>()
             .Where(method => method.Name.StartsWith("Register"));
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
 
         Assert.That(registrations.All(method => method.ContainingType.Name != "DependencyRegistrarExtensions"), Is.True);
-        Assert.That(sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(), Does.Not.Contain("factories.Add("));
+        Assert.That(factories, Does.Not.Contain("factories.Add("));
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
@@ -234,7 +257,11 @@ public class SingleTypeRegistrationTests
                 }
             }
             """;
-        var driver = CreateDriver(trackIncrementalSteps: true).RunGeneratorsAndAnalyze(CreateCompilation(source), out _, out var diagnostics);
+        var driver = CreateDriver(trackIncrementalSteps: true).RunGeneratorsAndAnalyze(
+            CreateCompilation(source),
+            out _,
+            out var diagnostics
+        );
 
         Assert.That(diagnostics, Is.Empty);
 
@@ -274,7 +301,10 @@ public class SingleTypeRegistrationTests
                 {
                     try
                     {
-                        using var container = DependencyContainerFactory.Create(registrar => registrar.Register<Service>(Lifetime.{{lifetime}}));
+                        using var container = DependencyContainerFactory.Create(registrar =>
+                        {
+                            registrar.Register<Service>(Lifetime.{{lifetime}});
+                        });
                         container.Resolve<Service>();
                         return false;
                     }

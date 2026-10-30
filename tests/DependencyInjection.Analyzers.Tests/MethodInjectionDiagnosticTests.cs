@@ -6,6 +6,20 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class MethodInjectionDiagnosticTests
 {
+    private const string MarkedConstructorAndMethod =
+        """
+        [Inject] public Service() { }
+
+        [Inject] public void Initialize() { }
+        """;
+
+    private const string MarkedMethods =
+        """
+        [Inject] public void First() { }
+
+        [Inject] public void Second() { }
+        """;
+
     [TestCase("[Inject] public static void Initialize() { }", "MADI0015")]
     [TestCase("[Inject] public int Initialize() => 1;", "MADI0015")]
     [TestCase("[Inject] public void Initialize<T>() { }", "MADI0015")]
@@ -17,15 +31,18 @@ public class MethodInjectionDiagnosticTests
     [TestCase("[Inject] public void Initialize(System.Span<int> value) { }", "MADI0008")]
     [TestCase("public void Initialize([Assisted] int value) { }", "MADI0011")]
     [TestCase("[Inject] public void Initialize([Tag, Assisted] int value) { }", "MADI0013")]
-    [TestCase("[Inject] public Service() { } [Inject] public void Initialize() { }", "MADI0005")]
-    [TestCase("[Inject] public void First() { } [Inject] public void Second() { }", "MADI0005")]
+    [TestCase(MarkedConstructorAndMethod, "MADI0005")]
+    [TestCase(MarkedMethods, "MADI0005")]
     public void UnusedInvalidDeclaration_ShouldBeReportedByAnalyzerAlone(string declaration, string expectedId)
     {
         var input = CreateCompilation(
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declaration}} }
+            public class Service
+            {
+                {{declaration}}
+            }
             """
         );
         var diagnostics = Analyze(input);
@@ -48,7 +65,10 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declaration}} }
+            public class Service
+            {
+                {{declaration}}
+            }
             """
         );
 
@@ -63,9 +83,15 @@ public class MethodInjectionDiagnosticTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize(ref int value) { } }
+            public class Service
+            {
+                [Inject] public void Initialize(ref int value) { }
+            }
 
-            public class Configuration { public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); } }
+            public class Configuration
+            {
+                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
+            }
             """
         );
         var driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
@@ -89,14 +115,20 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] {{modifiers}} void Initialize([Assisted] ref int value) { } }
+            public class Service
+            {
+                [Inject] {{modifiers}} void Initialize([Assisted] ref int value) { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
         var (_, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
-            public class Configuration { public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); } }
+            public class Configuration
+            {
+                public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
+            }
             """,
             additionalReferences: MetadataReference.CreateFromImage(external)
         );
@@ -148,7 +180,10 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declaration}} }
+            public class Service
+            {
+                {{declaration}}
+            }
             """
         );
         var diagnostics = Analyze(input);
@@ -169,7 +204,10 @@ public class MethodInjectionDiagnosticTests
 
             var service = new Service();
 
-            public class Service { [Inject] public static void Initialize() { } }
+            public class Service
+            {
+                [Inject] public static void Initialize() { }
+            }
             """
         );
 

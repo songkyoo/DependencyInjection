@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -6,6 +6,13 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class AccessibleInjectionSelectionTests
 {
+    private const string UnmarkedAccessibleConstructors =
+        """
+        public Service() { }
+
+        internal Service(int value) { }
+        """;
+
     [TestCase("public")]
     [TestCase("internal")]
     [TestCase("protected internal")]
@@ -284,7 +291,10 @@ public class AccessibleInjectionSelectionTests
 
             public class Base
             {
-                protected class Service { public void Initialize() { } }
+                protected class Service
+                {
+                    public void Initialize() { }
+                }
             }
             """,
             assemblyName: "ExternalServices"
@@ -305,14 +315,17 @@ public class AccessibleInjectionSelectionTests
     }
 
     [TestCase("private Service() { }", "MADI0006")]
-    [TestCase("public Service() { } internal Service(int value) { }", "MADI0007")]
+    [TestCase(UnmarkedAccessibleConstructors, "MADI0007")]
     public void ConstructorSelectionFailure_ShouldNotAddEntryPointMismatch(string constructors, string expectedId)
     {
         var (_, _, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{constructors}} }
+            public class Service
+            {
+                {{constructors}}
+            }
 
             public class Configuration
             {

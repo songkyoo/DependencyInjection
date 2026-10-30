@@ -7,6 +7,16 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class TagValueAccessibilityTests
 {
+    private const string ReferencedTagConsumer =
+        """
+        using Macaron.DependencyInjection;
+
+        public static class Configuration
+        {
+            public static void Configure(IDependencyRegistrar registrar) => registrar.RegisterTransient<Service>();
+        }
+        """;
+
     [Test]
     public void TagTypeAccessibilityChange_ShouldUpdateDiagnosticAndRestoreFactory()
     {
@@ -115,7 +125,10 @@ public class TagValueAccessibilityTests
                 private enum Kind { Main }
                 private class Hidden { }
                 private class Generic<T> { }
-                private class Outer { public class Nested { } }
+                private class Outer
+                {
+                    public class Nested { }
+                }
 
                 [Inject]
                 public Service([Tag(value: {{expression}})] string value) { }
@@ -222,26 +235,72 @@ public class TagValueAccessibilityTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("private", "Kind.Main", false, false)]
-    [TestCase("private", "typeof(Hidden)", false, false)]
-    [TestCase("private", "typeof(Hidden[])", false, false)]
-    [TestCase("internal", "Kind.Main", false, false)]
-    [TestCase("internal", "typeof(System.Collections.Generic.List<Hidden>)", false, false)]
-    [TestCase("internal", "Kind.Main", true, true)]
-    [TestCase("internal", "typeof(Hidden)", true, true)]
-    [TestCase("private", "Kind.Main", true, false)]
-    [TestCase("public", "typeof(Hidden)", false, true)]
-    public void ReferencedTagType_ShouldHonorAccessibilityAndFriendAssembly(
+    [TestCase("private", "Kind.Main", false)]
+    [TestCase("private", "typeof(Hidden)", false)]
+    [TestCase("private", "typeof(Hidden[])", false)]
+    [TestCase("internal", "Kind.Main", false)]
+    [TestCase("internal", "typeof(System.Collections.Generic.List<Hidden>)", false)]
+    [TestCase("private", "Kind.Main", true)]
+    public void ReferencedInaccessibleTagType_ShouldDiagnoseAndOmitFactory(
         string accessibility,
         string expression,
-        bool friendAssembly,
-        bool expectedFactory
+        bool friendAssembly
     )
     {
+        var reference = CreateReferencedTagAssembly(accessibility, expression, friendAssembly);
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            ReferencedTagConsumer,
+            assemblyName: "TagAccessibilityConsumer",
+            additionalReferences: reference
+        );
+        var diagnostic = diagnostics.Single();
+        var span = diagnostic.Location.SourceSpan;
+        var locationText = ReferencedTagConsumer.Substring(span.Start, span.Length);
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
+        Assert.That(locationText, Is.EqualTo("Service"));
+        Assert.That(diagnostic.GetMessage(), Does.Contain("Service").And.Contain("value").And.Contain("Tag"));
+        Assert.That(factories, Does.Not.Contain("typeof(global::Service)"));
+        AssertCompiles(compilation);
+    }
+
+    [TestCase("internal", "Kind.Main", true)]
+    [TestCase("internal", "typeof(Hidden)", true)]
+    [TestCase("public", "typeof(Hidden)", false)]
+    public void ReferencedAccessibleTagType_ShouldGenerateFactory(
+        string accessibility,
+        string expression,
+        bool friendAssembly
+    )
+    {
+        var reference = CreateReferencedTagAssembly(accessibility, expression, friendAssembly);
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            ReferencedTagConsumer,
+            assemblyName: "TagAccessibilityConsumer",
+            additionalReferences: reference
+        );
+        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
+
+        Assert.That(diagnostics, Is.Empty);
+        Assert.That(factories, Does.Contain("typeof(global::Service)"));
+        AssertCompiles(compilation);
+    }
+
+    private static MetadataReference CreateReferencedTagAssembly(
+        string accessibility,
+        string expression,
+        bool friendAssembly
+    )
+    {
+        var friendDeclaration = friendAssembly
+            ? """[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TagAccessibilityConsumer")]"""
+            : "";
         var external = EmitAssembly(CreateCompilation(
             $$"""
             using Macaron.DependencyInjection;
-            {{(friendAssembly ? "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TagAccessibilityConsumer\")]" : "")}}
+
+            {{friendDeclaration}}
 
             public class Service
             {
@@ -251,36 +310,10 @@ public class TagValueAccessibilityTests
                 [Inject]
                 public Service([Tag({{expression}})] string value) { }
             }
-            """, assemblyName: "ExternalServices"
+            """,
+            assemblyName: "ExternalServices"
         ));
-        const string source =
-            """
-            using Macaron.DependencyInjection;
 
-            public static class Configuration
-            {
-                public static void Configure(IDependencyRegistrar registrar) => registrar.RegisterTransient<Service>();
-            }
-            """;
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
-            source,
-            assemblyName: "TagAccessibilityConsumer",
-            additionalReferences: MetadataReference.CreateFromImage(external)
-        );
-
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(expectedFactory ? Array.Empty<string>() : ["MADI0012"]));
-
-        if (!expectedFactory)
-        {
-            var diagnostic = diagnostics.Single();
-
-            Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo("Service"));
-            Assert.That(diagnostic.GetMessage(), Does.Contain("Service").And.Contain("value").And.Contain("Tag"));
-        }
-
-        var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
-
-        Assert.That(factories.Contains("typeof(global::Service)"), Is.EqualTo(expectedFactory));
-        AssertCompiles(compilation);
+        return MetadataReference.CreateFromImage(external);
     }
 }

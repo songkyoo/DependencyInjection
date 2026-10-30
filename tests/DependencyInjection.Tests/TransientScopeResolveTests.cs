@@ -178,7 +178,10 @@ public class TransientScopeResolveTests
     [Test]
     public void FallbackResolver_ShouldBeSameScope_AndOwnNestedTransient([Values] bool useNamedTag)
     {
-        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(factory: () => new Resource()));
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+        });
         var scope = container.CreateTransientScope();
         IDependencyResolver? capturedResolver = null;
         Func<IDependencyResolver, FallbackService> factory = resolver =>

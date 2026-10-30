@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -6,9 +6,30 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class AccessibleInjectionDiagnosticTests
 {
-    [TestCase("[Inject] public Service() { } [Inject] internal Service(int value) { }")]
-    [TestCase("[Inject] public Service() { } [Inject] internal void Initialize() { }")]
-    [TestCase("[Inject] public void First() { } [Inject] internal void Second() { }")]
+    private const string MarkedPublicAndInternalConstructors =
+        """
+        [Inject] public Service() { }
+
+        [Inject] internal Service(int value) { }
+        """;
+
+    private const string MarkedConstructorAndMethod =
+        """
+        [Inject] public Service() { }
+
+        [Inject] internal void Initialize() { }
+        """;
+
+    private const string MarkedMethods =
+        """
+        [Inject] public void First() { }
+
+        [Inject] internal void Second() { }
+        """;
+
+    [TestCase(MarkedPublicAndInternalConstructors)]
+    [TestCase(MarkedConstructorAndMethod)]
+    [TestCase(MarkedMethods)]
     public void DuplicateInjectDeclarations_IncludingPrivateMember_ShouldUseOneDiagnostic(string declarations)
     {
         var input = CreateCompilation(
@@ -38,7 +59,10 @@ public class AccessibleInjectionDiagnosticTests
 
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Consumer")]
 
-            public class Service { [Inject] internal void Initialize() { } }
+            public class Service
+            {
+                [Inject] internal void Initialize() { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -67,7 +91,10 @@ public class AccessibleInjectionDiagnosticTests
             using System.Threading.Tasks;
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {
@@ -98,7 +125,10 @@ public class AccessibleInjectionDiagnosticTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {

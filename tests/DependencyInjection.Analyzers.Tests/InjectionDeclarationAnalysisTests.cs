@@ -8,6 +8,34 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class InjectionDeclarationAnalysisTests
 {
+    private const string UnmarkedOverloadedConstructors =
+        """
+        public Service(int value) { }
+
+        public Service(string value) { }
+        """;
+
+    private const string MarkedMethods =
+        """
+        [Inject] public void First() { }
+
+        [Inject] public void Second() { }
+        """;
+
+    private const string MarkedConstructorAndMethod =
+        """
+        [Inject] public Service() { }
+
+        [Inject] public void Initialize() { }
+        """;
+
+    private const string MarkedConstructors =
+        """
+        [Inject] public Service() { }
+
+        [Inject] public Service(int value) { }
+        """;
+
     [TestCase("[Inject] public Service(int value) { }", MethodKind.Constructor, ".ctor")]
     [TestCase("[Inject] public void Initialize(int value) { }", MethodKind.Ordinary, "Initialize")]
     public void DirectDeclaration_ShouldSelectMarkedMember(string declaration, MethodKind kind, string name)
@@ -16,7 +44,10 @@ public class InjectionDeclarationAnalysisTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declaration}} }
+            public class Service
+            {
+                {{declaration}}
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;
@@ -30,10 +61,17 @@ public class InjectionDeclarationAnalysisTests
     }
 
     [TestCase("public Service() { }")]
-    [TestCase("public Service(int value) { } public Service(string value) { }")]
+    [TestCase(UnmarkedOverloadedConstructors)]
     public void NoDirectInject_ShouldLeaveConstructorSelectionToTheCaller(string constructors)
     {
-        var input = CreateInput($"public class Service {{ {constructors} }}");
+        var input = CreateInput(
+            $$"""
+            public class Service
+            {
+                {{constructors}}
+            }
+            """
+        );
         var type = input.GetTypeByMetadataName("Service")!;
         var result = InjectionDeclarationAnalysis.Analyze(type, input, type.Locations.Single());
 
@@ -42,16 +80,19 @@ public class InjectionDeclarationAnalysisTests
         Assert.That(result.Member, Is.Null);
     }
 
-    [TestCase("[Inject] public void First() { } [Inject] public void Second() { }", "MADI0005")]
-    [TestCase("[Inject] public Service() { } [Inject] public void Initialize() { }", "MADI0005")]
-    [TestCase("[Inject] public Service() { } [Inject] public Service(int value) { }", "MADI0005")]
+    [TestCase(MarkedMethods, "MADI0005")]
+    [TestCase(MarkedConstructorAndMethod, "MADI0005")]
+    [TestCase(MarkedConstructors, "MADI0005")]
     public void MultipleDirectDeclarations_ShouldDiagnoseConflictWithRelatedLocation(string declarations, string expectedId)
     {
         var input = CreateInput(
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declarations}} }
+            public class Service
+            {
+                {{declarations}}
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;
@@ -76,9 +117,15 @@ public class InjectionDeclarationAnalysisTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Base { [Inject] public virtual void Initialize() { } }
+            public class Base
+            {
+                [Inject] public virtual void Initialize() { }
+            }
 
-            public class Derived : Base { {{derivedMember}} }
+            public class Derived : Base
+            {
+                {{derivedMember}}
+            }
             """
         );
         var baseType = input.GetTypeByMetadataName("Base")!;
@@ -101,9 +148,15 @@ public class InjectionDeclarationAnalysisTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Base { [Inject] public virtual void Initialize() { } }
+            public class Base
+            {
+                [Inject] public virtual void Initialize() { }
+            }
 
-            public class Derived : Base { {{declaration}} }
+            public class Derived : Base
+            {
+                {{declaration}}
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Derived")!;
@@ -126,7 +179,10 @@ public class InjectionDeclarationAnalysisTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{declaration}} }
+            public class Service
+            {
+                {{declaration}}
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;
@@ -144,7 +200,10 @@ public class InjectionDeclarationAnalysisTests
             """
             using Macaron.DependencyInjection;
 
-            public class Base { [Inject] public Base(int value) { } }
+            public class Base
+            {
+                [Inject] public Base(int value) { }
+            }
 
             public class Derived : Base
             {
@@ -201,7 +260,10 @@ public class InjectionDeclarationAnalysisTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { {{attribute}} public void Initialize({{parameter}}) { } }
+            public class Service
+            {
+                {{attribute}} public void Initialize({{parameter}}) { }
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;
@@ -253,7 +315,10 @@ public class InjectionDeclarationAnalysisTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize(Unknown value) { } }
+            public class Service
+            {
+                [Inject] public void Initialize(Unknown value) { }
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;

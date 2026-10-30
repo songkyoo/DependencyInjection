@@ -350,7 +350,10 @@ public class MethodInjectionGenerationTests
 
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {
@@ -376,7 +379,10 @@ public class MethodInjectionGenerationTests
             using System;
             using Macaron.DependencyInjection;
 
-            public class Service { public bool Called; [Inject] public void Initialize() { Called = true; } }
+            public class Service
+            {
+                public bool Called; [Inject] public void Initialize() { Called = true; }
+            }
 
             public static class Probe
             {
@@ -405,7 +411,10 @@ public class MethodInjectionGenerationTests
             """
             using Macaron.DependencyInjection;
 
-            public interface IService { int Value { get; } }
+            public interface IService
+            {
+                int Value { get; }
+            }
 
             public class Service : IService
             {

@@ -11,7 +11,10 @@ public class ConstructorInjectionTests
         """
         using Macaron.DependencyInjection;
 
-        public interface IService { string Value { get; } }
+        public interface IService
+        {
+            string Value { get; }
+        }
 
         public sealed class Service<T> : IService
         {
@@ -34,7 +37,10 @@ public class ConstructorInjectionTests
         """
         using Macaron.DependencyInjection;
 
-        public interface IService { string Value { get; } }
+        public interface IService
+        {
+            string Value { get; }
+        }
 
         public sealed class Service<T> : IService
         {

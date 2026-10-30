@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -6,6 +6,14 @@ namespace Macaron.DependencyInjection.Generator.Tests;
 
 public class FactoryGenerationTests
 {
+    private const string RegistrationMethodGroup =
+        """
+        System.Action<IDependencyRegistrar, object, System.Action<Service>> register =
+            Registrar.RegisterTransient<Service, Service>;
+
+        register(registrar, null, null);
+        """;
+
     [TestCase("Register", Lifetime.Scoped, false)]
     [TestCase("RegisterTransient", Lifetime.Transient, false)]
     [TestCase("RegisterScoped", Lifetime.Scoped, false)]
@@ -34,7 +42,10 @@ public class FactoryGenerationTests
 
             public sealed class Dependency : IDependency { }
 
-            public interface IService { IDependency Dependency { get; } }
+            public interface IService
+            {
+                IDependency Dependency { get; }
+            }
 
             public sealed class Service : IService
             {
@@ -377,7 +388,7 @@ public class FactoryGenerationTests
     [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service, Service>(registrar);")]
     [TestCase("Registrar.RegisterTransient<Service, Service>(registrar);")]
     [TestCase("registrar?.RegisterTransient<Service, Service>();")]
-    [TestCase("System.Action<IDependencyRegistrar, object, System.Action<Service>> register = Registrar.RegisterTransient<Service, Service>; register(registrar, null, null);")]
+    [TestCase(RegistrationMethodGroup)]
     public void RegistrationSyntax_ShouldIdentifyGeneratedMethod(string registration)
     {
         var (compilation, _) = Generate(

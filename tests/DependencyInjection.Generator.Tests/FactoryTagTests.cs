@@ -12,7 +12,10 @@ public class FactoryTagTests
         using Macaron.DependencyInjection;
         using DependencyTag = Macaron.DependencyInjection.TagAttribute;
 
-        public interface IService { string Value { get; } }
+        public interface IService
+        {
+            string Value { get; }
+        }
 
         public sealed class Service<T> : IService
         {

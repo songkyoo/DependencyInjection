@@ -40,7 +40,10 @@ public class OptionalDefaultValueTests
             using Macaron.DependencyInjection;
 
             public enum Mode : byte { First = 1, Second = 2 }
-            public struct Number { public int Value; }
+            public struct Number
+            {
+                public int Value;
+            }
 
             public sealed class Service
             {

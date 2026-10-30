@@ -43,32 +43,87 @@ public class DependencyContainerCleanupTests
     }
 
     [Test]
-    public void NonDisposableService_ShouldSupportDefaultAndCustomCleanup(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
-        [Values(false, true)] bool customCleanup
+    public void NonDisposableService_WithoutCleanup_ShouldRequireNoCleanup(
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var tag = "service";
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<IService>(() => new Service(), lifetime, cleanup: customCleanup ? service => service.CleanupCount++ : null, tag: tag);
+            registrar.Register<IService>(factory: () => new Service(), lifetime, cleanup: null, tag: tag);
         });
         var service = container.Resolve<IService>(tag);
 
         container.Dispose();
 
-        Assert.That(service.CleanupCount, Is.EqualTo(customCleanup ? 1 : 0));
+        Assert.That(service.CleanupCount, Is.Zero);
     }
 
     [Test]
-    public void CoreRegistration_ShouldApplyCleanupPolicyToEachCreatedInstance(
-        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime,
-        [Values(false, true)] bool customCleanup
+    public void NonDisposableService_WithCustomCleanup_ShouldInvokeCallback(
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
+    )
+    {
+        var tag = "service";
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.Register<IService>(
+                factory: () => new Service(),
+                lifetime,
+                cleanup: service => service.CleanupCount++,
+                tag: tag
+            );
+        });
+        var service = container.Resolve<IService>(tag);
+
+        container.Dispose();
+
+        Assert.That(service.CleanupCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CoreRegistration_WithoutCleanup_ShouldDisposeEachCreatedInstance(
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
+    )
+    {
+        var tag = "resource";
+        var container = DependencyContainerFactory.Create(registrar =>
+        {
+            switch (lifetime)
+            {
+                case Lifetime.Transient:
+                    registrar.RegisterTransient<Resource>((_, ref _) => new Resource(), cleanup: null, tag: tag);
+                    break;
+                case Lifetime.Scoped:
+                    registrar.RegisterScoped<Resource>((_, ref _) => new Resource(), cleanup: null, tag: tag);
+                    break;
+                case Lifetime.Singleton:
+                    registrar.RegisterSingleton<Resource>((_, ref _) => new Resource(), cleanup: null, tag: tag);
+                    break;
+            }
+        });
+        var first = container.Resolve<Resource>(tag);
+        var second = container.Resolve<Resource>(tag);
+
+        Assert.That(second, lifetime == Lifetime.Transient ? Is.Not.SameAs(first) : Is.SameAs(first));
+        Assert.That(first.DisposeCount, Is.Zero);
+        Assert.That(second.DisposeCount, Is.Zero);
+
+        container.Dispose();
+        container.Dispose();
+
+        Assert.That(first.DisposeCount, Is.EqualTo(1));
+        Assert.That(second.DisposeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CoreRegistration_WithCustomCleanup_ShouldCleanEachCreatedInstance(
+        [Values(Lifetime.Transient, Lifetime.Scoped, Lifetime.Singleton)] Lifetime lifetime
     )
     {
         var tag = "resource";
         var cleanedInstances = new List<Resource>();
-        Action<Resource>? cleanup = customCleanup ? cleanedInstances.Add : null;
+        Action<Resource> cleanup = cleanedInstances.Add;
 
         var container = DependencyContainerFactory.Create(registrar =>
         {
@@ -98,11 +153,11 @@ public class DependencyContainerCleanupTests
 
         var createdInstances = lifetime == Lifetime.Transient ? new[] { first, second } : new[] { first };
 
-        Assert.That(cleanedInstances, Is.EquivalentTo(customCleanup ? createdInstances : Array.Empty<Resource>()));
+        Assert.That(cleanedInstances, Is.EquivalentTo(createdInstances));
 
         foreach (var instance in createdInstances)
         {
-            Assert.That(instance.DisposeCount, Is.EqualTo(customCleanup ? 0 : 1));
+            Assert.That(instance.DisposeCount, Is.Zero);
         }
     }
 

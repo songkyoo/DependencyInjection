@@ -245,7 +245,10 @@ public class EnumConstantTests
             using Macaron.DependencyInjection;
             using Mode = @event.@class;
 
-            public static class Expected { public const Mode Value = {{expression}}; }
+            public static class Expected
+            {
+                public const Mode Value = {{expression}};
+            }
 
             public sealed class TaggedService
             {

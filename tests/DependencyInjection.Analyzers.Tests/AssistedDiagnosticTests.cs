@@ -25,10 +25,12 @@ public class AssistedDiagnosticTests
             """;
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
+        var span = diagnostic.Location.SourceSpan;
+        var actualLocation = source.Substring(span.Start, span.Length);
 
         Assert.That(diagnostic.Id, Is.EqualTo(id));
         Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
-        Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo(locationText));
+        Assert.That(actualLocation, Is.EqualTo(locationText));
         Assert.That(diagnostic.GetMessage(), Does.Contain("Assisted").And.EndsWith("."));
         AssertCompiles(compilation);
     }
@@ -42,8 +44,13 @@ public class AssistedDiagnosticTests
         var external = EmitAssembly(CreateCompilation(
             $$"""
             using Macaron.DependencyInjection;
-            public class Service { {{constructor}} }
-            """, "ExternalServices"));
+            public class Service
+            {
+                {{constructor}}
+            }
+            """,
+            assemblyName: "ExternalServices"
+        ));
         const string source =
             """
             using Macaron.DependencyInjection;

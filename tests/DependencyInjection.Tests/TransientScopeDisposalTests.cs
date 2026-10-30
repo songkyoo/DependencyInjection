@@ -53,7 +53,10 @@ public class TransientScopeDisposalTests
     [Test]
     public void GrowingSlotsAndReusingHoles_ShouldKeepScopesIndependent()
     {
-        using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(factory: () => new Resource()));
+        using var container = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+        });
         var scopes = new List<TransientScope>();
         var resources = new List<Resource>();
 

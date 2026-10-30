@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Reflection.Emit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,7 +19,10 @@ public class InjectionDeclarationMetadataTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] {{accessibility}} void Initialize() { } }
+            public class Service
+            {
+                [Inject] {{accessibility}} void Initialize() { }
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;
@@ -39,7 +42,10 @@ public class InjectionDeclarationMetadataTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] {{accessibility}} void Initialize() { } }
+            public class Service
+            {
+                [Inject] {{accessibility}} void Initialize() { }
+            }
 
             public class Use { }
             """
@@ -64,7 +70,10 @@ public class InjectionDeclarationMetadataTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] {{accessibility}} void Initialize() { } }
+            public class Service
+            {
+                [Inject] {{accessibility}} void Initialize() { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -86,7 +95,10 @@ public class InjectionDeclarationMetadataTests
             using Macaron.DependencyInjection;
 
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Consumer")]
-            public class Service { [Inject] internal void Initialize() { } }
+            public class Service
+            {
+                [Inject] internal void Initialize() { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -160,7 +172,10 @@ public class InjectionDeclarationMetadataTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { public void Initialize([Tag("value")] int value) { } }
+            public class Service
+            {
+                public void Initialize([Tag("value")] int value) { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -240,7 +255,10 @@ public class InjectionDeclarationMetadataTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { public void Initialize([Tag("value")] int value) { } }
+            public class Service
+            {
+                public void Initialize([Tag("value")] int value) { }
+            }
             """
         );
         var type = input.GetTypeByMetadataName("Service")!;

@@ -33,7 +33,13 @@ public class MethodInjectionLifetimeTests
             public IDependencyResolver Resolver;
 
             [Inject]
-            public void Initialize([Assisted] Resource provided, Resource resolved, Scoped scoped, Shared shared, IDependencyResolver resolver)
+            public void Initialize(
+                [Assisted] Resource provided,
+                Resource resolved,
+                Scoped scoped,
+                Shared shared,
+                IDependencyResolver resolver
+            )
             {
                 Provided = provided;
                 Resolved.Add(resolved);
@@ -184,7 +190,10 @@ public class MethodInjectionLifetimeTests
                 public static bool Run()
                 {
                     var resource = new Resource();
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(() => resource));
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterTransient<Resource>(() => resource);
+                    });
                     using var scope = container.CreateTransientScope();
                     var target = new Failing();
 
@@ -232,7 +241,10 @@ public class MethodInjectionLifetimeTests
                 {
                     var supplied = new Resource();
                     var resolved = new Resource();
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterTransient<Resource>(() => resolved));
+                    using var container = DependencyContainerFactory.Create(registrar =>
+                    {
+                        registrar.RegisterTransient<Resource>(() => resolved);
+                    });
                     using var scope = container.CreateTransientScope();
                     var target = new Failing();
 

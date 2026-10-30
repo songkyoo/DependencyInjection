@@ -9,8 +9,14 @@ public class CreationGenerationTests
 {
     private const string ClosedTypes =
         """
-        namespace A { public class Service<T> { } }
-        namespace B { public class Service<T> { } }
+        namespace A
+        {
+            public class Service<T> { }
+        }
+        namespace B
+        {
+            public class Service<T> { }
+        }
 
         public class Outer<T>
         {
@@ -255,8 +261,14 @@ public class CreationGenerationTests
     {
         var (compilation, sources) = Generate(
             """
-            public class Fake { public static void For<T>() { } }
-            public class Probe { public void Run() { Fake.For<object>(); } }
+            public class Fake
+            {
+                public static void For<T>() { }
+            }
+            public class Probe
+            {
+                public void Run() { Fake.For<object>(); }
+            }
             """
         );
 

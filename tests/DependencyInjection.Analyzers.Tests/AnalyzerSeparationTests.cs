@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -69,7 +69,8 @@ public class AnalyzerSeparationTests
                 public Service() { }
                 [Inject] private Service([Assisted] int value) { }
             }
-            """, "ExternalServices"
+            """,
+            assemblyName: "ExternalServices"
         ));
         var input = CreateCompilation(
             """
@@ -79,7 +80,8 @@ public class AnalyzerSeparationTests
             {
                 public void Configure(IDependencyResolver resolver) => resolver.For<Service>();
             }
-            """, additionalReferences: MetadataReference.CreateFromImage(image)
+            """,
+            additionalReferences: MetadataReference.CreateFromImage(image)
         );
 
         Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0018"]));
@@ -93,8 +95,13 @@ public class AnalyzerSeparationTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { public Service([Tag("main")] string value) { } }
+            public class Service
+            {
+                public Service([Tag("main")] string value) { }
+            }
+
             public class Valid { }
+
             public class Configuration
             {
                 public void Configure(IDependencyRegistrar registrar)
@@ -123,6 +130,7 @@ public class AnalyzerSeparationTests
             using Macaron.DependencyInjection;
 
             public abstract class Service { }
+
             public class Configuration
             {
                 public void Configure(IDependencyResolver resolver) => resolver.For<Service>();
@@ -142,7 +150,11 @@ public class AnalyzerSeparationTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public Service([Assisted] int value) { } }
+            public class Service
+            {
+                [Inject] public Service([Assisted] int value) { }
+            }
+
             public class Configuration
             {
                 public void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)

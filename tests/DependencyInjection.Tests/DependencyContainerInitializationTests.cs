@@ -43,14 +43,32 @@ public class DependencyContainerInitializationTests
     }
 
     [Test]
-    public void RootSingletonInstance_ShouldBeCleanedEvenWithoutExplicitResolve([Values] bool customCleanup)
+    public void RootSingletonInstance_WithoutExplicitResolve_ShouldBeDisposedByDefault()
+    {
+        var cleanups = 0;
+        var instance = new Resource(() => cleanups++);
+        var root = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton(instance, cleanup: null);
+        });
+
+        Assert.That(cleanups, Is.Zero);
+
+        root.Dispose();
+        root.Dispose();
+
+        Assert.That(cleanups, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RootSingletonInstance_WithoutExplicitResolve_ShouldUseCustomCleanup()
     {
         var defaultCleanups = 0;
         var customCleanups = 0;
         var instance = new Resource(() => defaultCleanups++);
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance, cleanup: customCleanup ? _ => customCleanups++ : null);
+            registrar.RegisterSingleton(instance, cleanup: _ => customCleanups++);
         });
 
         Assert.That(defaultCleanups, Is.Zero);
@@ -59,8 +77,8 @@ public class DependencyContainerInitializationTests
         root.Dispose();
         root.Dispose();
 
-        Assert.That(defaultCleanups, Is.EqualTo(customCleanup ? 0 : 1));
-        Assert.That(customCleanups, Is.EqualTo(customCleanup ? 1 : 0));
+        Assert.That(defaultCleanups, Is.Zero);
+        Assert.That(customCleanups, Is.EqualTo(1));
     }
 
     [Test]

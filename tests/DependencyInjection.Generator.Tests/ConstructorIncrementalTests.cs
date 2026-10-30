@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -149,7 +149,10 @@ public class ConstructorIncrementalTests
             """
             using Macaron.DependencyInjection;
 
-            public class Invalid { private Invalid() { } }
+            public class Invalid
+            {
+                private Invalid() { }
+            }
 
             public class Configuration
             {
@@ -204,7 +207,10 @@ public class ConstructorIncrementalTests
         var updated = CSharpSyntaxTree.ParseText(
             text:
                 """
-                public static class Tags { public const string Value = "second"; }
+                public static class Tags
+                {
+                    public const string Value = "second";
+                }
                 """,
             options: InputParseOptions,
             path: "Tags.cs"
@@ -253,7 +259,11 @@ public class ConstructorIncrementalTests
     [TestCase(DynamicConstructor, "MADI0002", 1)]
     [TestCase(InaccessibleConstructor, "MADI0018", 1)]
     [TestCase(NoPublicConstructor, "MADI0006", 3)]
-    public void InvalidDeclaration_ShouldRemoveOutputsAndRestoreThemAfterCorrection(string constructor, string expectedId, int diagnosticCount)
+    public void InvalidDeclaration_ShouldRemoveOutputsAndRestoreThemAfterCorrection(
+        string constructor,
+        string expectedId,
+        int diagnosticCount
+    )
     {
         var input = CreateInput(TaggedInConstructor);
         var original = input.SyntaxTrees.Single(tree => tree.FilePath == "Service.cs");
@@ -289,7 +299,10 @@ public class ConstructorIncrementalTests
         var tags = CSharpSyntaxTree.ParseText(
             text:
                 """
-                public static class Tags { public const string Value = "first"; }
+                public static class Tags
+                {
+                    public const string Value = "first";
+                }
                 """,
             options: InputParseOptions,
             path: "Tags.cs"

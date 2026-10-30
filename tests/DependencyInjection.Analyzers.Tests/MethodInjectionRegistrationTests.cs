@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -7,12 +7,30 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class MethodInjectionRegistrationTests
 {
+    private const string ResolverTransientRegistration =
+        """
+        registrar.RegisterTransient(
+            (IDependencyResolver resolver, ref CleanupCollector collector) => new Service()
+        );
+        """;
+
+    private const string ResolverLifetimeRegistration =
+        """
+        registrar.Register<Service>(
+            (IDependencyResolver resolver, ref CleanupCollector collector) => new Service(),
+            Lifetime.Transient
+        );
+        """;
+
     private const string Services =
         """
         using Macaron.DependencyInjection;
 
         public interface IService { }
-        public class Service : IService { [Inject] public void Initialize() { } }
+        public class Service : IService
+        {
+            [Inject] public void Initialize() { }
+        }
         public class Derived : Service { }
         public class Valid { }
         """;
@@ -41,8 +59,8 @@ public class MethodInjectionRegistrationTests
     [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
     [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service());", "Service", 1)]
     [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    [TestCase("registrar.RegisterTransient((IDependencyResolver resolver, ref CleanupCollector collector) => new Service());", "RegisterTransient", 1)]
-    [TestCase("registrar.Register<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(), Lifetime.Transient);", "Service", 1)]
+    [TestCase(ResolverTransientRegistration, "RegisterTransient", 1)]
+    [TestCase(ResolverLifetimeRegistration, "Service", 1)]
     public void MethodPath_ShouldBeRejectedAtEveryRegistrationApi(string registration, string locationText, int count)
     {
         var consumer =
@@ -92,9 +110,15 @@ public class MethodInjectionRegistrationTests
 
             public abstract class AbstractService { }
 
-            public class Implementation : AbstractService { [Inject] public void Initialize() { } }
+            public class Implementation : AbstractService
+            {
+                [Inject] public void Initialize() { }
+            }
 
-            public class OtherRegistrar { public void RegisterSingleton<T>(T value) { } }
+            public class OtherRegistrar
+            {
+                public void RegisterSingleton<T>(T value) { }
+            }
 
             public static class Probe
             {
@@ -127,7 +151,10 @@ public class MethodInjectionRegistrationTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] private void Initialize() { } }
+            public class Service
+            {
+                [Inject] private void Initialize() { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -155,7 +182,10 @@ public class MethodInjectionRegistrationTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {

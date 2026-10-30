@@ -81,7 +81,10 @@ public class OptionalDependencyFailureTests
             using Macaron.DependencyInjection;
 
             public sealed class Dependency { }
-            public sealed class Service { public Service(Dependency? dependency = null) { } }
+            public sealed class Service
+            {
+                public Service(Dependency? dependency = null) { }
+            }
 
             public static class Probe
             {
@@ -118,8 +121,14 @@ public class OptionalDependencyFailureTests
             using Macaron.DependencyInjection;
 
             public sealed class Missing { }
-            public sealed class Dependency { public Dependency(Missing missing) { } }
-            public sealed class Service { public Service(Dependency? dependency = null) { } }
+            public sealed class Dependency
+            {
+                public Dependency(Missing missing) { }
+            }
+            public sealed class Service
+            {
+                public Service(Dependency? dependency = null) { }
+            }
 
             public static class Probe
             {
@@ -149,8 +158,14 @@ public class OptionalDependencyFailureTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class First { public First(Second? second = null) { } }
-            public sealed class Second { public Second(First? first = null) { } }
+            public sealed class First
+            {
+                public First(Second? second = null) { }
+            }
+            public sealed class Second
+            {
+                public Second(First? first = null) { }
+            }
 
             public static class Probe
             {
@@ -184,7 +199,10 @@ public class OptionalDependencyFailureTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class Service { public Service(string? value = "fallback") { } }
+            public sealed class Service
+            {
+                public Service(string? value = "fallback") { }
+            }
 
             public static class Probe
             {

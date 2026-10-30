@@ -17,7 +17,10 @@ public class FactoryDiagnosticTests
         var (_, _, diagnostics) = GenerateWithDiagnostics(
             $$"""
             using Macaron.DependencyInjection;
-            public class Service { private Service() { } }
+            public class Service
+            {
+                private Service() { }
+            }
             public class Configuration
             {
                 public void Configure(IDependencyRegistrar registrar)
@@ -141,7 +144,10 @@ public class FactoryDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public unsafe class Service { public Service({{parameterType}} value) { } }
+            public unsafe class Service
+            {
+                public Service({{parameterType}} value) { }
+            }
 
             public class Configuration
             {
@@ -202,7 +208,10 @@ public class FactoryDiagnosticTests
 
             public sealed class Service<T> : IService { }
 
-            public class Outer<T> { public sealed class Inner : IService { } }
+            public class Outer<T>
+            {
+                public sealed class Inner : IService { }
+            }
 
             public static class Probe
             {
@@ -236,7 +245,10 @@ public class FactoryDiagnosticTests
 
             public sealed class Service<T> { }
 
-            public class Outer<T> { public sealed class Inner { } }
+            public class Outer<T>
+            {
+                public sealed class Inner { }
+            }
 
             public static class Probe
             {

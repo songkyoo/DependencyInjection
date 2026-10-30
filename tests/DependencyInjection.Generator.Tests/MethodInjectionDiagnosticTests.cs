@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -15,7 +15,10 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {
@@ -72,9 +75,15 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] {{accessibility}} void Initialize() { } }
+            public class Service
+            {
+                [Inject] {{accessibility}} void Initialize() { }
+            }
 
-            public class Valid { [Inject] public void Initialize() { } }
+            public class Valid
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {
@@ -103,7 +112,10 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] public void Initialize([Assisted] int value) { } }
+            public class Service
+            {
+                [Inject] public void Initialize([Assisted] int value) { }
+            }
 
             public class Configuration
             {
@@ -130,7 +142,10 @@ public class MethodInjectionDiagnosticTests
             $$"""
             using Macaron.DependencyInjection;
 
-            public struct State { [Inject] public void Initialize() { } }
+            public struct State
+            {
+                [Inject] public void Initialize() { }
+            }
 
             public class Configuration
             {
@@ -150,7 +165,10 @@ public class MethodInjectionDiagnosticTests
             """
             using Macaron.DependencyInjection;
 
-            public class Service { [Inject] private void Initialize() { } }
+            public class Service
+            {
+                [Inject] private void Initialize() { }
+            }
             """,
             assemblyName: "ExternalServices"
         ));
@@ -175,7 +193,10 @@ public class MethodInjectionDiagnosticTests
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
-            public class Service { [Inject] public void Initialize() { } }
+            public class Service
+            {
+                [Inject] public void Initialize() { }
+            }
             public static class UserExtensions
             {
                 public static int Create(this InjectionContext<Service> context) => 42;

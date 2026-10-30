@@ -12,7 +12,10 @@ public class OptionalConstructorInjectionTests
         #nullable enable
         using Macaron.DependencyInjection;
 
-        public interface IView { string Value { get; } }
+        public interface IView
+        {
+            string Value { get; }
+        }
         public interface IDependency { }
         public sealed class Dependency : IDependency { }
 
@@ -306,7 +309,10 @@ public class OptionalConstructorInjectionTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class Service<T> { public Service(T? value) { } }
+            public sealed class Service<T>
+            {
+                public Service(T? value) { }
+            }
 
             public static class Probe
             {
@@ -335,7 +341,10 @@ public class OptionalConstructorInjectionTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class Service { public Service({{type}} value) { } }
+            public sealed class Service
+            {
+                public Service({{type}} value) { }
+            }
 
             public static class Probe
             {
@@ -362,7 +371,10 @@ public class OptionalConstructorInjectionTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class Service { public Service(string value) { } }
+            public sealed class Service
+            {
+                public Service(string value) { }
+            }
 
             public static class Probe
             {
@@ -430,7 +442,10 @@ public class OptionalConstructorInjectionTests
             using System;
             using Macaron.DependencyInjection;
 
-            public sealed class Service<T> { public Service(T value) { } }
+            public sealed class Service<T>
+            {
+                public Service(T value) { }
+            }
 
             public static class Probe
             {

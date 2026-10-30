@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -7,6 +7,21 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class AssistedRegistrationTests
 {
+    private const string ResolverTransientRegistration =
+        """
+        registrar.RegisterTransient(
+            (IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1)
+        );
+        """;
+
+    private const string ResolverLifetimeRegistration =
+        """
+        registrar.Register<Service>(
+            (IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1),
+            Lifetime.Transient
+        );
+        """;
+
     private const string ServiceDeclaration =
         """
         using Macaron.DependencyInjection;
@@ -50,8 +65,8 @@ public class AssistedRegistrationTests
     [TestCase("DependencyRegistrarExtensions.RegisterTransient<Service>(registrar);", "Service", 1)]
     [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service(1));", "Service", 1)]
     [TestCase("Action<object, Action<Service>> register = registrar.RegisterTransient<Service>;", "Service", 1)]
-    [TestCase("registrar.RegisterTransient((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1));", "RegisterTransient", 1)]
-    [TestCase("registrar.Register<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1), Lifetime.Transient);", "Service", 1)]
+    [TestCase(ResolverTransientRegistration, "RegisterTransient", 1)]
+    [TestCase(ResolverLifetimeRegistration, "Service", 1)]
     [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));", "RegisterSingleton", 1)]
     [TestCase("registrar.RegisterSingleton<Service>(() => resolver.For<Service>().Create(1));", "Service", 1)]
     [TestCase("registrar.RegisterSingleton(() => resolver.For<Service>().Create(1));", "RegisterSingleton", 1)]
@@ -80,17 +95,22 @@ public class AssistedRegistrationTests
                 }
             }
             """;
-        var input = CreateCompilation(consumer).AddSyntaxTrees(CSharpSyntaxTree.ParseText(ServiceDeclaration, InputParseOptions, "Service.cs"));
+        var input = CreateCompilation(consumer).AddSyntaxTrees(
+            CSharpSyntaxTree.ParseText(ServiceDeclaration, InputParseOptions, path: "Service.cs")
+        );
         var (compilation, sources, diagnostics) = GenerateWithDiagnostics(input);
+        var locationTexts = diagnostics.Select(diagnostic =>
+        {
+            var span = diagnostic.Location.SourceSpan;
+
+            return consumer.Substring(span.Start, span.Length);
+        });
 
         Assert.That(
             diagnostics.Select(diagnostic => diagnostic.Id),
             Is.EqualTo(Enumerable.Repeat("MADI0014", expectedCount))
         );
-        Assert.That(
-            diagnostics.Select(diagnostic => consumer.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
-            Is.All.EqualTo(locationText)
-        );
+        Assert.That(locationTexts, Is.All.EqualTo(locationText));
         Assert.That(
             sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
             Does.Contain("typeof(global::Valid)").And.Not.Contain("typeof(global::Service)").And.Not.Contain("typeof(global::Derived)")
@@ -194,6 +214,7 @@ public class AssistedRegistrationTests
             public class Service
             {
                 public Service() { }
+
                 {{constructor}}
             }
             """,
@@ -227,6 +248,7 @@ public class AssistedRegistrationTests
             using Macaron.DependencyInjection;
 
             public abstract class AbstractService { }
+
             public class Implementation : AbstractService
             {
                 [Inject] public Implementation([Assisted] int value) { }
@@ -260,12 +282,22 @@ public class AssistedRegistrationTests
             using Macaron.DependencyInjection;
 
             public class AssistedAttribute : System.Attribute { }
-            public class Ordinary { public Ordinary([Assisted] string value) { } }
+
+            public class Ordinary
+            {
+                public Ordinary([Assisted] string value) { }
+            }
+
             public class Service
             {
                 [Inject] public Service([Macaron.DependencyInjection.Assisted] int value) { }
             }
-            public class FakeRegistrar { public void RegisterSingleton<T>(T value) { } }
+
+            public class FakeRegistrar
+            {
+                public void RegisterSingleton<T>(T value) { }
+            }
+
             public class Configuration
             {
                 public void Configure(IDependencyRegistrar registrar, FakeRegistrar fake)

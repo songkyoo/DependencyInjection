@@ -288,7 +288,10 @@ public class DependencyContainerBuildFailureTests
         var firstTag = "first";
         var secondTag = "second";
         var protectedResource = new Resource();
-        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton<Resource>(protectedResource, tag: parentTag));
+        using var parent = DependencyContainerFactory.Create(registrar =>
+        {
+            registrar.RegisterSingleton<Resource>(protectedResource, tag: parentTag);
+        });
         var sharedResource = new Resource();
         var creationOrder = new List<string>();
         var cleanupOrder = new List<string>();
