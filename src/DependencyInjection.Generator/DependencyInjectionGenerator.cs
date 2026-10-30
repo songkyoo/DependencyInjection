@@ -156,7 +156,7 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             .Combine(context.CompilationProvider)
             .Select(static (data, cancellationToken) => ConstructionDiscovery.CreateDefinitions(
                 requests: data.Left,
-                compilation: (CSharpCompilation)data.Right,
+                sourceCompilation: (CSharpCompilation)data.Right,
                 cancellationToken
             ))
             .WithTrackingName("FactoryGeneration");
@@ -182,6 +182,39 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             action: static (output, creation) =>
             {
                 output.AddSource(creation.HintName, SourceText.From(creation.Source, Encoding.UTF8));
+            }
+        );
+
+        var injectionSources = generation
+            .SelectMany(static (result, _) => result.Injections)
+            .Select(static (definition, _) => (definition.HintName, Source: InjectionRenderer.Render(definition)))
+            .WithTrackingName("InjectionSource");
+
+        context.RegisterSourceOutput(
+            source: injectionSources,
+            action: static (output, injection) =>
+            {
+                output.AddSource(injection.HintName, SourceText.From(injection.Source, Encoding.UTF8));
+            }
+        );
+
+        var entryPoints = context.SyntaxProvider.CreateSyntaxProvider(
+            predicate: static (node, _) => InjectionEntryPointValidation.IsCandidate(node),
+            transform: static (syntax, _) => syntax.Node.GetReference()
+        );
+
+        context.RegisterSourceOutput(
+            source: entryPoints.Collect().Combine(context.CompilationProvider),
+            action: static (output, data) =>
+            {
+                foreach (var diagnostic in InjectionEntryPointValidation.Validate(
+                    references: data.Left,
+                    sourceCompilation: data.Right,
+                    cancellationToken: output.CancellationToken
+                ))
+                {
+                    output.ReportDiagnostic(diagnostic);
+                }
             }
         );
 

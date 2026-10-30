@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Reflection.Emit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -33,7 +33,7 @@ public class InjectionDeclarationMetadataTests
     [TestCase("private")]
     [TestCase("protected")]
     [TestCase("private protected")]
-    public void SourceInaccessibleMethod_ShouldFailAtUseWithoutChangingSelection(string accessibility)
+    public void SourceInaccessibleMethod_ShouldKeepSelectionAndReportAccessibility(string accessibility)
     {
         var input = CreateInput(
             $$"""
@@ -47,13 +47,10 @@ public class InjectionDeclarationMetadataTests
         var type = input.GetTypeByMetadataName("Service")!;
         var useLocation = input.GetTypeByMetadataName("Use")!.Locations.Single();
         var result = InjectionDeclarationAnalysis.Analyze(type, input, useLocation);
-        var diagnostic = InjectionDeclarationAnalysis.ValidateMethodUse(result.Member!, input, useLocation);
 
         AssertCompiles(input);
-        Assert.That(result.HasErrors, Is.False);
-        Assert.That(diagnostic!.Id, Is.EqualTo("MADI0018"));
-        Assert.That(diagnostic.Location, Is.EqualTo(useLocation));
-        Assert.That(diagnostic.AdditionalLocations, Has.Count.EqualTo(1));
+        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0018" }));
+        Assert.That(result.Member!.Name, Is.EqualTo("Initialize"));
     }
 
     [TestCase("private")]
@@ -61,7 +58,7 @@ public class InjectionDeclarationMetadataTests
     [TestCase("protected")]
     [TestCase("protected internal")]
     [TestCase("private protected")]
-    public void ExternalInaccessibleMethod_ShouldRemainSelectedAndFailAtConsumerUse(string accessibility)
+    public void ExternalInaccessibleMethod_ShouldKeepSelectionAndReportAccessibility(string accessibility)
     {
         var image = EmitAssembly(CreateInput(
             $$"""
@@ -75,14 +72,10 @@ public class InjectionDeclarationMetadataTests
         var type = input.GetTypeByMetadataName("Service")!;
         var useLocation = input.GetTypeByMetadataName("Use")!.Locations.Single();
         var result = InjectionDeclarationAnalysis.Analyze(type, input, useLocation);
-        var diagnostic = InjectionDeclarationAnalysis.ValidateMethodUse(result.Member!, input, useLocation);
 
         AssertCompiles(input);
-        Assert.That(result.HasErrors, Is.False);
+        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0018" }));
         Assert.That(result.Member!.Name, Is.EqualTo("Initialize"));
-        Assert.That(diagnostic!.Id, Is.EqualTo("MADI0018"));
-        Assert.That(diagnostic.Location, Is.EqualTo(useLocation));
-        Assert.That(diagnostic.AdditionalLocations, Is.Empty);
     }
 
     [Test]
@@ -124,7 +117,7 @@ public class InjectionDeclarationMetadataTests
         var useLocation = input.GetTypeByMetadataName("Use")!.Locations.Single();
         var result = InjectionDeclarationAnalysis.Analyze(type, input, useLocation);
 
-        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0017" }));
+        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
         Assert.That(result.Diagnostics.Single().Location, Is.EqualTo(useLocation));
     }
 
@@ -176,7 +169,7 @@ public class InjectionDeclarationMetadataTests
         var useLocation = input.GetTypeByMetadataName("Use")!.Locations.Single();
         var result = InjectionDeclarationAnalysis.Analyze(type, input, useLocation);
 
-        Assert.That(result.Diagnostics.Single().Id, Is.EqualTo("MADI0012"));
+        Assert.That(result.Diagnostics.Single().Id, Is.EqualTo("MADI0011"));
         Assert.That(result.Diagnostics.Single().GetMessage(), Does.StartWith("Method '"));
         Assert.That(result.Diagnostics.Single().Location, Is.EqualTo(useLocation));
     }
@@ -203,7 +196,7 @@ public class InjectionDeclarationMetadataTests
         var diagnostic = result.Diagnostics.Single();
 
         Assert.That(result.Member, Is.Null);
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0016"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0005"));
         Assert.That(diagnostic.Location, Is.EqualTo(useLocation));
         Assert.That(diagnostic.AdditionalLocations, Is.Empty);
     }
@@ -228,23 +221,20 @@ public class InjectionDeclarationMetadataTests
         var input = CreateCompilation(
             source: "public class Use { }",
             additionalReferences: MetadataReference.CreateFromImage(stream.ToArray())
-        ).WithOptions(new CSharpCompilationOptions(
-            outputKind: OutputKind.DynamicallyLinkedLibrary,
-            metadataImportOptions: MetadataImportOptions.All
-        ));
+        );
         var type = input.GetTypeByMetadataName("Service")!;
         var useLocation = input.GetTypeByMetadataName("Use")!.Locations.Single();
         var result = InjectionDeclarationAnalysis.Analyze(type, input, useLocation);
         var diagnostic = InjectionDeclarationAnalysis.ValidateMethodUse(result.Member!, input, useLocation);
 
         Assert.That(result.HasErrors, Is.False);
-        Assert.That(diagnostic!.Id, Is.EqualTo("MADI0010"));
+        Assert.That(diagnostic!.Id, Is.EqualTo("MADI0009"));
         Assert.That(diagnostic.GetMessage(), Does.Contain("method parameter"));
         Assert.That(diagnostic.Location, Is.EqualTo(useLocation));
     }
 
     [Test]
-    public void ProductionAnalyzerAndAttribute_ShouldKeepMethodFeatureInactive()
+    public void ProductionAnalyzerAndAttribute_ShouldEnableMethodDeclarations()
     {
         var input = CreateInput(
             """
@@ -257,12 +247,12 @@ public class InjectionDeclarationMetadataTests
         var result = InjectionDeclarationAnalysis.Analyze(type, input, type.Locations.Single());
         var attributeUsage = typeof(InjectAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
 
-        Assert.That(result.Diagnostics.Single().Id, Is.EqualTo("MADI0012"));
-        Assert.That(Analyze(input), Is.Empty);
-        Assert.That(attributeUsage.ValidOn, Is.EqualTo(AttributeTargets.Constructor));
+        Assert.That(result.Diagnostics.Single().Id, Is.EqualTo("MADI0011"));
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0011" }));
+        Assert.That(attributeUsage.ValidOn, Is.EqualTo(AttributeTargets.Constructor | AttributeTargets.Method));
         Assert.That(
             new DependencyInjectionAnalyzer().SupportedDiagnostics.Select(descriptor => descriptor.Id),
-            Does.Not.Contain("MADI0016").And.Not.Contain("MADI0017").And.Not.Contain("MADI0018")
+            Does.Contain("MADI0005").And.Contain("MADI0015").And.Contain("MADI0016")
         );
     }
 

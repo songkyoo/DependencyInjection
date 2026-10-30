@@ -6,12 +6,12 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class InjectionParameterDiagnosticTests
 {
-    [TestCase("ref int", "MADI0009")]
-    [TestCase("out int", "MADI0009")]
-    [TestCase("System.Span<int>", "MADI0009")]
-    [TestCase("System.ReadOnlySpan<int>", "MADI0009")]
-    [TestCase("int*", "MADI0009")]
-    [TestCase("delegate*<void>", "MADI0009")]
+    [TestCase("ref int", "MADI0008")]
+    [TestCase("out int", "MADI0008")]
+    [TestCase("System.Span<int>", "MADI0008")]
+    [TestCase("System.ReadOnlySpan<int>", "MADI0008")]
+    [TestCase("int*", "MADI0008")]
+    [TestCase("delegate*<void>", "MADI0008")]
     [TestCase("dynamic", "MADI0002")]
     [TestCase("dynamic[]", "MADI0002")]
     [TestCase("System.Collections.Generic.List<dynamic>", "MADI0002")]
@@ -42,9 +42,9 @@ public class InjectionParameterDiagnosticTests
         AssertCompiles(output);
     }
 
-    [TestCase("ref int", "value = 0;", "MADI0009")]
-    [TestCase("out int", "value = 0;", "MADI0009")]
-    [TestCase("System.Span<int>", "", "MADI0009")]
+    [TestCase("ref int", "value = 0;", "MADI0008")]
+    [TestCase("out int", "value = 0;", "MADI0008")]
+    [TestCase("System.Span<int>", "", "MADI0008")]
     [TestCase("dynamic", "", "MADI0002")]
     public void RepeatedUses_ShouldReportShapeOnceAndPreserveValidFactory(string parameterType, string body, string expectedId)
     {
@@ -83,9 +83,9 @@ public class InjectionParameterDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase("ref int", "value = 0;", "MADI0009")]
-    [TestCase("out int", "value = 0;", "MADI0009")]
-    [TestCase("System.Span<int>", "", "MADI0009")]
+    [TestCase("ref int", "value = 0;", "MADI0008")]
+    [TestCase("out int", "value = 0;", "MADI0008")]
+    [TestCase("System.Span<int>", "", "MADI0008")]
     [TestCase("dynamic", "", "MADI0002")]
     public void ReferencedTaggedParameter_ShouldReportAtUse(string parameterType, string body, string expectedId)
     {
@@ -97,7 +97,7 @@ public class InjectionParameterDiagnosticTests
             {
                 public Service() { }
                 [Inject]
-                private Service([Tag("tagged")] {{parameterType}} value) { {{body}} }
+                public Service([Tag("tagged")] {{parameterType}} value) { {{body}} }
             }
             """, assemblyName: "ExternalServices"
         ));
@@ -154,7 +154,7 @@ public class InjectionParameterDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0011", "MADI0012", "MADI0009"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0010", "MADI0011", "MADI0008"]));
         AssertCompiles(compilation);
     }
 

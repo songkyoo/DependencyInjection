@@ -12,12 +12,16 @@ public sealed class DependencyInjectionAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(
         DiagnosticDescriptors.DynamicTypeNotSupported,
+        DiagnosticDescriptors.MultipleInjectMembers,
         DiagnosticDescriptors.UnsupportedParameter,
         DiagnosticDescriptors.ArrayTagNotSupported,
         DiagnosticDescriptors.RequiresInject,
         DiagnosticDescriptors.TagValueTypeNotAccessible,
         DiagnosticDescriptors.ConflictingParameterAttributes,
-        DiagnosticDescriptors.AssistedTypeCannotBeRegistered
+        DiagnosticDescriptors.AssistedTypeCannotBeRegistered,
+        DiagnosticDescriptors.UnsupportedInjectionMethod,
+        DiagnosticDescriptors.MethodInjectedTypeCannotBeRegistered,
+        DiagnosticDescriptors.InjectionMemberNotAccessible
     );
 
     public override void Initialize(AnalysisContext context)
@@ -26,22 +30,15 @@ public sealed class DependencyInjectionAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
-            var input = (CSharpCompilation)start.Compilation;
+            var compilation = start.Compilation;
+            var models = new InjectionAnalysisModels(compilation);
 
-            // 외부 DLL의 비공개 생성자도 같은 선언 규칙으로 검사한다.
-            var compilation = input.WithOptions(input.Options.WithMetadataImportOptions(MetadataImportOptions.All));
-
-            start.RegisterSyntaxNodeAction(
-                analysis =>
+            start.RegisterSymbolAction(
+                action: analysis =>
                 {
-                    if (analysis.Node is not AttributeSyntax { Parent.Parent: ParameterSyntax } attribute)
-                    {
-                        return;
-                    }
-
-                    var diagnostics = InjectionParameterValidation.ValidateDeclaration(
-                        syntax: attribute,
-                        semanticModel: analysis.SemanticModel,
+                    var diagnostics = InjectionDeclarationValidation.ValidateSource(
+                        type: (INamedTypeSymbol)analysis.Symbol,
+                        compilation,
                         cancellationToken: analysis.CancellationToken
                     );
 
@@ -50,11 +47,71 @@ public sealed class DependencyInjectionAnalyzer : DiagnosticAnalyzer
                         analysis.ReportDiagnostic(diagnostic);
                     }
                 },
-                SyntaxKind.Attribute
+                symbolKinds: SymbolKind.NamedType
             );
 
             start.RegisterSyntaxNodeAction(
-                analysis =>
+                action: analysis =>
+                {
+                    var attribute = (AttributeSyntax)analysis.Node;
+
+                    if (attribute.Parent?.Parent is not (ParameterSyntax or LocalFunctionStatementSyntax))
+                    {
+                        return;
+                    }
+
+                    var model = analysis.SemanticModel;
+                    var sourceCompilation = model.Compilation;
+
+                    if (attribute.Parent.Parent is LocalFunctionStatementSyntax local
+                        && model.GetDeclaredSymbol(
+                            local,
+                            cancellationToken: analysis.CancellationToken
+                        ) is IMethodSymbol member
+                        && InjectionParameterValidation
+                            .FindInjectAttribute(member, sourceCompilation)?
+                            .ApplicationSyntaxReference?
+                            .Span == analysis.Node.Span
+                        && !CompilationValidation.HasDeclarationErrors(
+                            model,
+                            local,
+                            cancellationToken: analysis.CancellationToken
+                        )
+                    )
+                    {
+                        var diagnostic = InjectionDeclarationAnalysis.ValidateMethodShape(
+                            method: member,
+                            compilation: sourceCompilation,
+                            location: local.Identifier.GetLocation()
+                        );
+
+                        if (diagnostic is not null)
+                        {
+                            analysis.ReportDiagnostic(diagnostic);
+                        }
+                    }
+
+                    if (attribute.Parent.Parent is not ParameterSyntax)
+                    {
+                        return;
+                    }
+
+                    var diagnostics = InjectionParameterValidation.ValidateDeclaration(
+                        syntax: attribute,
+                        semanticModel: model,
+                        cancellationToken: analysis.CancellationToken
+                    );
+
+                    foreach (var diagnostic in diagnostics)
+                    {
+                        analysis.ReportDiagnostic(diagnostic);
+                    }
+                },
+                syntaxKinds: SyntaxKind.Attribute
+            );
+
+            start.RegisterSyntaxNodeAction(
+                action: analysis =>
                 {
                     var name = (SimpleNameSyntax)analysis.Node;
 
@@ -63,19 +120,20 @@ public sealed class DependencyInjectionAnalyzer : DiagnosticAnalyzer
                         return;
                     }
 
-                    // 외부 DLL의 비공개 생성자는 호스트가 제공한 기본 모델에서 생략될 수 있다.
-#pragma warning disable RS1030
-                    var model = compilation.GetSemanticModel(name.SyntaxTree);
-#pragma warning restore RS1030
-                    var diagnostics = RegistrationValidation.ValidateUse(name, model, analysis.CancellationToken);
+                    var model = analysis.SemanticModel;
+                    var diagnostics = RegistrationValidation.ValidateUse(
+                        name,
+                        model,
+                        models,
+                        cancellationToken: analysis.CancellationToken
+                    );
 
                     foreach (var diagnostic in diagnostics)
                     {
                         analysis.ReportDiagnostic(diagnostic);
                     }
                 },
-                SyntaxKind.IdentifierName,
-                SyntaxKind.GenericName
+                syntaxKinds: ImmutableArray.Create(SyntaxKind.IdentifierName, SyntaxKind.GenericName)
             );
         });
     }

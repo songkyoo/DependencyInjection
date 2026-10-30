@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -85,7 +85,7 @@ public class AssistedRegistrationTests
 
         Assert.That(
             diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo(Enumerable.Repeat("MADI0015", expectedCount))
+            Is.EqualTo(Enumerable.Repeat("MADI0014", expectedCount))
         );
         Assert.That(
             diagnostics.Select(diagnostic => consumer.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
@@ -119,7 +119,7 @@ public class AssistedRegistrationTests
             .AddSyntaxTrees(CSharpSyntaxTree.ParseText(ServiceDeclaration, InputParseOptions, "Service.cs"));
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(input);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0015"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
         AssertCompiles(compilation);
     }
 
@@ -151,7 +151,7 @@ public class AssistedRegistrationTests
     }
 
     [Test]
-    public void ExternalPrivateAssistedConstructor_ShouldPreventExplicitInstanceRegistration()
+    public void ExternalPrivateAssistedConstructor_ShouldRejectForWithoutConstructorFallback()
     {
         const string declaration =
             """
@@ -170,22 +170,21 @@ public class AssistedRegistrationTests
 
             public class Configuration
             {
-                public void Configure(IDependencyRegistrar registrar)
+                public void Configure(IDependencyResolver resolver)
                 {
-                    registrar.RegisterSingleton(new Service());
+                    resolver.For<Service>();
                 }
             }
             """, additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0015"]));
-        Assert.That(diagnostics.Single().AdditionalLocations, Is.Empty);
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0018" }));
         AssertCompiles(compilation);
     }
 
-    [TestCase("private Service([Assisted] int value) { }", "MADI0012")]
-    [TestCase("[Inject] private Service([Assisted] ref int value) { }", "MADI0009", "MADI0015")]
-    [TestCase("[Inject] private Service([Tag, Assisted] int value) { }", "MADI0014", "MADI0015")]
+    [TestCase("public Service([Assisted] int value) { }", "MADI0011")]
+    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0008")]
+    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0013")]
     public void ExternalDeclarationErrors_ShouldBeCheckedDuringExplicitRegistration(string constructor, params string[] expectedIds)
     {
         var external = EmitAssembly(CreateCompilation(

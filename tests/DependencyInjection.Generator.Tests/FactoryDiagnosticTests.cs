@@ -55,7 +55,9 @@ public class FactoryDiagnosticTests
 
         Assert.That(diagnostic.Id, Is.EqualTo("MADI0005"));
         Assert.That(
-            diagnostic.AdditionalLocations.Select(location => source.Substring(location.SourceSpan.Start, location.SourceSpan.Length)),
+            new[] { diagnostic.Location }
+                .Concat(diagnostic.AdditionalLocations)
+                .Select(location => source.Substring(location.SourceSpan.Start, location.SourceSpan.Length)),
             Is.EqualTo(["Inject", "Inject"])
         );
     }
@@ -120,7 +122,7 @@ public class FactoryDiagnosticTests
             source,
             additionalReferences: MetadataReference.CreateFromImage(image.ToArray())
         );
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0010", "MADI0010" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0009", "MADI0009" }));
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start), Is.EqualTo(new[]
         {
             source.IndexOf("Service>", StringComparison.Ordinal),
@@ -157,7 +159,7 @@ public class FactoryDiagnosticTests
 
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0009"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0008"));
         Assert.That(diagnostic.Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf("Service", StringComparison.Ordinal)));
         Assert.That(
             diagnostic.AdditionalLocations.Select(location => source.Substring(location.SourceSpan.Start, location.SourceSpan.Length)),

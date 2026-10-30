@@ -8,6 +8,22 @@ namespace Macaron.DependencyInjection.Analysis;
 
 internal static class InjectionDeclarationAnalysis
 {
+    internal static IEnumerable<IMethodSymbol> GetAccessibleMembers(INamedTypeSymbol type, Compilation compilation)
+    {
+        return type.GetMembers().OfType<IMethodSymbol>().Where(member =>
+        {
+            return compilation.IsSymbolAccessibleWithin(member, compilation.Assembly);
+        });
+    }
+
+    internal static bool HasMethodInjection(ITypeSymbol type, Compilation compilation)
+    {
+        return type is INamedTypeSymbol named && GetAccessibleMembers(named, compilation).Any(member =>
+        {
+            return member.MethodKind != MethodKind.Constructor && FindInjectAttribute(member, compilation) is not null;
+        });
+    }
+
     internal static InjectionDeclaration Analyze(
         INamedTypeSymbol type,
         Compilation compilation,
@@ -17,10 +33,14 @@ internal static class InjectionDeclarationAnalysis
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // GetMembers는 T의 직접 선언만 반환한다.
-        var members = type.GetMembers().OfType<IMethodSymbol>().ToArray();
+        // 접근성은 경로를 바꾸지 않는다. T 자체의 모든 Inject 선언으로 경로를 먼저 정한다.
+        var members = type.GetMembers().OfType<IMethodSymbol>().Where(member =>
+        {
+            return FindInjectAttribute(member, compilation) is not null
+                || compilation.IsSymbolAccessibleWithin(member, compilation.Assembly);
+        }).ToArray();
 
-        if (members.Any(member => CompilationValidation.HasMemberErrors(member, compilation, cancellationToken)))
+        if (members.Any(member => CompilationValidation.HasMemberDeclarationErrors(member, compilation, cancellationToken)))
         {
             return new InjectionDeclaration(
                 Member: null,
@@ -44,11 +64,8 @@ internal static class InjectionDeclarationAnalysis
                 .Select(location => location!)
                 .ToArray();
             var location = locations.LastOrDefault() ?? useLocation;
-            var descriptor = marked.All(member => member.MethodKind == MethodKind.Constructor)
-                ? DiagnosticDescriptors.MultipleInjectConstructors
-                : DiagnosticDescriptors.MultipleInjectMembers;
             var diagnostic = Diagnostic.Create(
-                descriptor,
+                descriptor: DiagnosticDescriptors.MultipleInjectMembers,
                 location,
                 additionalLocations: locations.Where(candidate => candidate.IsInSource && !candidate.Equals(location)),
                 properties: null,
@@ -57,6 +74,25 @@ internal static class InjectionDeclarationAnalysis
 
             return new InjectionDeclaration(
                 Member: null,
+                Diagnostics: ImmutableArray.Create(diagnostic),
+                HasCompilerErrors: false
+            );
+        }
+
+        var selected = marked.SingleOrDefault();
+
+        if (selected is not null && !compilation.IsSymbolAccessibleWithin(selected, compilation.Assembly))
+        {
+            var attribute = FindInjectAttribute(selected, compilation)!;
+            var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation() ?? useLocation;
+            var diagnostic = Diagnostic.Create(
+                descriptor: DiagnosticDescriptors.InjectionMemberNotAccessible,
+                location,
+                messageArgs: [selected.ToDisplayString()]
+            );
+
+            return new InjectionDeclaration(
+                Member: selected,
                 Diagnostics: ImmutableArray.Create(diagnostic),
                 HasCompilerErrors: false
             );
@@ -81,7 +117,7 @@ internal static class InjectionDeclarationAnalysis
         }
 
         return new InjectionDeclaration(
-            Member: marked.SingleOrDefault(),
+            Member: selected,
             Diagnostics: diagnostics.ToImmutable(),
             HasCompilerErrors: false
         );
@@ -100,17 +136,6 @@ internal static class InjectionDeclarationAnalysis
             return shapeDiagnostic;
         }
 
-        if (!compilation.IsSymbolAccessibleWithin(method, compilation.Assembly))
-        {
-            return Diagnostic.Create(
-                descriptor: DiagnosticDescriptors.InjectionMethodNotAccessible,
-                location: useLocation,
-                additionalLocations: method.Locations.Where(location => location.IsInSource),
-                properties: null,
-                messageArgs: [method.ToDisplayString(), method.ContainingType.ToDisplayString(FullyQualifiedFormat)]
-            );
-        }
-
         foreach (var parameter in method.Parameters)
         {
             if (!compilation.IsSymbolAccessibleWithin(parameter.Type, compilation.Assembly))
@@ -126,7 +151,6 @@ internal static class InjectionDeclarationAnalysis
                         parameter.Name,
                         method.ContainingType.ToDisplayString(FullyQualifiedFormat),
                         "method",
-                        "injection",
                     ]
                 );
             }
@@ -135,7 +159,7 @@ internal static class InjectionDeclarationAnalysis
         return null;
     }
 
-    private static Diagnostic? ValidateMethodShape(IMethodSymbol method, Compilation compilation, Location location)
+    internal static Diagnostic? ValidateMethodShape(IMethodSymbol method, Compilation compilation, Location location)
     {
         // 외부 DLL의 async void도 구분하도록 컴파일러가 남긴 상태 머신 특성을 함께 검사한다.
         var asyncAttribute = compilation.GetTypeByMetadataName(

@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -523,13 +523,11 @@ public class FactoryGenerationTests
         Assert.That(Execute<bool>(compilation), Is.True);
     }
 
-    [TestCase("public", true, false)]
-    [TestCase("internal", false, false)]
-    [TestCase("public", true, true)]
-    [TestCase("internal", false, true)]
-    public void ReferencedImplementation_ShouldHonorInjectMetadataAndAccessibility(
+    [TestCase("public", "external", false)]
+    [TestCase("public", "external", true)]
+    public void ReferencedImplementation_ShouldSelectAccessibleConstructor(
         string accessibility,
-        bool expectedFactory,
+        string expectedValue,
         bool singleType
     )
     {
@@ -555,22 +553,15 @@ public class FactoryGenerationTests
 
             public static class Probe
             {
-                public static bool Run()
+                public static string Run()
                 {
-                    try
+                    using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        using var container = DependencyContainerFactory.Create(registrar =>
-                        {
-                            registrar.RegisterSingleton<string>(() => "external");
-                            registrar.RegisterTransient<{{typeArguments}}>();
-                        });
+                        registrar.RegisterSingleton<string>(() => "external");
+                        registrar.RegisterTransient<{{typeArguments}}>();
+                    });
 
-                        return container.Resolve<Service>().Value == "external";
-                    }
-                    catch (System.Collections.Generic.KeyNotFoundException)
-                    {
-                        return false;
-                    }
+                    return container.Resolve<Service>().Value;
                 }
             }
             """,
@@ -578,15 +569,9 @@ public class FactoryGenerationTests
             additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(
-            diagnostics.Select(diagnostic => diagnostic.Id),
-            Is.EqualTo(expectedFactory ? Array.Empty<string>() : ["MADI0008"])
-        );
+        Assert.That(diagnostics, Is.Empty);
         AssertCompiles(compilation);
 
-        if (expectedFactory)
-        {
-            Assert.That(Execute<bool>(compilation, external), Is.True);
-        }
+        Assert.That(Execute<string>(compilation, external), Is.EqualTo(expectedValue));
     }
 }

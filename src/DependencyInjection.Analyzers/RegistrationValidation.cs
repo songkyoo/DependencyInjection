@@ -15,6 +15,7 @@ internal static class RegistrationValidation
     internal static ImmutableArray<Diagnostic> ValidateUse(
         SimpleNameSyntax name,
         SemanticModel model,
+        InjectionAnalysisModels models,
         CancellationToken cancellationToken
     )
     {
@@ -53,12 +54,16 @@ internal static class RegistrationValidation
             binding = invocation;
         }
 
-        if (model.GetDiagnostics(binding.Span, cancellationToken).Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+        if (model.GetSymbolInfo(binding, cancellationToken).Symbol is not IMethodSymbol)
         {
             return ImmutableArray<Diagnostic>.Empty;
         }
 
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+
+        model = models.ForTypes(model, method.TypeArguments);
+        compilation = model.Compilation;
+        method = (IMethodSymbol)model.GetSymbolInfo(name, cancellationToken).Symbol!;
 
         for (var i = 0; i < method.TypeArguments.Length; i++)
         {
@@ -67,27 +72,43 @@ internal static class RegistrationValidation
                 ? generic.TypeArgumentList.Arguments[i].GetLocation()
                 : name.GetLocation();
 
-            // 소스 선언은 특성 위치에서 한 번 보고하고 외부 DLL의 선언만 사용 위치에서 검사한다.
-            if (type is INamedTypeSymbol named && !named.Locations.Any(location => location.IsInSource))
+            if (type is not INamedTypeSymbol named)
             {
-                var declarationDiagnostic = InjectionParameterValidation.ValidateConstructors(
-                    implementation: named,
-                    compilation,
-                    useLocation: location
-                );
-
-                if (declarationDiagnostic is not null)
-                {
-                    diagnostics.Add(declarationDiagnostic);
-                }
+                continue;
             }
 
-            if (isRegistration && InjectionParameterValidation.HasAssistedConstructor(type, compilation)
-                && !CompilationValidation.HasConstructorErrors(type, compilation, cancellationToken)
-            )
+            var declaration = InjectionDeclarationAnalysis.Analyze(named, compilation, location, cancellationToken);
+
+            // 소스 선언은 선언 위치에 한 번 보고하고 외부 선언은 각 사용 위치에서 검사한다.
+            if (!named.Locations.Any(location => location.IsInSource))
+            {
+                diagnostics.AddRange(declaration.Diagnostics);
+            }
+
+            if (!isRegistration || declaration.HasErrors || declaration.Member is not { } member)
+            {
+                continue;
+            }
+
+            DiagnosticDescriptor? descriptor = null;
+
+            if (member.MethodKind != MethodKind.Constructor)
+            {
+                descriptor = DiagnosticDescriptors.MethodInjectedTypeCannotBeRegistered;
+            }
+            else if (member.Parameters.Any(parameter => InjectionParameterValidation.FindAttribute(
+                parameter,
+                compilation,
+                metadataName: "AssistedAttribute"
+            ) is not null))
+            {
+                descriptor = DiagnosticDescriptors.AssistedTypeCannotBeRegistered;
+            }
+
+            if (descriptor is not null)
             {
                 diagnostics.Add(Diagnostic.Create(
-                    descriptor: DiagnosticDescriptors.AssistedTypeCannotBeRegistered,
+                    descriptor,
                     location,
                     additionalLocations: type.Locations.Where(location => location.IsInSource),
                     properties: null,

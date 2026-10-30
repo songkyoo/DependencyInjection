@@ -7,9 +7,9 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 public class TagDiagnosticTests
 {
     [TestCase("public Service([Tag] string value) { }")]
-    [TestCase("private Service([Tag(null)] string value) { }")]
+    [TestCase("internal Service([Tag(null)] string value) { }")]
     [TestCase("public Service([Tag(\"tagged\")] string value) { } public Service() { }")]
-    [TestCase("private Service([Tag(\"tagged\")] string value) { } [Inject] public Service() { }")]
+    [TestCase("internal Service([Tag(\"tagged\")] string value) { } [Inject] public Service() { }")]
     public void UnusedTaggedConstructorWithoutInject_ShouldReportAtTag(string constructors)
     {
         var source =
@@ -21,7 +21,7 @@ public class TagDiagnosticTests
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0011"));
         Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
         Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Does.StartWith("Tag"));
         Assert.That(diagnostic.GetMessage(), Does.Contain("Inject").And.Contain("Service").And.Contain("value"));
@@ -42,7 +42,7 @@ public class TagDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0011", "MADI0012"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0010", "MADI0011"]));
         AssertCompiles(compilation);
     }
 
@@ -69,7 +69,7 @@ public class TagDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
         AssertCompiles(compilation);
     }
 
@@ -87,7 +87,7 @@ public class TagDiagnosticTests
             """;
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012", "MADI0012"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011", "MADI0011"]));
         Assert.That(diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
             Is.EquivalentTo(["Tag(\"first\")", "Tag(\"second\")"]));
         AssertCompiles(compilation);
@@ -123,7 +123,7 @@ public class TagDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
         var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
         Assert.That(factories, Does.Not.Contain("typeof(global::Service)").And.Contain("typeof(global::Valid)"));
         AssertCompiles(compilation);
@@ -142,7 +142,7 @@ public class TagDiagnosticTests
             public sealed class Service
             {
                 {{(hasDefaultConstructor ? "[Inject] public Service() { }" : "")}}
-                {{(hasDefaultConstructor ? "private" : "public")}} Service([Tag("tagged")] string value) { }
+                public Service([Tag("tagged")] string value) { }
             }
             """, assemblyName: "ExternalServices"
         ));
@@ -162,7 +162,7 @@ public class TagDiagnosticTests
         );
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0011"));
         Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo("Service"));
         Assert.That(diagnostic.GetMessage(), Does.Contain("Inject").And.Contain("Service").And.Contain("value"));
         AssertCompiles(compilation);
@@ -189,14 +189,14 @@ public class TagDiagnosticTests
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0011"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0010"));
         Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
         Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo(expression));
         Assert.That(diagnostic.GetMessage(), Does.Contain("value").And.Contain("Service"));
         AssertCompiles(compilation);
     }
 
-    [TestCase("public void Method([Tag(new[] { 1 })] string value) { }")]
+    [TestCase("[Inject] public void Method([Tag(new[] { 1 })] string value) { }")]
     [TestCase("public delegate void Callback([Tag(new[] { 1 })] string value);")]
     [TestCase("public string this[[Tag(new[] { 1 })] string value] => value;")]
     [TestCase("public void Method() { void Local([Tag(new[] { 1 })] string value) { } }")]
@@ -210,7 +210,7 @@ public class TagDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0010"]));
         AssertCompiles(compilation);
     }
 
@@ -249,7 +249,7 @@ public class TagDiagnosticTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0010"]));
         Assert.That(
             sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
             Does.Not.Contain("typeof(global::Service)")
@@ -288,7 +288,7 @@ public class TagDiagnosticTests
         );
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0011"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0010"));
         Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo("Service"));
         Assert.That(diagnostic.GetMessage(), Does.Contain("value").And.Contain("Service"));
         AssertCompiles(compilation);
@@ -316,9 +316,9 @@ public class TagDiagnosticTests
     }
 
     [Test]
-    public void TaggedMethodWithoutInject_ShouldRemainOutsideConstructorDiagnostic()
+    public void TaggedMethodWithoutInject_ShouldRequireInject()
     {
-        var (compilation, _) = Generate(
+        var (compilation, _, diagnostics) = GenerateWithDiagnostics(
             """
             using Macaron.DependencyInjection;
 
@@ -329,6 +329,7 @@ public class TagDiagnosticTests
             """
         );
 
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0011" }));
         AssertCompiles(compilation);
     }
 

@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -54,11 +54,11 @@ public class CreationDiagnosticTests
         """, InputParseOptions, "AssemblyInfo.cs"
     );
 
-    [TestCase("public Service([Tag] int value) { }", "MADI0012")]
-    [TestCase("[Inject] public Service([Tag(new[] { 1 })] int value) { }", "MADI0011")]
-    [TestCase("[Inject] public Service([Tag] ref int value) { }", "MADI0009")]
+    [TestCase("public Service([Tag] int value) { }", "MADI0011")]
+    [TestCase("[Inject] public Service([Tag(new[] { 1 })] int value) { }", "MADI0010")]
+    [TestCase("[Inject] public Service([Tag] ref int value) { }", "MADI0008")]
     [TestCase("[Inject] public Service([Tag] dynamic value) { }", "MADI0002")]
-    [TestCase("[Inject] private Service() { }", "MADI0008")]
+    [TestCase("[Inject] private Service() { }", "MADI0018")]
     public void InvalidExternalConstructor_ShouldDiagnoseForLocation(string constructor, string id)
     {
         var external = EmitAssembly(CreateCompilation(
@@ -81,7 +81,10 @@ public class CreationDiagnosticTests
                 public void Configure(IDependencyResolver resolver) { resolver.For<Service>(); }
             }
             """;
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(source, additionalReferences: MetadataReference.CreateFromImage(external));
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            source,
+            additionalReferences: MetadataReference.CreateFromImage(external)
+        );
         var diagnostic = diagnostics.Single();
 
         Assert.That(diagnostic.Id, Is.EqualTo(id));
@@ -95,10 +98,12 @@ public class CreationDiagnosticTests
     public void ExternalInternalConstructor_ShouldBeRejectedWithoutFriendAccess()
     {
         var external = EmitAssembly(CreateCompilation(InternalConstructor, "External"));
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(ForUse,
-            additionalReferences: MetadataReference.CreateFromImage(external));
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            ForUse,
+            additionalReferences: MetadataReference.CreateFromImage(external)
+        );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0008" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0018"]));
         Assert.That(sources, Has.Length.EqualTo(2));
         AssertCompiles(compilation);
     }
@@ -131,10 +136,12 @@ public class CreationDiagnosticTests
     public void ExternalInternalTag_ShouldBeRejectedWithoutFriendAccess()
     {
         var external = EmitAssembly(CreateCompilation(InternalTag, "External"));
-        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(ForUse,
-            additionalReferences: MetadataReference.CreateFromImage(external));
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            ForUse,
+            additionalReferences: MetadataReference.CreateFromImage(external)
+        );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0013" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
         Assert.That(sources, Has.Length.EqualTo(2));
         AssertCompiles(compilation);
     }
@@ -142,7 +149,10 @@ public class CreationDiagnosticTests
     [Test]
     public void ExternalInternalTag_ShouldResolveWithConsumerFriendAccess()
     {
-        var external = EmitAssembly(CreateCompilation(InternalTag, "External").AddSyntaxTrees(FriendAccess));
+        var external = EmitAssembly(CreateCompilation(
+            InternalTag,
+            assemblyName: "External"
+        ).AddSyntaxTrees(FriendAccess));
         var (compilation, _) = Generate(
             """
             using Macaron.DependencyInjection;

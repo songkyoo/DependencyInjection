@@ -6,5 +6,5 @@ internal sealed record ConstructionRequest(
     ITypeSymbol Implementation,
     Location Location,
     SyntaxReference NameReference,
-    bool GenerateCreate
+    bool IsForUse
 );

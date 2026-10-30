@@ -5,10 +5,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Macaron.DependencyInjection.Analysis;
 
 using static Macaron.DependencyInjection.Generator.HintNameHelpers;
+using static Macaron.DependencyInjection.Generator.KeywordNameHelpers;
 using static Macaron.DependencyInjection.Analysis.InjectionParameterValidation;
 using static Macaron.DependencyInjection.Analysis.CompilationValidation;
 using static Macaron.DependencyInjection.Generator.Result;
-using static Microsoft.CodeAnalysis.MetadataImportOptions;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
 namespace Macaron.DependencyInjection.Generator;
@@ -43,8 +43,8 @@ internal static class ConstructionDiscovery
         }
 
         var compilation = semanticModel.Compilation;
-        var generateCreate = method.Name == "For";
-        var extensions = generateCreate
+        var isForUse = method.Name == "For";
+        var extensions = isForUse
             ? compilation
                 .GetTypeByMetadataName("Macaron.DependencyInjection.IDependencyResolver")?
                 .ContainingAssembly
@@ -54,7 +54,7 @@ internal static class ConstructionDiscovery
         var comparer = SymbolEqualityComparer.Default;
 
         if (!comparer.Equals(definition.ContainingType, extensions)
-            || (generateCreate
+            || (isForUse
                 ? method.TypeArguments.Length != 1
                 : method.TypeArguments.Length is not (1 or 2)
             )
@@ -82,8 +82,9 @@ internal static class ConstructionDiscovery
 
         if (HasErrorDiagnostics(semanticModel, binding, cancellationToken)
             || ContainsType(implementation, TypeKind.Error)
-            || (implementation is INamedTypeSymbol named && HasConstructorErrors(named, compilation, cancellationToken)
-        )
+            || (implementation is INamedTypeSymbol named
+                && HasConstructorDeclarationErrors(named, compilation, cancellationToken)
+            )
         )
         {
             return null;
@@ -93,41 +94,43 @@ internal static class ConstructionDiscovery
             ? genericName.TypeArgumentList.Arguments[implementationIndex].GetLocation()
             : name.GetLocation();
 
-        return new ConstructionRequest(implementation, location, name.GetReference(), generateCreate);
+        return new ConstructionRequest(implementation, location, name.GetReference(), isForUse);
     }
 
     internal static FactoryGenerationResult CreateDefinitions(
         ImmutableArray<ConstructionRequest> requests,
-        CSharpCompilation compilation,
+        CSharpCompilation sourceCompilation,
         CancellationToken cancellationToken
     )
     {
-        // 외부 DLL의 비공개 생성자도 읽어야 접근 불가와 생성자 부재를 구분할 수 있다.
-        compilation = compilation.WithOptions(compilation.Options.WithMetadataImportOptions(All));
-
         var constructors = new List<(INamedTypeSymbol Type, CreationDefinition Definition)>();
         var definitions = ImmutableArray.CreateBuilder<FactoryDefinition>();
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var creations = ImmutableArray.CreateBuilder<CreationDefinition>();
+        var injections = ImmutableArray.CreateBuilder<InjectionDefinition>();
+        var injectionTypes = new List<INamedTypeSymbol>();
+        // 모든 요청을 같은 컴파일의 심볼로 비교하며 외부 타입의 비공개 Inject도 확인한다.
+        var compilation = sourceCompilation.WithOptions(
+            sourceCompilation.Options.WithMetadataImportOptions(MetadataImportOptions.All)
+        );
 
         foreach (var originalRequest in requests)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var name = originalRequest.NameReference.GetSyntax(cancellationToken);
-            var symbol = compilation
-                .GetSemanticModel(name.SyntaxTree)
-                .GetSymbolInfo(name, cancellationToken)
-                .Symbol;
+            var model = compilation.GetSemanticModel(name.SyntaxTree);
+            var symbol = model.GetSymbolInfo(name, cancellationToken).Symbol;
 
             if (symbol is not IMethodSymbol methodSymbol)
             {
                 continue;
             }
 
-            if (!originalRequest.GenerateCreate && methodSymbol.TypeArguments.Any(type =>
+            if (!originalRequest.IsForUse && methodSymbol.TypeArguments.Any(type =>
             {
-                return HasAssistedConstructor(type, compilation);
+                return HasAssistedConstructor(type, compilation)
+                    || InjectionDeclarationAnalysis.HasMethodInjection(type, compilation);
             }))
             {
                 continue;
@@ -151,6 +154,43 @@ internal static class ConstructionDiscovery
             }
 
             var implementation = implementationResult.Value;
+            var declaration = InjectionDeclarationAnalysis.Analyze(
+                implementation,
+                compilation,
+                useLocation: request.Location,
+                cancellationToken
+            );
+
+            // 독립 선언 오류는 Analyzer가 보고하며 여기서는 잘못된 출력만 막는다.
+            if (declaration.HasErrors)
+            {
+                continue;
+            }
+
+            if (declaration.Member is { MethodKind: not MethodKind.Constructor } injectionMethod)
+            {
+                if (injectionTypes.Any(type =>
+                {
+                    return compilation.ClassifyConversion(source: type, destination: implementation).IsIdentity;
+                }))
+                {
+                    continue;
+                }
+
+                var injection = CreateInjectionDefinition(request, implementation, injectionMethod, compilation);
+
+                if (injection.IsError)
+                {
+                    diagnostics.Add(injection.Error);
+                }
+                else if (!injections.Contains(injection.Value))
+                {
+                    injections.Add(injection.Value);
+                    injectionTypes.Add(implementation);
+                }
+
+                continue;
+            }
             // nullable 참조 표기와 튜플 요소 이름만 다른 타입은 같은 생성자 정의를 공유한다.
             var existingIndex = constructors.FindIndex(entry =>
             {
@@ -164,19 +204,7 @@ internal static class ConstructionDiscovery
                 continue;
             }
 
-            var declarationDiagnostic = ValidateConstructors(
-                implementation,
-                compilation,
-                useLocation: request.Location
-            );
-
-            if (declarationDiagnostic is not null)
-            {
-                // 독립적인 선언 진단은 Analyzer가 보고하며 생성기는 잘못된 출력만 막는다.
-                continue;
-            }
-
-            var definition = CreateDefinition(request, implementation, compilation);
+            var definition = CreateDefinition(request, implementation, declaration.Member, compilation);
 
             if (definition.IsError)
             {
@@ -196,12 +224,17 @@ internal static class ConstructionDiscovery
             AddCreation(request, definition.Value);
         }
 
-        return new FactoryGenerationResult(definitions.ToImmutable(), creations.ToImmutable(), diagnostics.ToImmutable());
+        return new FactoryGenerationResult(
+            Definitions: definitions.ToImmutable(),
+            Creations: creations.ToImmutable(),
+            Injections: injections.ToImmutable(),
+            Diagnostics: diagnostics.ToImmutable()
+        );
 
         #region Local Functions
         void AddCreation(ConstructionRequest request, CreationDefinition definition)
         {
-            if (request.GenerateCreate && !creations.Contains(definition))
+            if (request.IsForUse && !creations.Contains(definition))
             {
                 creations.Add(definition);
             }
@@ -264,13 +297,59 @@ internal static class ConstructionDiscovery
         return Ok(named);
     }
 
-    private static Result<CreationDefinition, Diagnostic> CreateDefinition(
+    private static Result<InjectionDefinition, Diagnostic> CreateInjectionDefinition(
         ConstructionRequest request,
         INamedTypeSymbol implementation,
+        IMethodSymbol method,
         Compilation compilation
     )
     {
-        var constructorResult = SelectConstructor(request, implementation, compilation);
+        var diagnostic = InjectionDeclarationAnalysis.ValidateMethodUse(method, compilation, request.Location);
+
+        if (diagnostic is not null)
+        {
+            return Error(diagnostic);
+        }
+
+        var builder = new InjectionArgumentsBuilder(method, compilation);
+        var contextName = builder.ReserveName("context");
+        var targetName = builder.ReserveName("instance");
+        var resolverName = builder.ReserveName("resolver");
+        var arguments = builder.Build(request.Location, resolverName);
+
+        if (arguments.IsError)
+        {
+            return Error(arguments.Error);
+        }
+
+        var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
+        var signatureFormat = AssistedParameterRenderer.SignatureTypeFormat;
+
+        return Ok(new InjectionDefinition(
+            HintName: GetCreationHintName(implementation.Name, implementation.Arity, typeName),
+            ContextTypeName: implementation.ToDisplayString(signatureFormat),
+            TargetTypeName: implementation.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(signatureFormat),
+            IsValueType: implementation.IsValueType,
+            MethodName: EscapeName(method.Name),
+            Parameters: arguments.Value.AssistedParameters,
+            Arguments: arguments.Value.Arguments,
+            DependencyStatements: arguments.Value.DependencyStatements,
+            ContextName: contextName,
+            TargetName: targetName,
+            ResolverName: resolverName
+        ));
+    }
+
+    private static Result<CreationDefinition, Diagnostic> CreateDefinition(
+        ConstructionRequest request,
+        INamedTypeSymbol implementation,
+        IMethodSymbol? markedConstructor,
+        Compilation compilation
+    )
+    {
+        var constructorResult = markedConstructor is not null
+            ? Ok<IMethodSymbol, Diagnostic>(markedConstructor)
+            : SelectConstructor(request, implementation, compilation);
 
         if (constructorResult.IsError)
         {
@@ -279,16 +358,6 @@ internal static class ConstructionDiscovery
 
         var constructor = constructorResult.Value;
         var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
-
-        if (!compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly))
-        {
-            return Error(CreateDiagnostic(
-                descriptor: DiagnosticDescriptors.ConstructorNotAccessible,
-                request,
-                additionalLocations: constructor.Locations,
-                arguments: [constructor.ToDisplayString(), typeName]
-            ));
-        }
 
         var argumentBuilder = new InjectionArgumentsBuilder(constructor, compilation);
         var contextName = argumentBuilder.ReserveName("context");
@@ -332,69 +401,31 @@ internal static class ConstructionDiscovery
         Compilation compilation
     )
     {
-        var comparer = SymbolEqualityComparer.Default;
-
-        var injectAttribute = compilation.GetTypeByMetadataName("Macaron.DependencyInjection.InjectAttribute");
-        var marked = implementation
-            .InstanceConstructors
-            .Where(constructor => injectAttribute is not null && constructor.GetAttributes().Any(attribute =>
-            {
-                return comparer.Equals(attribute.AttributeClass, injectAttribute);
-            }))
-            .ToArray();
         var typeName = implementation.ToDisplayString(FullyQualifiedFormat);
-
-        if (marked.Length > 1)
-        {
-            var locations = marked
-                .SelectMany(constructor => constructor.GetAttributes())
-                .Where(attribute => comparer.Equals(attribute.AttributeClass, injectAttribute))
-                .Select(attribute => attribute.ApplicationSyntaxReference)
-                .Where(reference => reference is not null)
-                .Select(reference => reference!.GetSyntax().GetLocation());
-
-            return Error(CreateDiagnostic(
-                descriptor: DiagnosticDescriptors.MultipleInjectConstructors,
-                request,
-                additionalLocations: locations,
-                arguments: [typeName]
-            ));
-        }
-
-        if (marked.Length == 1)
-        {
-            return Ok(marked[0]);
-        }
-
-        var publicConstructors = implementation
+        var constructors = implementation
             .InstanceConstructors
-            .Where(constructor => constructor.DeclaredAccessibility == Accessibility.Public)
+            .Where(constructor => compilation.IsSymbolAccessibleWithin(constructor, within: compilation.Assembly))
             .ToArray();
 
-        if (publicConstructors.Length == 0)
+        return constructors.Length switch
         {
-            return Error(CreateDiagnostic(
-                descriptor: DiagnosticDescriptors.NoPublicConstructor,
+            0 => Error(CreateDiagnostic(
+                descriptor: DiagnosticDescriptors.NoAccessibleConstructor,
                 request,
                 additionalLocations: implementation.Locations,
                 arguments: [typeName]
-            ));
-        }
-
-        if (publicConstructors.Length > 1)
-        {
-            return Error(CreateDiagnostic(
-                descriptor: DiagnosticDescriptors.AmbiguousPublicConstructors,
+            )),
+            > 1 => Error(CreateDiagnostic(
+                descriptor: DiagnosticDescriptors.AmbiguousConstructors,
                 request,
-                additionalLocations: publicConstructors.SelectMany(constructor => constructor.Locations),
+                additionalLocations: constructors.SelectMany(constructor => constructor.Locations),
                 arguments: [typeName]
-            ));
-        }
-
-        return Ok(publicConstructors[0]);
+            )),
+            _ => Ok(constructors[0]),
+        };
     }
 
-    private static bool IsClosed(ITypeSymbol type)
+    internal static bool IsClosed(ITypeSymbol type)
     {
         if (type.TypeKind == TypeKind.TypeParameter)
         {

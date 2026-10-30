@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -165,13 +165,13 @@ public class ConstructorIncrementalTests
         var driver = CreateDriver(trackIncrementalSteps: true)
             .RunGeneratorsAndAnalyze(input, out _, out var firstDiagnostics);
 
-        Assert.That(firstDiagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0006", "MADI0006" }));
+        Assert.That(firstDiagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0006", "MADI0006"]));
 
         var moved = CSharpSyntaxTree.ParseText("\n\n" + invalidSource, InputParseOptions, "Invalid.cs");
 
         driver = driver.RunGeneratorsAndAnalyze(input.ReplaceSyntaxTree(invalid, moved), out var output, out var diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0006", "MADI0006" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0006", "MADI0006"]));
 
         for (var i = 0; i < diagnostics.Length; i++)
         {
@@ -199,7 +199,7 @@ public class ConstructorIncrementalTests
             .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
-        Assert.That(Execute<string[]>(first), Is.EqualTo(new[] { "first", "first", "first" }));
+        Assert.That(Execute<string[]>(first), Is.EqualTo(["first", "first", "first"]));
 
         var updated = CSharpSyntaxTree.ParseText(
             text:
@@ -247,11 +247,11 @@ public class ConstructorIncrementalTests
         Assert.That(Execute<string[]>(output), Is.EqualTo(["updated", "updated", "updated"]));
     }
 
-    [TestCase(ArrayTagConstructor, "MADI0011", 1)]
-    [TestCase(MissingInjectConstructor, "MADI0012", 1)]
-    [TestCase(RefConstructor, "MADI0009", 1)]
+    [TestCase(ArrayTagConstructor, "MADI0010", 1)]
+    [TestCase(MissingInjectConstructor, "MADI0011", 1)]
+    [TestCase(RefConstructor, "MADI0008", 1)]
     [TestCase(DynamicConstructor, "MADI0002", 1)]
-    [TestCase(InaccessibleConstructor, "MADI0008", 3)]
+    [TestCase(InaccessibleConstructor, "MADI0018", 1)]
     [TestCase(NoPublicConstructor, "MADI0006", 3)]
     public void InvalidDeclaration_ShouldRemoveOutputsAndRestoreThemAfterCorrection(string constructor, string expectedId, int diagnosticCount)
     {
@@ -261,7 +261,7 @@ public class ConstructorIncrementalTests
             .RunGeneratorsAndAnalyze(input, out var first, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
-        Assert.That(Execute<string[]>(first), Is.EqualTo(new[] { "first", "first", "first" }));
+        Assert.That(Execute<string[]>(first), Is.EqualTo(["first", "first", "first"]));
 
         var invalid = CSharpSyntaxTree.ParseText(DeclareService(constructor), InputParseOptions, "Service.cs");
 

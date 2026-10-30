@@ -65,7 +65,6 @@ internal sealed class InjectionArgumentsBuilder
                         parameter.Name,
                         _member.ContainingType.ToDisplayString(FullyQualifiedFormat),
                         _member.MethodKind == MethodKind.Constructor ? "constructor" : "method",
-                        _member.MethodKind == MethodKind.Constructor ? "factory" : "injection",
                     ]
                 ));
             }

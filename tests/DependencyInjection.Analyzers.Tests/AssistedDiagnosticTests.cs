@@ -6,12 +6,12 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class AssistedDiagnosticTests
 {
-    [TestCase("public Service([Assisted] int value) { }", "MADI0012", "Assisted")]
-    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0009", "value")]
-    [TestCase("[Inject] public Service([Assisted] out int value) { value = 0; }", "MADI0009", "value")]
-    [TestCase("[Inject] public Service([Assisted] System.Span<int> value) { }", "MADI0009", "value")]
+    [TestCase("public Service([Assisted] int value) { }", "MADI0011", "Assisted")]
+    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0008", "value")]
+    [TestCase("[Inject] public Service([Assisted] out int value) { value = 0; }", "MADI0008", "value")]
+    [TestCase("[Inject] public Service([Assisted] System.Span<int> value) { }", "MADI0008", "value")]
     [TestCase("[Inject] public Service([Assisted] dynamic value) { }", "MADI0002", "value")]
-    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0014", "Assisted")]
+    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0013", "Assisted")]
     public void UnusedAssistedDeclaration_ShouldReportAtAttributeOrParameter(string constructor, string id, string locationText)
     {
         var source =
@@ -33,10 +33,10 @@ public class AssistedDiagnosticTests
         AssertCompiles(compilation);
     }
 
-    [TestCase("public Service([Assisted] int value) { }", "MADI0012")]
-    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0009")]
+    [TestCase("public Service([Assisted] int value) { }", "MADI0011")]
+    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0008")]
     [TestCase("[Inject] public Service([Assisted] dynamic value) { }", "MADI0002")]
-    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0014")]
+    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0013")]
     public void InvalidExternalDeclaration_ShouldReportAtEachForUse(string constructor, string id)
     {
         var external = EmitAssembly(CreateCompilation(

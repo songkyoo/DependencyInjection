@@ -6,5 +6,6 @@ namespace Macaron.DependencyInjection.Generator;
 internal sealed record FactoryGenerationResult(
     ImmutableArray<FactoryDefinition> Definitions,
     ImmutableArray<CreationDefinition> Creations,
+    ImmutableArray<InjectionDefinition> Injections,
     ImmutableArray<Diagnostic> Diagnostics
 );

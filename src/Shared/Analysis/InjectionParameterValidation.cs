@@ -18,11 +18,15 @@ internal static class InjectionParameterValidation
         var compilation = semanticModel.Compilation;
 
         if (semanticModel.GetSymbolInfo(syntax, cancellationToken).Symbol is not IMethodSymbol attributeConstructor
-            || semanticModel.GetDiagnostics(parameterSyntax.Span, cancellationToken).Any(diagnostic =>
-            {
-                return diagnostic.Severity == DiagnosticSeverity.Error;
-            })
+            || CompilationValidation.HasDeclarationErrors(semanticModel, parameterSyntax, cancellationToken)
             || semanticModel.GetDeclaredSymbol(parameterSyntax, cancellationToken) is not IParameterSymbol parameter
+        )
+        {
+            return ImmutableArray<Diagnostic>.Empty;
+        }
+
+        if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.Ordinary } member
+            && !compilation.IsSymbolAccessibleWithin(member, compilation.Assembly)
         )
         {
             return ImmutableArray<Diagnostic>.Empty;
@@ -59,11 +63,7 @@ internal static class InjectionParameterValidation
             Add(CreateConflictDiagnostic(parameter, syntax.GetLocation()));
         }
 
-        // 메서드 선언의 독립 진단은 Inject 메서드 API를 연결할 때 활성화한다.
-        if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor })
-        {
-            Add(ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation()));
-        }
+        Add(ValidateInjectRequirement(parameter, compilation, attributeName, syntax.GetLocation()));
 
         Add(ValidateShape(parameter, attributeName, parameterSyntax.Identifier.GetLocation()));
 
@@ -117,7 +117,8 @@ internal static class InjectionParameterValidation
             var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
             var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
 
-            if (!isMarked && tag is null && assisted is null)
+            // 특성 없는 생성자 인자의 형태는 기존 생성 경로에서 사용 위치에 진단한다.
+            if ((!isMarked || member.MethodKind == MethodKind.Constructor) && tag is null && assisted is null)
             {
                 continue;
             }
@@ -146,43 +147,6 @@ internal static class InjectionParameterValidation
             if (diagnostic is not null)
             {
                 return diagnostic;
-            }
-        }
-
-        return null;
-    }
-
-    internal static Diagnostic? ValidateConstructors(
-        INamedTypeSymbol implementation,
-        Compilation compilation,
-        Location useLocation
-    )
-    {
-        foreach (var constructor in implementation.InstanceConstructors)
-        {
-            foreach (var parameter in constructor.Parameters)
-            {
-                var tag = FindAttribute(parameter, compilation, metadataName: "TagAttribute");
-                var assisted = FindAttribute(parameter, compilation, metadataName: "AssistedAttribute");
-
-                if (tag is null && assisted is null)
-                {
-                    continue;
-                }
-
-                if (tag is not null && assisted is not null)
-                {
-                    return CreateConflictDiagnostic(parameter, useLocation);
-                }
-
-                var diagnostic = TagAttributeValidation.ValidateParameter(tag, parameter, compilation, useLocation)
-                    ?? ValidateInjectRequirement(parameter, compilation, tag is null ? "Assisted" : "Tag", useLocation)
-                    ?? ValidateShape(parameter, tag is null ? "Assisted" : "Tag", useLocation, parameter.Locations);
-
-                if (diagnostic is not null)
-                {
-                    return diagnostic;
-                }
             }
         }
 
@@ -295,7 +259,9 @@ internal static class InjectionParameterValidation
         Location location
     )
     {
-        if (parameter.ContainingSymbol is not IMethodSymbol member)
+        if (parameter.ContainingSymbol is not IMethodSymbol
+            { MethodKind: MethodKind.Constructor or MethodKind.Ordinary } member
+        )
         {
             return null;
         }
@@ -331,7 +297,8 @@ internal static class InjectionParameterValidation
             .InstanceConstructors
             .Any(constructor =>
             {
-                if (!constructor
+                if (!compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly)
+                    || !constructor
                     .GetAttributes()
                     .Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inject))
                 )

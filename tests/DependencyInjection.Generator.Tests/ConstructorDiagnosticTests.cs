@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -24,15 +24,6 @@ public class ConstructorDiagnosticTests
         }
         """;
 
-    private const string InaccessibleSelectedConstructor =
-        """
-        public class Service
-        {
-            public Service() { }
-            [Inject] private Service(int value) { }
-        }
-        """;
-
     [TestCase("T", "", "MADI0001")]
     [TestCase("Service<T>", "public class Service<T> { }", "MADI0001")]
     [TestCase("Service", "public abstract class Service { }", "MADI0003")]
@@ -40,20 +31,17 @@ public class ConstructorDiagnosticTests
     [TestCase("Service", "public enum Service { Value }", "MADI0003")]
     [TestCase("int[]", "", "MADI0003")]
     [TestCase("Service", "private class Service { }", "MADI0004")]
-    [TestCase("Service", MultipleInjectConstructors, "MADI0005")]
     [TestCase("Service", "public class Service { private Service() { } }", "MADI0006")]
     [TestCase("Service", AmbiguousConstructors, "MADI0007")]
     [TestCase("Service", "public struct Service { public Service(int value) { } }", "MADI0007")]
-    [TestCase("Service", InaccessibleSelectedConstructor, "MADI0008")]
-    [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0009")]
-    [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0009")]
+    [TestCase("Service", "public class Service { public Service(System.Span<int> value) { } }", "MADI0008")]
+    [TestCase("Service", "public class Service { public Service(ref int value) { } }", "MADI0008")]
+    [TestCase("Service", "public class Service { public Service(out int value) { value = 0; } }", "MADI0008")]
     [TestCase("Service", "public class Service { public Service(dynamic value) { } }", "MADI0002")]
     [TestCase("Service", "public class Service { public Service(dynamic[] value) { } }", "MADI0002")]
     [TestCase("Service", "public class Service { public Service(System.Collections.Generic.List<dynamic> value) { } }", "MADI0002")]
     [TestCase("Outer<T>.Service", "public class Outer<T> { public class Service { } }", "MADI0001")]
     [TestCase("Service<dynamic>", "public class Service<T> { }", "MADI0002")]
-    [TestCase("Service", "public class Service { [Inject] private Service() { } }", "MADI0008")]
     public void InvalidTarget_ShouldDiagnoseEachUseAndPreserveValidConstruction(string target, string declaration, string expectedId)
     {
         var source =
@@ -82,14 +70,53 @@ public class ConstructorDiagnosticTests
 
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(Enumerable.Repeat(expectedId, 4)));
         Assert.That(diagnostics.Select(diagnostic => diagnostic.Severity), Is.All.EqualTo(DiagnosticSeverity.Error));
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start).Distinct().Count(), Is.EqualTo(4));
-        Assert.That(diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
-            Is.All.EqualTo(target));
-        Assert.That(diagnostics.Last().Location.SourceSpan.Start, Is.EqualTo(source.LastIndexOf($"For<{target}>", StringComparison.Ordinal) + "For<".Length));
+        Assert.That(
+            diagnostics.Select(diagnostic => diagnostic.Location.SourceSpan.Start).Distinct().Count(),
+            Is.EqualTo(4)
+        );
+        Assert.That(
+            diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length)),
+            Is.All.EqualTo(target)
+        );
+        Assert.That(
+            diagnostics.Last().Location.SourceSpan.Start,
+            Is.EqualTo(source.LastIndexOf($"For<{target}>", StringComparison.Ordinal) + "For<".Length)
+        );
         Assert.That(diagnostics.Select(diagnostic => diagnostic.GetMessage()), Is.All.Contains(target));
         Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(1));
-        Assert.That(sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
-            Does.Contain("typeof(global::Valid)").And.Contain("capacity: 1"));
+        Assert.That(
+            sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString(),
+            Does.Contain("typeof(global::Valid)").And.Contain("capacity: 1")
+        );
+        AssertCompiles(compilation);
+    }
+
+    [Test]
+    public void DuplicateAccessibleInjectConstructors_ShouldDiagnoseDeclarationOnceAndKeepValidTarget()
+    {
+        var (compilation, sources, diagnostics) = GenerateWithDiagnostics(
+            $$"""
+            using Macaron.DependencyInjection;
+
+            {{MultipleInjectConstructors}}
+
+            public class Valid { }
+
+            public class Configuration
+            {
+                public void Configure(IDependencyRegistrar registrar, IDependencyResolver resolver)
+                {
+                    registrar.RegisterTransient<Service>();
+                    resolver.For<Service>();
+                    resolver.For<Service>();
+                    resolver.For<Valid>().Create();
+                }
+            }
+            """
+        );
+
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0005"]));
+        Assert.That(sources.Count(source => source.HintName.StartsWith("InjectionContextExtensions.")), Is.EqualTo(1));
         AssertCompiles(compilation);
     }
 

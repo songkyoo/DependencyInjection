@@ -42,8 +42,8 @@ public class InjectionDeclarationAnalysisTests
         Assert.That(result.Member, Is.Null);
     }
 
-    [TestCase("[Inject] public void First() { } [Inject] public void Second() { }", "MADI0016")]
-    [TestCase("[Inject] public Service() { } [Inject] public void Initialize() { }", "MADI0016")]
+    [TestCase("[Inject] public void First() { } [Inject] public void Second() { }", "MADI0005")]
+    [TestCase("[Inject] public Service() { } [Inject] public void Initialize() { }", "MADI0005")]
     [TestCase("[Inject] public Service() { } [Inject] public Service(int value) { }", "MADI0005")]
     public void MultipleDirectDeclarations_ShouldDiagnoseConflictWithRelatedLocation(string declarations, string expectedId)
     {
@@ -133,7 +133,7 @@ public class InjectionDeclarationAnalysisTests
         var result = InjectionDeclarationAnalysis.Analyze(type, input, type.Locations.Single());
 
         AssertCompiles(input);
-        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0017" }));
+        Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
         Assert.That(result.Member, Is.Not.Null);
     }
 
@@ -184,17 +184,17 @@ public class InjectionDeclarationAnalysisTests
         var diagnostic = result.Diagnostics.Single();
 
         AssertCompiles(input);
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0013"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
         Assert.That(diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan), Is.EqualTo(value));
     }
 
-    [TestCase("[Tag(\"main\")] string value", "", "MADI0012")]
-    [TestCase("[Assisted] int value", "", "MADI0012")]
-    [TestCase("[Tag, Assisted] int value", "[Inject]", "MADI0014")]
-    [TestCase("[Tag(new[] { 1 })] string value", "[Inject]", "MADI0011")]
-    [TestCase("ref int value", "[Inject]", "MADI0009")]
+    [TestCase("[Tag(\"main\")] string value", "", "MADI0011")]
+    [TestCase("[Assisted] int value", "", "MADI0011")]
+    [TestCase("[Tag, Assisted] int value", "[Inject]", "MADI0013")]
+    [TestCase("[Tag(new[] { 1 })] string value", "[Inject]", "MADI0010")]
+    [TestCase("ref int value", "[Inject]", "MADI0008")]
     [TestCase("dynamic value", "[Inject]", "MADI0002")]
-    [TestCase("System.Span<int> value", "[Inject]", "MADI0009")]
+    [TestCase("System.Span<int> value", "[Inject]", "MADI0008")]
     public void MethodParameters_ShouldUseSharedDeclarationRules(string parameter, string attribute, string expectedId)
     {
         var input = CreateInput(

@@ -53,7 +53,7 @@ public class TagValueAccessibilityTests
             out var diagnostics
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0013"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
         AssertCompiles(withoutFactory);
 
         var accessible = CSharpSyntaxTree.ParseText(
@@ -73,7 +73,7 @@ public class TagValueAccessibilityTests
 
         driver.RunGeneratorsAndAnalyze(input, out withoutFactory, out diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0013"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
         AssertCompiles(withoutFactory);
     }
 
@@ -93,7 +93,7 @@ public class TagValueAccessibilityTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0013", "MADI0012", "MADI0009"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EquivalentTo(["MADI0012", "MADI0011", "MADI0008"]));
         AssertCompiles(compilation);
     }
 
@@ -124,7 +124,7 @@ public class TagValueAccessibilityTests
         var (compilation, _, diagnostics) = GenerateWithDiagnostics(source);
         var diagnostic = diagnostics.Single();
 
-        Assert.That(diagnostic.Id, Is.EqualTo("MADI0013"));
+        Assert.That(diagnostic.Id, Is.EqualTo("MADI0012"));
         Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
         Assert.That(source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length), Is.EqualTo(expression));
         Assert.That(diagnostic.GetMessage(), Does.Contain("Tag").And.Contain("value").And.Contain("Service").And.EndsWith("."));
@@ -165,7 +165,7 @@ public class TagValueAccessibilityTests
             """
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0013"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0012"]));
 
         var factories = sources.Single(source => source.HintName.StartsWith("Factories.")).SourceText.ToString();
 
@@ -268,7 +268,7 @@ public class TagValueAccessibilityTests
             additionalReferences: MetadataReference.CreateFromImage(external)
         );
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(expectedFactory ? Array.Empty<string>() : ["MADI0013"]));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(expectedFactory ? Array.Empty<string>() : ["MADI0012"]));
 
         if (!expectedFactory)
         {

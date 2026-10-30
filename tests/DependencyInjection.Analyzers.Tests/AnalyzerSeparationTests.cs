@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
 
@@ -6,10 +6,10 @@ namespace Macaron.DependencyInjection.Analyzers.Tests;
 
 public class AnalyzerSeparationTests
 {
-    [TestCase("public Service([Tag(\"main\")] string value) { }", "MADI0012")]
-    [TestCase("[Inject] public Service([Tag(new[] { 1 })] string value) { }", "MADI0011")]
-    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0014")]
-    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0009")]
+    [TestCase("public Service([Tag(\"main\")] string value) { }", "MADI0011")]
+    [TestCase("[Inject] public Service([Tag(new[] { 1 })] string value) { }", "MADI0010")]
+    [TestCase("[Inject] public Service([Tag, Assisted] int value) { }", "MADI0013")]
+    [TestCase("[Inject] public Service([Assisted] ref int value) { }", "MADI0008")]
     [TestCase("[Inject] public Service([Assisted] dynamic value) { }", "MADI0002")]
     public void AnalyzerWithoutGenerator_ShouldCheckUnusedDeclarations(string constructor, string expectedId)
     {
@@ -24,7 +24,7 @@ public class AnalyzerSeparationTests
             """
         );
 
-        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { expectedId }));
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo([expectedId]));
         Assert.That(input.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions"), Is.Null);
     }
 
@@ -54,11 +54,11 @@ public class AnalyzerSeparationTests
         );
 
         AssertCompiles(input);
-        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
     }
 
     [Test]
-    public void AnalyzerWithoutGenerator_ShouldInspectExternalPrivateConstructors()
+    public void AnalyzerWithoutGenerator_ShouldRejectExternalPrivateInjectConstructor()
     {
         var image = EmitAssembly(CreateCompilation(
             """
@@ -77,12 +77,12 @@ public class AnalyzerSeparationTests
 
             public class Configuration
             {
-                public void Configure(IDependencyRegistrar registrar) => registrar.RegisterSingleton(new Service());
+                public void Configure(IDependencyResolver resolver) => resolver.For<Service>();
             }
             """, additionalReferences: MetadataReference.CreateFromImage(image)
         );
 
-        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+        Assert.That(Analyze(input).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0018"]));
         AssertCompiles(input);
     }
 
@@ -111,7 +111,7 @@ public class AnalyzerSeparationTests
 
         Assert.That(diagnostics, Is.Empty);
         Assert.That(factories, Does.Not.Contain("typeof(global::Service)").And.Contain("typeof(global::Valid)"));
-        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0012" }));
+        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0011"]));
         AssertCompiles(output);
     }
 
@@ -131,7 +131,7 @@ public class AnalyzerSeparationTests
         );
         CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
 
-        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0003" }));
+        Assert.That(diagnostics.Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0003"]));
         Assert.That(Analyze(output), Is.Empty);
     }
 
@@ -155,7 +155,7 @@ public class AnalyzerSeparationTests
         CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
 
         Assert.That(diagnostics, Is.Empty);
-        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(new[] { "MADI0015" }));
+        Assert.That(Analyze(output).Select(diagnostic => diagnostic.Id), Is.EqualTo(["MADI0014"]));
         AssertCompiles(output);
     }
 }
