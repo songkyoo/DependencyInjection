@@ -313,6 +313,7 @@ internal static class ConstructionDiscovery
             Parameters: arguments.Value.AssistedParameters,
             Arguments: arguments.Value.Arguments,
             DependencyStatements: arguments.Value.DependencyStatements,
+            TagFields: arguments.Value.TagFields,
             ContextName: contextName,
             TargetName: targetName,
             ResolverName: resolverName
@@ -361,7 +362,8 @@ internal static class ConstructionDiscovery
         var factory = new FactoryDefinition(
             TypeName: signatureTypeName,
             CreationExpression: creationExpression,
-            DependencyStatements: preparedArguments.DependencyStatements
+            DependencyStatements: preparedArguments.DependencyStatements,
+            TagFields: preparedArguments.TagFields
         );
         var hintName = GetCreationHintName(implementation.Name, implementation.Arity, typeName);
 

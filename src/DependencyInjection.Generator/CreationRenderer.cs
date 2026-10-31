@@ -20,6 +20,17 @@ internal static class CreationRenderer
                 {
             """
         );
+
+        if (factory.TagFields.Length > 0)
+        {
+            foreach (var field in factory.TagFields.Split('\n'))
+            {
+                source.AppendLine($"        {field}");
+            }
+
+            source.AppendLine();
+        }
+
         source.AppendLine($"        internal static {factory.TypeName} Create(");
 
         var parameters = definition.Parameters.Length == 0 ? "" : $", {definition.Parameters}";

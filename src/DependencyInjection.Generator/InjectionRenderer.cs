@@ -17,9 +17,20 @@ internal static class InjectionRenderer
             {
                 internal static partial class InjectionContextExtensions
                 {
-                    internal static void Inject(
             """
         );
+
+        if (definition.TagFields.Length > 0)
+        {
+            foreach (var field in definition.TagFields.Split('\n'))
+            {
+                source.AppendLine($"        {field}");
+            }
+
+            source.AppendLine();
+        }
+
+        source.AppendLine("        internal static void Inject(");
         source.AppendLine($"            this global::Macaron.DependencyInjection.InjectionContext<{definition.ContextTypeName}> {definition.ContextName},");
 
         var targetModifier = definition.IsValueType ? "ref " : "";

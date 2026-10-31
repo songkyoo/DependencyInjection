@@ -9,6 +9,7 @@ internal sealed record InjectionDefinition(
     string Parameters,
     string Arguments,
     string DependencyStatements,
+    string TagFields,
     string ContextName,
     string TargetName,
     string ResolverName

@@ -52,6 +52,17 @@ internal static class FactoriesRenderer
             var factory = definitions[i];
 
             source.AppendLine();
+
+            if (factory.TagFields.Length > 0)
+            {
+                foreach (var field in factory.TagFields.Split('\n'))
+                {
+                    source.AppendLine($"        {field}");
+                }
+
+                source.AppendLine();
+            }
+
             source.AppendLine($"        private static {factory.TypeName} Create{i}(");
             source.AppendLine("            global::Macaron.DependencyInjection.IDependencyResolver resolver,");
             source.AppendLine("            ref global::Macaron.DependencyInjection.CleanupCollector collector)");

@@ -3,6 +3,7 @@ using Macaron.DependencyInjection.Analysis;
 
 using static Macaron.DependencyInjection.Analysis.InjectionParameterValidation;
 using static Macaron.DependencyInjection.Generator.KeywordNameHelpers;
+using static Macaron.DependencyInjection.Generator.HintNameHelpers;
 using static Macaron.DependencyInjection.Generator.Result;
 using static Microsoft.CodeAnalysis.SymbolDisplayFormat;
 
@@ -30,6 +31,14 @@ internal sealed class InjectionArgumentsBuilder
         var arguments = new List<string>();
         var dependencyStatements = new List<string>();
         var assistedParameters = new List<string>();
+        var tagFields = new List<string>();
+        var boxedTags = new Dictionary<string, string>(StringComparer.Ordinal);
+        var containingType = _member.ContainingType;
+        var tagFieldPrefix = GetTagFieldPrefix(
+            containingType.Name,
+            containingType.Arity,
+            containingType.ToDisplayString(FullyQualifiedFormat)
+        );
         var usesInParameters = _member.Parameters.Any(parameter => parameter.RefKind == RefKind.In);
 
         foreach (var parameter in _member.Parameters)
@@ -80,9 +89,7 @@ internal sealed class InjectionArgumentsBuilder
                 continue;
             }
 
-            var resolveArguments = tag is { ConstructorArguments.Length: 1 }
-                ? $"tag: {TagValueRenderer.Render(tag.ConstructorArguments[0], _compilation)}"
-                : "";
+            var resolveArguments = RenderTagArguments(tag, parameter.Ordinal);
             var resolveExpression = DependencyArgumentRenderer.Render(
                 parameter,
                 resolverName,
@@ -107,8 +114,38 @@ internal sealed class InjectionArgumentsBuilder
         return Ok(new InjectionArguments(
             Arguments: string.Join(", ", arguments),
             DependencyStatements: string.Join("\n", dependencyStatements),
-            AssistedParameters: string.Join(", ", assistedParameters)
+            AssistedParameters: string.Join(", ", assistedParameters),
+            TagFields: string.Join("\n", tagFields)
         ));
+
+        #region Local Functions
+        string RenderTagArguments(AttributeData? attribute, int parameterIndex)
+        {
+            if (attribute is not { ConstructorArguments.Length: 1 })
+            {
+                return "";
+            }
+
+            var value = attribute.ConstructorArguments[0];
+            var expression = TagValueRenderer.Render(value, _compilation);
+
+            if (!value.IsNull && value.Type?.IsValueType == true)
+            {
+                if (!boxedTags.TryGetValue(expression, out var fieldName))
+                {
+                    fieldName = ReserveName($"{tagFieldPrefix}{parameterIndex}");
+                    boxedTags.Add(expression, fieldName);
+
+                    // object 필드에서 한 번 boxing하고 Contains와 Resolve의 반복 호출에 재사용한다.
+                    tagFields.Add($"private static readonly object {fieldName} = {expression};");
+                }
+
+                expression = fieldName;
+            }
+
+            return $"tag: {expression}";
+        }
+        #endregion
     }
 
     internal string ReserveName(string name)

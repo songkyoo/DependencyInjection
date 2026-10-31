@@ -276,6 +276,6 @@ public class EnumConstantTests
         var source = string.Join("\n", sources.Select(source => source.SourceText.ToString()));
 
         Assert.That(source, Does.Contain($"value = {expectedExpression}"));
-        Assert.That(source, Does.Contain($"tag: {expectedExpression}"));
+        Assert.That(source, Does.Contain($"= {expectedExpression};"));
     }
 }

@@ -14,6 +14,11 @@ internal static class HintNameHelpers
         return $"InjectionContextExtensions.{name}_{arity}.{GetStableHash(fullyQualifiedName):x8}.g.cs";
     }
 
+    internal static string GetTagFieldPrefix(string name, int arity, string fullyQualifiedName)
+    {
+        return $"_tag_{name}_{arity}_{GetStableHash(fullyQualifiedName):x8}_";
+    }
+
     private static uint GetStableHash(string value)
     {
         const uint fnvPrime = 16777619;
