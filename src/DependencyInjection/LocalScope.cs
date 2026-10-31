@@ -4,20 +4,18 @@ public sealed class LocalScope : IDependencyResolver, IDisposable
 {
     #region Fields
     private DependencyContainer? _container;
-    private readonly int _index;
     #endregion
 
     #region Properties
-    internal int Index => _index;
+    internal int LastCleanupIndex { get; set; } = -1;
 
     private DependencyContainer Container => _container ?? throw new ObjectDisposedException(nameof(LocalScope));
     #endregion
 
     #region Constructors
-    internal LocalScope(DependencyContainer container, int index)
+    internal LocalScope(DependencyContainer container)
     {
         _container = container;
-        _index = index;
     }
     #endregion
 
@@ -29,7 +27,7 @@ public sealed class LocalScope : IDependencyResolver, IDisposable
 
     public bool Contains<T>(object? tag = null)
     {
-        return Container.Contains<T>(tag, localScope: this);
+        return Container.Contains<T>(tag);
     }
     #endregion
 
@@ -44,6 +42,7 @@ public sealed class LocalScope : IDependencyResolver, IDisposable
     internal void Invalidate()
     {
         _container = null;
+        LastCleanupIndex = -1;
     }
     #endregion
 }

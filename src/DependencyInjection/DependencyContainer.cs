@@ -7,20 +7,6 @@ internal sealed class DependencyContainer(
     ImmutableDictionary<RegistrationKey, TypeRegistration> registry
 ) : IDependencyContainer
 {
-    #region Types
-    private struct LocalScopeSlot
-    {
-        internal LocalScope? Scope;
-        internal List<CleanupEntry>? Cleanups;
-
-        internal void Deconstruct(out LocalScope? scope, out List<CleanupEntry>? cleanups)
-        {
-            scope = Scope;
-            cleanups = Cleanups;
-        }
-    }
-    #endregion
-
     #region Static
     private static readonly ImmutableDictionary<RegistrationKey, TypeRegistration> EmptyRegistry =
         ImmutableDictionary.Create<RegistrationKey, TypeRegistration>();
@@ -80,9 +66,9 @@ internal sealed class DependencyContainer(
     private bool _isDisposed;
     private bool _isCleaningLocalScope;
 
-    private LocalScopeSlot[] _localScopeSlots = [];
-    private int _localScopeSlotCount;
-    private int _freeLocalScopeSlotCount;
+    private HashSet<LocalScope>? _localScopes;
+    private List<(CleanupEntry Entry, int PreviousIndex)>? _localScopeCleanups;
+    private Stack<int>? _freeLocalScopeCleanupIndices;
 
     private DependencyContainer? _parent = parent;
     private ImmutableDictionary<RegistrationKey, TypeRegistration> _registry = registry;
@@ -135,10 +121,9 @@ internal sealed class DependencyContainer(
         ThrowIfDisposed();
         ThrowIfLifecycleChangeBlocked(nameof(CreateLocalScope));
 
-        var index = AllocateLocalScopeSlot();
-        var localScope = new LocalScope(this, index);
+        var localScope = new LocalScope(this);
 
-        _localScopeSlots[index].Scope = localScope;
+        (_localScopes ??= []).Add(localScope);
 
         return localScope;
     }
@@ -159,27 +144,26 @@ internal sealed class DependencyContainer(
 
         List<Exception>? exceptions = null;
 
-        for (var i = _localScopeSlotCount - 1; i >= 0; i--)
+        if (_localScopes is not null)
         {
-            if (_localScopeSlots[i].Scope is null)
+            foreach (var localScope in _localScopes)
             {
-                continue;
-            }
-
-            try
-            {
-                DisposeLocalScopeSlot(i);
-            }
-            catch (Exception exception)
-            {
-                exceptions ??= [];
-                exceptions.Add(exception);
+                try
+                {
+                    // 전체 해제 중에는 집합을 변경하지 않고 각 범위의 체인만 정리한다.
+                    DisposeLocalScopeEntries(localScope);
+                }
+                catch (Exception exception)
+                {
+                    exceptions ??= [];
+                    exceptions.Add(exception);
+                }
             }
         }
 
-        _localScopeSlots = [];
-        _localScopeSlotCount = 0;
-        _freeLocalScopeSlotCount = 0;
+        _localScopes = null;
+        _localScopeCleanups = null;
+        _freeLocalScopeCleanupIndices = null;
 
         CleanupEntries(_cleanups, ref exceptions);
         _instances.Clear();
@@ -234,24 +218,16 @@ internal sealed class DependencyContainer(
 
     internal T Resolve<T>(object? tag, LocalScope localScope)
     {
-        ThrowIfLocalScopeInvalid(localScope);
-
         return (T)ResolveRecursively(new RegistrationKey(typeof(T), tag), _instances, dependencyContainer: this, localScope);
-    }
-
-    internal bool Contains<T>(object? tag, LocalScope localScope)
-    {
-        ThrowIfLocalScopeInvalid(localScope);
-
-        return Contains<T>(tag);
     }
 
     internal void DisposeLocalScope(LocalScope localScope)
     {
         ThrowIfLifecycleChangeBlocked(nameof(Dispose));
-        ThrowIfLocalScopeInvalid(localScope);
+        ThrowIfDisposed();
 
-        DisposeLocalScopeSlot(localScope.Index);
+        _localScopes!.Remove(localScope);
+        DisposeLocalScopeEntries(localScope);
     }
 
     private object ResolveRecursively(
@@ -279,8 +255,7 @@ internal sealed class DependencyContainer(
                         key,
                         factory,
                         cleanup,
-                        resolver,
-                        dependencyContainer.GetTransientCleanups(resolver)
+                        resolver
                     ),
                 TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
                     dependencyContainer.GetOrAdd(
@@ -321,7 +296,7 @@ internal sealed class DependencyContainer(
         }
 
         // 공유 서비스의 의존성은 최초 조회 범위가 아니라 그 서비스를 소유한 컨테이너에 귀속한다.
-        var newInstance = CreateInstance(key, factory, cleanup, resolver: this, cleanups: _cleanups);
+        var newInstance = CreateInstance(key, factory, cleanup, resolver: this);
 
         instances.Add(key, newInstance);
 
@@ -332,8 +307,7 @@ internal sealed class DependencyContainer(
         RegistrationKey key,
         DependencyFactory<object> factory,
         Action<object>? cleanup,
-        IDependencyResolver resolver,
-        List<CleanupEntry> cleanups
+        IDependencyResolver resolver
     )
     {
         // 실제로 서비스를 생성하는 컨테이너에서 키를 추적해 서로 다른 Scoped 캐시를 구분한다.
@@ -374,11 +348,11 @@ internal sealed class DependencyContainer(
         }
 
         // 역순 정리에서 수집 항목이 서비스보다 먼저 실행되도록 서비스를 먼저 기록한다.
-        cleanups.Add(new CleanupEntry(instance, cleanup));
+        AddCleanup(new CleanupEntry(instance, cleanup), resolver);
 
         foreach (var entry in cleanupCollector.Entries)
         {
-            cleanups.Add(entry);
+            AddCleanup(entry, resolver);
         }
 
         return instance;
@@ -409,63 +383,39 @@ internal sealed class DependencyContainer(
         #endregion
     }
 
-    private int AllocateLocalScopeSlot()
-    {
-        if (_freeLocalScopeSlotCount > 0)
-        {
-            for (var i = 0; i < _localScopeSlotCount; i++)
-            {
-                if (_localScopeSlots[i].Scope is null)
-                {
-                    _freeLocalScopeSlotCount -= 1;
-
-                    return i;
-                }
-            }
-        }
-
-        if (_localScopeSlotCount == _localScopeSlots.Length)
-        {
-            var capacity = _localScopeSlots.Length == 0 ? 4 : _localScopeSlots.Length * 2;
-
-            Array.Resize(ref _localScopeSlots, capacity);
-        }
-
-        var newIndex = _localScopeSlotCount;
-
-        _localScopeSlotCount += 1;
-
-        return newIndex;
-    }
-
-    private List<CleanupEntry> GetTransientCleanups(IDependencyResolver resolver)
+    private void AddCleanup(CleanupEntry entry, IDependencyResolver resolver)
     {
         if (resolver is not LocalScope localScope)
         {
-            return _cleanups;
+            _cleanups.Add(entry);
+
+            return;
         }
 
-        ref var slot = ref GetLocalScopeSlot(localScope);
+        var entries = _localScopeCleanups ??= [];
+        var node = (entry, localScope.LastCleanupIndex);
+        int index;
 
-        return slot.Cleanups ??= [];
+        if (_freeLocalScopeCleanupIndices is { Count: > 0 })
+        {
+            index = _freeLocalScopeCleanupIndices.Pop();
+            entries[index] = node;
+        }
+        else
+        {
+            index = entries.Count;
+            entries.Add(node);
+        }
+
+        localScope.LastCleanupIndex = index;
     }
 
-    private ref LocalScopeSlot GetLocalScopeSlot(LocalScope localScope)
+    private void DisposeLocalScopeEntries(LocalScope localScope)
     {
-        ThrowIfLocalScopeInvalid(localScope);
+        // 콜백 전에 범위를 무효화하고 정리할 체인을 분리한다.
+        var index = localScope.LastCleanupIndex;
 
-        return ref _localScopeSlots[localScope.Index];
-    }
-
-    private void DisposeLocalScopeSlot(int index)
-    {
-        var (scope, cleanups) = _localScopeSlots[index];
-
-        // 정리 콜백 전에 슬롯을 비우고 범위의 컨테이너 참조를 끊어 이전 참조를 무효화한다.
-        _localScopeSlots[index] = default;
-        _freeLocalScopeSlotCount += 1;
-
-        scope!.Invalidate();
+        localScope.Invalidate();
 
         _isCleaningLocalScope = true;
 
@@ -473,9 +423,24 @@ internal sealed class DependencyContainer(
 
         try
         {
-            if (cleanups is not null)
+            while (index >= 0)
             {
-                CleanupEntries(cleanups, ref exceptions);
+                // 다른 범위의 Resolve가 저장소를 확장하거나 이 인덱스를 재사용해도 사본으로 진행한다.
+                var (entry, previousIndex) = _localScopeCleanups![index];
+
+                _localScopeCleanups[index] = default;
+                (_freeLocalScopeCleanupIndices ??= new Stack<int>()).Push(index);
+                index = previousIndex;
+
+                try
+                {
+                    entry.Invoke();
+                }
+                catch (Exception exception)
+                {
+                    exceptions ??= [];
+                    exceptions.Add(exception);
+                }
             }
         }
         finally
@@ -507,19 +472,6 @@ internal sealed class DependencyContainer(
         if (_isCleaningLocalScope)
         {
             throw new InvalidOperationException($"Cannot call {operation} while a local scope is being disposed.");
-        }
-    }
-
-    private void ThrowIfLocalScopeInvalid(LocalScope localScope)
-    {
-        ThrowIfDisposed();
-
-        var index = localScope.Index;
-
-        // 슬롯 인덱스는 재사용되므로 현재 슬롯을 소유한 범위 객체의 참조까지 확인한다.
-        if ((uint)index >= (uint)_localScopeSlotCount || !ReferenceEquals(_localScopeSlots[index].Scope, localScope))
-        {
-            throw new ObjectDisposedException(nameof(LocalScope));
         }
     }
     #endregion
