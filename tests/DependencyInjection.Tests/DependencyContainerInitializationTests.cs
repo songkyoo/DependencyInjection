@@ -94,8 +94,8 @@ public class DependencyContainerInitializationTests
         var serviceCreations = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Service>(CreateService, serviceLifetime, tag: firstTag);
-            registrar.Register<Service>(CreateService, serviceLifetime, tag: secondTag);
+            registrar.Register(CreateService, serviceLifetime, tag: firstTag);
+            registrar.Register(CreateService, serviceLifetime, tag: secondTag);
             registrar.Register(factory: () =>
             {
                 dependencyCreations++;

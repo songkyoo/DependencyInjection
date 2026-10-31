@@ -35,7 +35,7 @@ public class DependencyContainerTransientTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
         });
         using var child = root.CreateChild();
         using var grandchild = child.CreateChild();
@@ -75,7 +75,7 @@ public class DependencyContainerTransientTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
             registrar.RegisterTransient(
                 factory: (resolver, ref _) => new Dependency(resolver.Resolve<Resource>()),
                 cleanup: dependency => dependency.CleanupCount++

@@ -1,3 +1,4 @@
+// ReSharper disable NotAccessedPositionalProperty.Local
 using System.Runtime.CompilerServices;
 
 namespace Macaron.DependencyInjection.Tests;
@@ -47,13 +48,12 @@ public class DependencyContainerBuildFailureTests
         });
 
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
+
         var validationError = exception.InnerExceptions[0];
 
         Assert.That(validationError, Is.TypeOf<InvalidOperationException>());
         Assert.That(validationError.Message, Does.Contain(typeof(Service).ToString()));
-
-        Assert.That(validationError.Message, Does.Contain(tag?.ToString() ?? "null"));
-
+        Assert.That(validationError.Message, Does.Contain(tag ?? "null"));
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
         Assert.That(serviceCleanups, Is.Zero);
         Assert.That(() => failedContainer!.Contains<Service>(), Throws.TypeOf<ObjectDisposedException>());
@@ -61,6 +61,7 @@ public class DependencyContainerBuildFailureTests
         Assert.That(collected.DisposeCount, Is.EqualTo(1));
         Assert.That(parent.Contains<Service>(), Is.False);
 
+        #region Local Functions
         void Configure(IDependencyRegistrar registrar)
         {
             DependencyFactory<Service> factory = (container, ref collector) =>
@@ -73,13 +74,14 @@ public class DependencyContainerBuildFailureTests
 
             if (lifetime == Lifetime.Scoped)
             {
-                registrar.RegisterScoped<Service>(factory, cleanup: _ => serviceCleanups++, tag: tag);
+                registrar.RegisterScoped(factory, cleanup: _ => serviceCleanups++, tag: tag);
             }
             else
             {
-                registrar.RegisterSingleton<Service>(factory, cleanup: _ => serviceCleanups++, tag: tag);
+                registrar.RegisterSingleton(factory, cleanup: _ => serviceCleanups++, tag: tag);
             }
         }
+        #endregion
     }
 
     [Test]
@@ -156,7 +158,7 @@ public class DependencyContainerBuildFailureTests
 
                     return resource;
                 }, tag: parentScopedTag);
-            registrar.RegisterSingleton<Resource>(factory: () => new Resource(), tag: parentSingletonTag);
+            registrar.RegisterSingleton(factory: () => new Resource(), tag: parentSingletonTag);
         });
         using var sibling = parent.CreateChild();
         var parentResource = scopedInstances[parent];
@@ -290,7 +292,7 @@ public class DependencyContainerBuildFailureTests
         var protectedResource = new Resource();
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Resource>(protectedResource, tag: parentTag);
+            registrar.RegisterSingleton(protectedResource, tag: parentTag);
         });
         var sharedResource = new Resource();
         var creationOrder = new List<string>();
@@ -318,7 +320,7 @@ public class DependencyContainerBuildFailureTests
 
         void Configure(IDependencyRegistrar registrar)
         {
-            registrar.Register<Resource>(factory: () =>
+            registrar.Register(factory: () =>
                 {
                     creationOrder.Add("first");
 

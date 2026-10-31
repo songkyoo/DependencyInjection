@@ -37,7 +37,7 @@ public class DependencyContainerChildInitializationTests
 
                 return resource;
             });
-            registrar.RegisterSingleton<object>(factory: () =>
+            registrar.RegisterSingleton(factory: () =>
             {
                 rootSingletonCreations++;
 
@@ -46,7 +46,7 @@ public class DependencyContainerChildInitializationTests
         });
         using var child = root.CreateChild(registrar =>
         {
-            registrar.RegisterSingleton<object>(factory: () =>
+            registrar.RegisterSingleton(factory: () =>
             {
                 childSingletonCreations++;
 
@@ -174,7 +174,7 @@ public class DependencyContainerChildInitializationTests
         IDependencyContainer? failedChild = null;
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Resource>(factory: () => new Resource(), tag: singletonTag);
+            registrar.RegisterSingleton(factory: () => new Resource(), tag: singletonTag);
             registrar.RegisterScoped<Resource>(factory: (resolver, ref _) =>
             {
                 var resource = new Resource(() =>
@@ -254,7 +254,7 @@ public class DependencyContainerChildInitializationTests
         var tag = useDefaultTag ? null : "service";
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(factory: () =>
+            registrar.Register(factory: () =>
                 {
                     parentCreations++;
 
@@ -263,7 +263,7 @@ public class DependencyContainerChildInitializationTests
         });
         using var child = root.CreateChild(registrar =>
         {
-            registrar.Register<Resource>(factory: () =>
+            registrar.Register(factory: () =>
                 {
                     childCreations++;
 
@@ -362,7 +362,7 @@ public class DependencyContainerChildInitializationTests
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
         Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions[0].Message, Does.Contain(typeof(string).ToString()));
-        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(tag?.ToString() ?? "null"));
+        Assert.That(exception.InnerExceptions[0].Message, Does.Contain(tag ?? "null"));
         Assert.That(root.Resolve<string>(tag), Is.EqualTo("Hello"));
 
         failCreation = false;

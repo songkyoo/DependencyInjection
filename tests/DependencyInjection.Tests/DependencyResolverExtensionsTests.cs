@@ -14,8 +14,8 @@ public class DependencyResolverExtensionsTests(bool useLocalScope)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Service>(factory: () => new Service());
-            registrar.RegisterSingleton<Service>(factory: () => new Service(), tag: "service");
+            registrar.RegisterSingleton(factory: () => new Service());
+            registrar.RegisterSingleton(factory: () => new Service(), tag: "service");
         });
         using var scope = container.CreateLocalScope();
         IDependencyResolver resolver = useLocalScope ? scope : container;
@@ -36,11 +36,11 @@ public class DependencyResolverExtensionsTests(bool useLocalScope)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Service>(factory: () => new Service(), tag: "service");
+            registrar.RegisterSingleton(factory: () => new Service(), tag: "service");
 
             if (missingTag is not null)
             {
-                registrar.RegisterSingleton<Service>(factory: () => new Service());
+                registrar.RegisterSingleton(factory: () => new Service());
             }
         });
         using var scope = container.CreateLocalScope();
@@ -106,12 +106,16 @@ public class DependencyResolverExtensionsTests(bool useLocalScope)
 
         Assert.That(error!.Message, Does.Contain(typeof(Service).ToString()));
         Assert.That(error.Message, Does.Contain(tag ?? "null"));
-        Assert.That(() => resolver.ResolveOrElse<Service>(current =>
-        {
-            fallbackCalls++;
-            return fallback;
-        }, tag), Throws.TypeOf<InvalidOperationException>());
-        Assert.That(() => resolver.ResolveOrElse<Service>(() =>
+        Assert.That(() => resolver.ResolveOrElse<Service>(
+            factory: _ =>
+            {
+                fallbackCalls++;
+                return fallback;
+            },
+            tag),
+            Throws.TypeOf<InvalidOperationException>()
+        );
+        Assert.That(() => resolver.ResolveOrElse(() =>
         {
             fallbackCalls++;
             return fallback;

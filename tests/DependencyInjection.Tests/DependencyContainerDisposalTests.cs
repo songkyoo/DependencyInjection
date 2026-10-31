@@ -54,7 +54,7 @@ public class DependencyContainerDisposalTests
 
         Assert.That(() => container.Resolve<Foo>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.Contains<Foo>(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => container.CreateChild(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(container.CreateChild, Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateChild(_ => configurationCalls++), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => container.CreateChild(installer), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(container.CreateLocalScope, Throws.TypeOf<ObjectDisposedException>());

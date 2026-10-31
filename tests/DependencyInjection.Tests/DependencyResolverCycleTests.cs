@@ -50,7 +50,7 @@ public class DependencyResolverCycleTests
     }
 
     [Test]
-    public void FailedFactoryCleanup_ShouldRejectRecursiveCreation_AndAllowRetry([Values] bool useLocalScope)
+    public void FailedFactoryCleanup_ShouldRejectResolveBeforeCycleDetection_AndAllowRetry([Values] bool useLocalScope)
     {
         var failCreation = true;
         var factoryCalls = 0;
@@ -83,7 +83,7 @@ public class DependencyResolverCycleTests
         Assert.That(error!.InnerExceptions, Has.Count.EqualTo(2));
         Assert.That(error.InnerExceptions[0], Is.SameAs(creationFailure));
         Assert.That(error.InnerExceptions[1], Is.TypeOf<InvalidOperationException>());
-        Assert.That(error.InnerExceptions[1].Message, Does.Contain("Cyclic dependency detected"));
+        Assert.That(error.InnerExceptions[1].Message, Does.Contain("cleanup"));
         Assert.That(factoryCalls, Is.EqualTo(1));
 
         var service = resolver.Resolve<Service>();
@@ -106,7 +106,7 @@ public class DependencyResolverCycleTests
                 },
                 tag: "first"
             );
-            registrar.RegisterTransient<Service>(factory: () => new Service(), tag: "second");
+            registrar.RegisterTransient(factory: () => new Service(), tag: "second");
         });
 
         Assert.That(() => container.Resolve<Service>("first"), Throws.Nothing);
@@ -126,7 +126,7 @@ public class DependencyResolverCycleTests
                 },
                 tag: "service"
             );
-            registrar.RegisterTransient<OtherService>(factory: () => new OtherService(), tag: "service");
+            registrar.RegisterTransient(factory: () => new OtherService(), tag: "service");
         });
 
         Assert.That(() => container.Resolve<Service>("service"), Throws.Nothing);

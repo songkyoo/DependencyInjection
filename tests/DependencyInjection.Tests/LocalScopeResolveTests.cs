@@ -63,7 +63,7 @@ public class LocalScopeResolveTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
             registrar.Register<Service>(factory: (resolver, ref _) =>
                 new Service(resolver.Resolve<Resource>(), resolver.Resolve<Resource>()), lifetime);
         });
@@ -104,7 +104,7 @@ public class LocalScopeResolveTests
         var serviceId = 0;
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterScoped<Resource>(factory: () => new Resource(), tag: sharedTag);
+            registrar.RegisterScoped(factory: () => new Resource(), tag: sharedTag);
             registrar.RegisterTransient<Resource>(
                 factory: (resolver, ref collector) =>
                 {
@@ -180,7 +180,7 @@ public class LocalScopeResolveTests
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
         });
         var scope = container.CreateLocalScope();
         IDependencyResolver? capturedResolver = null;

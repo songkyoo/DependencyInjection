@@ -59,19 +59,19 @@ internal sealed class DependencyContainer(
     #endregion
 
     #region Fields
+    private DependencyContainer? _parent = parent;
+    private ImmutableDictionary<RegistrationKey, TypeRegistration> _registry = registry;
+    private bool _isDisposed;
+
     private readonly Dictionary<RegistrationKey, object> _instances = new();
     private readonly List<CleanupEntry> _cleanups = [];
     private readonly Stack<RegistrationKey> _resolutionStack = new();
     private int _creationDepth;
-    private bool _isDisposed;
-    private bool _isCleaningLocalScope;
+    private bool _isCleaning;
 
     private HashSet<LocalScope>? _localScopes;
     private List<(CleanupEntry Entry, int PreviousIndex)>? _localScopeCleanups;
     private Stack<int>? _freeLocalScopeCleanupIndices;
-
-    private DependencyContainer? _parent = parent;
-    private ImmutableDictionary<RegistrationKey, TypeRegistration> _registry = registry;
     #endregion
 
     #region IDependencyContainer Interface
@@ -239,6 +239,11 @@ internal sealed class DependencyContainer(
     {
         ThrowIfDisposed();
 
+        if (_isCleaning)
+        {
+            throw new InvalidOperationException("Cannot resolve services while cleanup is running.");
+        }
+
         if (key.IsResolver)
         {
             return resolver;
@@ -358,26 +363,35 @@ internal sealed class DependencyContainer(
         return instance;
 
         #region Local Functions
-        static void CleanupFailedFactory(in CleanupCollector cleanupCollector, Exception factoryException)
+        void CleanupFailedFactory(in CleanupCollector cleanupCollector, Exception factoryException)
         {
-            var exceptions = new List<Exception> { factoryException };
-            var entries = cleanupCollector.Entries;
+            _isCleaning = true;
 
-            for (var i = entries.Length - 1; i >= 0; i--)
+            try
             {
-                try
+                var exceptions = new List<Exception> { factoryException };
+                var entries = cleanupCollector.Entries;
+
+                for (var i = entries.Length - 1; i >= 0; i--)
                 {
-                    entries[i].Invoke();
+                    try
+                    {
+                        entries[i].Invoke();
+                    }
+                    catch (Exception exception)
+                    {
+                        exceptions.Add(exception);
+                    }
                 }
-                catch (Exception exception)
+
+                if (exceptions.Count > 1)
                 {
-                    exceptions.Add(exception);
+                    throw new AggregateException(exceptions);
                 }
             }
-
-            if (exceptions.Count > 1)
+            finally
             {
-                throw new AggregateException(exceptions);
+                _isCleaning = false;
             }
         }
         #endregion
@@ -417,7 +431,7 @@ internal sealed class DependencyContainer(
 
         localScope.Invalidate();
 
-        _isCleaningLocalScope = true;
+        _isCleaning = true;
 
         List<Exception>? exceptions = null;
 
@@ -425,7 +439,7 @@ internal sealed class DependencyContainer(
         {
             while (index >= 0)
             {
-                // 다른 범위의 Resolve가 저장소를 확장하거나 이 인덱스를 재사용해도 사본으로 진행한다.
+                // 정리가 실패해도 저장소가 서비스 참조를 보관하지 않도록 콜백 전에 비운다.
                 var (entry, previousIndex) = _localScopeCleanups![index];
 
                 _localScopeCleanups[index] = default;
@@ -445,7 +459,7 @@ internal sealed class DependencyContainer(
         }
         finally
         {
-            _isCleaningLocalScope = false;
+            _isCleaning = false;
         }
 
         if (exceptions is not null)
@@ -469,9 +483,9 @@ internal sealed class DependencyContainer(
             throw new InvalidOperationException($"Cannot call {operation} while a service is being created.");
         }
 
-        if (_isCleaningLocalScope)
+        if (_isCleaning)
         {
-            throw new InvalidOperationException($"Cannot call {operation} while a local scope is being disposed.");
+            throw new InvalidOperationException($"Cannot call {operation} while cleanup is running.");
         }
     }
     #endregion

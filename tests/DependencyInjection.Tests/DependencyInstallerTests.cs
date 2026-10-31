@@ -76,7 +76,7 @@ public class DependencyInstallerTests
         var factoryCalls = 0;
         using var parent = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton<Service>(factory: () => new Service());
+            registrar.RegisterSingleton(factory: () => new Service());
         });
         var parentService = parent.Resolve<Service>();
         var error = Assert.Throws<AggregateException>(() =>
@@ -121,7 +121,7 @@ public class DependencyInstallerTests
         var installer = new Installer(registrar =>
         {
             registrars.Add(registrar);
-            registrar.Register<Resource>(factory: () => new Resource(), lifetime, tag: tag);
+            registrar.Register(factory: () => new Resource(), lifetime, tag: tag);
         });
         using var parent = DependencyContainerFactory.Create(_ => { });
         var first = createChild ? parent.CreateChild(installer) : DependencyContainerFactory.Create(installer);
@@ -182,7 +182,7 @@ public class DependencyInstallerTests
     {
         using var parent = DependencyContainerFactory.Create(new Installer(registrar =>
         {
-            registrar.RegisterSingleton<Resource>(factory: () => new Resource());
+            registrar.RegisterSingleton(factory: () => new Resource());
         }));
         var resource = parent.Resolve<Resource>();
         var child = useActionOverload ? parent.CreateChild(_ => { }) : parent.CreateChild();

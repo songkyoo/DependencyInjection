@@ -47,9 +47,9 @@ public class DependencyResolverSelfReferenceTests
             Assert.That(resolver.Resolve<IDependencyResolver>(), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrNull<IDependencyResolver>(tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrNull<IDependencyResolver>(), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrElse<IDependencyResolver>(fallback, tag: tag), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrElse(fallback, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse(fallback), Is.SameAs(resolver));
-            Assert.That(resolver.ResolveOrElse<IDependencyResolver>(resolverFallback, tag: tag), Is.SameAs(resolver));
+            Assert.That(resolver.ResolveOrElse(resolverFallback, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse(resolverFallback), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse<IDependencyResolver>(root, tag: tag), Is.SameAs(resolver));
             Assert.That(resolver.ResolveOrElse((IDependencyResolver)root), Is.SameAs(resolver));
@@ -90,7 +90,7 @@ public class DependencyResolverSelfReferenceTests
         {
             if (useExplicitTag)
             {
-                registrar.Register<IDependencyResolver>(factory, lifetime, tag: null);
+                registrar.Register(factory, lifetime, tag: null);
             }
             else
             {
@@ -188,7 +188,7 @@ public class DependencyResolverSelfReferenceTests
 
         Consumer CreateConsumer(IDependencyResolver resolver, ref CleanupCollector _)
         {
-            var self = resolver.Resolve<IDependencyResolver>(null);
+            var self = resolver.Resolve<IDependencyResolver>();
 
             Assert.That(self, Is.SameAs(resolver));
 
@@ -203,7 +203,7 @@ public class DependencyResolverSelfReferenceTests
     {
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
             registrar.RegisterTransient<Dependency>(factory: (resolver, ref _) =>
             {
                 return new Dependency(resolver.Resolve<IDependencyResolver>());

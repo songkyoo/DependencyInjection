@@ -27,7 +27,7 @@ public class DependencyContainerFactoryScopeTests
                     factoryCalls++;
 
                     Assert.That(container.Contains<Dependency>(), Is.True);
-                    Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                    Assert.That(container.CreateChild, Throws.InvalidOperationException);
                     Assert.That(container.CreateLocalScope, Throws.InvalidOperationException);
 
                     var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -116,7 +116,7 @@ public class DependencyContainerFactoryScopeTests
                         {
                             collectedCleanups++;
 
-                            Assert.That(() => container.CreateChild(), Throws.InvalidOperationException);
+                            Assert.That(container.CreateChild, Throws.InvalidOperationException);
 
                             if (cleanupFails)
                             {

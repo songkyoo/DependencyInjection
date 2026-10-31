@@ -1,4 +1,5 @@
 // ReSharper disable AccessToDisposedClosure
+// ReSharper disable NotAccessedPositionalProperty.Local
 namespace Macaron.DependencyInjection.Tests;
 
 public class DependencyContainerTagTests
@@ -93,8 +94,8 @@ public class DependencyContainerTagTests
         Assert.That(
             () => DependencyContainerFactory.Create(registrar =>
             {
-                registrar.Register<Service>(factory: () => new Service(), lifetime);
-                registrar.Register<Service>(factory: () => new Service(), lifetime, tag: null);
+                registrar.Register(factory: () => new Service(), lifetime);
+                registrar.Register(factory: () => new Service(), lifetime, tag: null);
             }),
             Throws.ArgumentException
         );
@@ -108,10 +109,10 @@ public class DependencyContainerTagTests
         {
             foreach (var tag in tags)
             {
-                registrar.Register<Service>(factory: () => new Service(), lifetime, tag: tag);
+                registrar.Register(factory: () => new Service(), lifetime, tag: tag);
             }
         });
-        var instances = tags.Select(tag => container.Resolve<Service>(tag)).ToArray();
+        var instances = tags.Select(container.Resolve<Service>).ToArray();
 
         Assert.That(instances.Distinct().Count(), Is.EqualTo(tags.Length));
 
@@ -129,8 +130,8 @@ public class DependencyContainerTagTests
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Service>(factory: () => new Service(), lifetime, tag: "service");
-            registrar.Register<OtherService>(factory: () => new OtherService(), lifetime, tag: "service");
+            registrar.Register(factory: () => new Service(), lifetime, tag: "service");
+            registrar.Register(factory: () => new OtherService(), lifetime, tag: "service");
         });
 
         Assert.That(container.Resolve<Service>("service"), Is.TypeOf<Service>());

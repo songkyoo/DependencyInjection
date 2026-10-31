@@ -29,7 +29,7 @@ public class DependencyContainerCleanupTests
     {
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.Register<Resource>(factory: () => new Resource(), lifetime, cleanup: _ => { });
+            registrar.Register(factory: () => new Resource(), lifetime, cleanup: _ => { });
         });
         var resource = container.Resolve<Resource>();
 
@@ -183,17 +183,17 @@ public class DependencyContainerCleanupTests
         var tag = "service";
 
         yield return Registration("GeneralFactoryWithTag", tag,
-            (registrar, cleanup) => registrar.Register<IService>(() => new Service(), Lifetime.Scoped, cleanup: cleanup, tag: tag));
+            (registrar, cleanup) => registrar.Register(() => new Service(), Lifetime.Scoped, cleanup: cleanup, tag: tag));
         yield return Registration("GeneralContainerFactoryWithTag", tag,
-            (registrar, cleanup) => registrar.Register<IService>((_, ref _) => new Service(), Lifetime.Scoped, cleanup: cleanup, tag: tag));
+            (registrar, cleanup) => registrar.Register((_, ref _) => new Service(), Lifetime.Scoped, cleanup: cleanup, tag: tag));
         yield return Registration("ScopedContainerFactoryWithTag", tag,
-            (registrar, cleanup) => registrar.RegisterScoped<IService>((_, ref _) => new Service(), cleanup: cleanup, tag: tag));
+            (registrar, cleanup) => registrar.RegisterScoped((_, ref _) => new Service(), cleanup: cleanup, tag: tag));
         yield return Registration("SingletonContainerFactory", null,
             (registrar, cleanup) => registrar.RegisterSingleton((_, ref _) => new Service(), cleanup: cleanup));
         yield return Registration("SingletonFactory", null,
             (registrar, cleanup) => registrar.RegisterSingleton(() => new Service(), cleanup: cleanup));
         yield return Registration("InstanceWithTag", tag,
-            (registrar, cleanup) => registrar.RegisterSingleton<IService>(new Service(), cleanup: cleanup, tag: tag));
+            (registrar, cleanup) => registrar.RegisterSingleton(new Service(), cleanup: cleanup, tag: tag));
         yield return Registration("Instance", null,
             (registrar, cleanup) => registrar.RegisterSingleton(new Service(), cleanup: cleanup));
     }

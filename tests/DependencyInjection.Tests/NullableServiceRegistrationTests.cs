@@ -17,11 +17,11 @@ public class NullableServiceRegistrationTests
         var registrations = new (string Name, RegisterNullable Register)[]
         {
             ("RawTransient", (registrar, factory, cleanup, tag) =>
-                registrar.RegisterTransient<int?>((_, ref _) => factory(), tag, cleanup)),
+                registrar.RegisterTransient((_, ref _) => factory(), tag, cleanup)),
             ("RawScoped", (registrar, factory, cleanup, tag) =>
-                registrar.RegisterScoped<int?>((_, ref _) => factory(), tag, cleanup)),
+                registrar.RegisterScoped((_, ref _) => factory(), tag, cleanup)),
             ("RawSingleton", (registrar, factory, cleanup, tag) =>
-                registrar.RegisterSingleton<int?>((_, ref _) => factory(), tag, cleanup)),
+                registrar.RegisterSingleton((_, ref _) => factory(), tag, cleanup)),
             ("FuncTransient", (registrar, factory, cleanup, tag) =>
                 registrar.RegisterTransient(factory, tag, cleanup)),
             ("FuncScoped", (registrar, factory, cleanup, tag) =>
@@ -41,7 +41,7 @@ public class NullableServiceRegistrationTests
             foreach (var lifetime in Enum.GetValues<Lifetime>())
             {
                 RegisterNullable rawRegistration = (registrar, factory, cleanup, currentTag) =>
-                    registrar.Register<int?>((_, ref _) => factory(), lifetime, currentTag, cleanup);
+                    registrar.Register((_, ref _) => factory(), lifetime, currentTag, cleanup);
                 RegisterNullable funcRegistration = (registrar, factory, cleanup, currentTag) =>
                     registrar.Register(factory, lifetime, currentTag, cleanup);
 

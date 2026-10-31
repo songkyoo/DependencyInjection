@@ -18,7 +18,7 @@ internal static class CompilationTestHelper
         .Append(typeof(IDependencyRegistrar).Assembly.Location)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .Select(path => MetadataReference.CreateFromFile(path))
-        .ToArray();
+        .ToArray<MetadataReference>();
 
     internal static CSharpCompilation CreateCompilation(
         string source,

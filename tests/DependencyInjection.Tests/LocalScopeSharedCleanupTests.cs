@@ -3,7 +3,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-// ReSharper disable AccessToModifiedClosure
 
 namespace Macaron.DependencyInjection.Tests;
 
@@ -58,11 +57,11 @@ public class LocalScopeSharedCleanupTests
     }
 
     [Test]
-    public void CleanupReentry_ShouldKeepRemainingEntries_WhenAnotherScopeReusesAndGrowsStorage()
+    public void CleanupReentry_ShouldRejectResolve_AndAllowStorageReuseAfterCleanup()
     {
         var nextId = 0;
         var cleanups = new List<int>();
-        var createdDuringCleanup = new List<Resource>();
+        var createdAfterCleanup = new List<Resource>();
         LocalScope other = null!;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
@@ -75,10 +74,7 @@ public class LocalScopeSharedCleanupTests
 
                     if (resource.Id == 2)
                     {
-                        for (var index = 0; index < 32; index++)
-                        {
-                            createdDuringCleanup.Add(other.Resolve<Resource>());
-                        }
+                        other.Resolve<Resource>();
                     }
                 }
             );
@@ -90,18 +86,27 @@ public class LocalScopeSharedCleanupTests
 
         first.Resolve<Resource>();
         first.Resolve<Resource>();
-        first.Dispose();
 
+        var exception = Assert.Throws<AggregateException>(first.Dispose);
+
+        Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(exception.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
         Assert.That(cleanups, Is.EqualTo(new[] { 2, 1 }));
-        Assert.That(createdDuringCleanup, Has.Count.EqualTo(32));
-        Assert.That(createdDuringCleanup.All(resource => resource.DisposeCount == 0), Is.True);
+
+        for (var index = 0; index < 32; index++)
+        {
+            createdAfterCleanup.Add(other.Resolve<Resource>());
+        }
+
+        Assert.That(createdAfterCleanup, Has.Count.EqualTo(32));
+        Assert.That(createdAfterCleanup.All(resource => resource.DisposeCount == 0), Is.True);
 
         second.Dispose();
 
         var expectedOrder = new[] { 2, 1 }.Concat(Enumerable.Range(3, 32).Reverse());
 
         Assert.That(cleanups, Is.EqualTo(expectedOrder));
-        Assert.That(createdDuringCleanup.All(resource => resource.DisposeCount == 1), Is.True);
+        Assert.That(createdAfterCleanup.All(resource => resource.DisposeCount == 1), Is.True);
     }
 
     [Test]

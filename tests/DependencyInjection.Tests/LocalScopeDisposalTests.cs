@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
 // ReSharper disable DisposeOnUsingVariable
 // ReSharper disable AccessToModifiedClosure
+using System.Runtime.CompilerServices;
 
 namespace Macaron.DependencyInjection.Tests;
 
@@ -30,7 +30,7 @@ public class LocalScopeDisposalTests
         });
         var first = container.CreateLocalScope();
         var alias = first;
-        var firstResource = first.Resolve<Resource>(null);
+        var firstResource = first.Resolve<Resource>();
         var oldResolver = capturedResolver!;
 
         Assert.That(oldResolver, Is.SameAs(first));
@@ -38,16 +38,16 @@ public class LocalScopeDisposalTests
         first.Dispose();
 
         using var second = container.CreateLocalScope();
-        var secondResource = second.Resolve<Resource>(null);
+        var secondResource = second.Resolve<Resource>();
 
         Assert.That(alias.Dispose, Throws.Nothing);
-        Assert.That(() => alias.Resolve<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => alias.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => alias.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => alias.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => oldResolver.Resolve<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(() => oldResolver.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(firstResource.DisposeCount, Is.EqualTo(1));
         Assert.That(secondResource.DisposeCount, Is.Zero);
-        Assert.That(second.Contains<Resource>(null), Is.True);
+        Assert.That(second.Contains<Resource>(), Is.True);
     }
 
     [Test]
@@ -55,7 +55,7 @@ public class LocalScopeDisposalTests
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterTransient<Resource>(factory: () => new Resource());
+            registrar.RegisterTransient(factory: () => new Resource());
         });
         var scopes = new List<LocalScope>();
         var resources = new List<Resource>();
@@ -65,7 +65,7 @@ public class LocalScopeDisposalTests
             var scope = container.CreateLocalScope();
 
             scopes.Add(scope);
-            resources.Add(scope.Resolve<Resource>(null));
+            resources.Add(scope.Resolve<Resource>());
         }
 
         for (var i = 0; i < 12; i += 2)
@@ -78,14 +78,14 @@ public class LocalScopeDisposalTests
             var scope = container.CreateLocalScope();
 
             scopes.Add(scope);
-            resources.Add(scope.Resolve<Resource>(null));
+            resources.Add(scope.Resolve<Resource>());
         }
 
         for (var i = 0; i < 12; i += 2)
         {
             scopes[i].Dispose();
 
-            Assert.That(() => scopes[i].Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => scopes[i].Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         }
 
         Assert.That(resources.Skip(12).All(resource => resource.DisposeCount == 0), Is.True);
@@ -97,7 +97,7 @@ public class LocalScopeDisposalTests
         foreach (var scope in scopes)
         {
             Assert.That(scope.Dispose, Throws.Nothing);
-            Assert.That(() => scope.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => scope.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         }
     }
 
@@ -133,7 +133,7 @@ public class LocalScopeDisposalTests
         });
         var scope = container.CreateLocalScope();
 
-        scope.Resolve<object>(null);
+        scope.Resolve<object>();
 
         var exception = Assert.Throws<AggregateException>(scope.Dispose);
 
@@ -143,11 +143,11 @@ public class LocalScopeDisposalTests
             : new Exception[] { collectedFailure }));
         Assert.That(scope.Dispose, Throws.Nothing);
         Assert.That(() => capturedResolver!.Resolve<object>(), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => scope.Contains<object>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => scope.Contains<object>(), Throws.TypeOf<ObjectDisposedException>());
 
         using var replacement = container.CreateLocalScope();
 
-        Assert.That(replacement.Contains<object>(null), Is.True);
+        Assert.That(replacement.Contains<object>(), Is.True);
     }
 
     [Test]
@@ -187,8 +187,8 @@ public class LocalScopeDisposalTests
         var first = container.CreateLocalScope();
         var second = container.CreateLocalScope();
 
-        first.Resolve<Service>(null);
-        second.Resolve<Service>(null);
+        first.Resolve<Service>();
+        second.Resolve<Service>();
 
         if (scopeCleanupFails || containerCleanupFails)
         {
@@ -220,8 +220,8 @@ public class LocalScopeDisposalTests
         Assert.That(first.Dispose, Throws.Nothing);
         Assert.That(second.Dispose, Throws.Nothing);
         Assert.That(container.Dispose, Throws.Nothing);
-        Assert.That(() => first.Resolve<Service>(null), Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(() => second.Contains<Resource>(null), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => first.Resolve<Service>(), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => second.Contains<Resource>(), Throws.TypeOf<ObjectDisposedException>());
         Assert.That(container.CreateLocalScope, Throws.TypeOf<ObjectDisposedException>());
     }
 
@@ -233,9 +233,9 @@ public class LocalScopeDisposalTests
         var first = container.CreateLocalScope();
         var second = container.CreateLocalScope();
 
-        first.Resolve<Resource>(null);
-        first.Resolve<Resource>(null);
-        second.Resolve<Resource>(null);
+        first.Resolve<Resource>();
+        first.Resolve<Resource>();
+        second.Resolve<Resource>();
 
         first.Dispose();
         Assert.That(resource.DisposeCount, Is.EqualTo(2));
@@ -295,7 +295,7 @@ public class LocalScopeDisposalTests
             );
         });
         var scope = container.CreateLocalScope();
-        var exception = Assert.Catch(() => scope.Resolve<Service>(null));
+        var exception = Assert.Catch(() => scope.Resolve<Service>());
 
         if (cleanupFails)
         {
@@ -315,7 +315,7 @@ public class LocalScopeDisposalTests
 
         fail = false;
 
-        scope.Resolve<Service>(null);
+        scope.Resolve<Service>();
         scope.Dispose();
 
         Assert.That(dependencies.All(resource => resource.DisposeCount == 1), Is.True);
@@ -370,7 +370,7 @@ public class LocalScopeDisposalTests
                 });
             });
             var scope = container.CreateLocalScope();
-            var resource = scope.Resolve<Resource>(null);
+            var resource = scope.Resolve<Resource>();
             var references = new[] { new WeakReference(container), new WeakReference(resource), new WeakReference(collected!) };
 
             if (cleanupFails)
