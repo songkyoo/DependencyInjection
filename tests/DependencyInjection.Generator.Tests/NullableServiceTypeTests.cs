@@ -35,7 +35,7 @@ public class NullableServiceTypeTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "value");
+                        registrar.RegisterInstance(instance: "value");
                         {{registration}}
                     });
 

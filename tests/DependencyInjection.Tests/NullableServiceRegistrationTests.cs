@@ -78,7 +78,7 @@ public class NullableServiceRegistrationTests
 
             Assert.That(error!.Message, Does.Contain(typeof(int?).ToString()));
 
-            registrar.RegisterSingleton(instance: 7, tag);
+            registrar.RegisterInstance(instance: 7, tag);
         }))
         {
             Assert.That(container.Resolve<int>(tag), Is.EqualTo(7));
@@ -98,12 +98,12 @@ public class NullableServiceRegistrationTests
         {
             var error = Assert.Throws<ArgumentException>(() =>
             {
-                registrar.RegisterSingleton<int?>(instance: value, cleanup: _ => cleanupCalls++);
+                registrar.RegisterInstance<int?>(instance: value, cleanup: _ => cleanupCalls++);
             });
 
             Assert.That(error!.Message, Does.Contain(typeof(int?).ToString()));
 
-            registrar.RegisterSingleton(instance: value);
+            registrar.RegisterInstance(instance: value);
         }))
         {
             Assert.That(container.Resolve<int>(), Is.EqualTo(value));
@@ -119,7 +119,7 @@ public class NullableServiceRegistrationTests
         {
             var error = Assert.Throws<ArgumentNullException>(() =>
             {
-                registrar.RegisterSingleton<int?>(instance: null);
+                registrar.RegisterInstance<int?>(instance: null);
             });
 
             Assert.That(error!.ParamName, Is.EqualTo("instance"));
@@ -141,7 +141,7 @@ public class NullableServiceRegistrationTests
         #region Local Functions
         static void RegisterInstance<T>(IDependencyRegistrar registrar, T value) where T : notnull
         {
-            registrar.RegisterSingleton(instance: value);
+            registrar.RegisterInstance(instance: value);
         }
         #endregion
     }
@@ -150,7 +150,7 @@ public class NullableServiceRegistrationTests
     public void ChildRegistration_ShouldRejectNullableTypeBeforeRunningFactory()
     {
         var factoryCalls = 0;
-        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 7));
+        using var parent = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: 7));
         using var child = parent.CreateChild(registrar =>
         {
             Assert.That(

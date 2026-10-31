@@ -65,8 +65,8 @@ public class EnumConstantTests
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
                 {
-                    registrar.RegisterSingleton(instance: "tagged", tag: Expected.Value);
-                    registrar.RegisterSingleton(instance: "numeric", tag: unchecked((ulong)Expected.Value));
+                    registrar.RegisterInstance(instance: "tagged", tag: Expected.Value);
+                    registrar.RegisterInstance(instance: "numeric", tag: unchecked((ulong)Expected.Value));
                     registrar.RegisterTransient<TaggedService>();
                 });
 

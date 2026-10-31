@@ -138,7 +138,7 @@ public class DependencyContainerSharedInstanceTests
         var customCleanupCount = 0;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance: resource, tag: ownerTag);
+            registrar.RegisterInstance(instance: resource, tag: ownerTag);
             registrar.Register<object>(factory: () => resource, lifetime, cleanup: _ => customCleanupCount++, tag: otherTag);
         });
 

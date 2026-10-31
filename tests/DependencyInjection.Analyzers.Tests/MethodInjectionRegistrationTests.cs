@@ -96,8 +96,8 @@ public class MethodInjectionRegistrationTests
     [TestCase("registrar.RegisterScoped<Service>(() => new Service());")]
     [TestCase("registrar.RegisterSingleton<Service>(() => new Service());")]
     [TestCase("registrar.Register<Service>(() => new Service(), Lifetime.Transient);")]
-    [TestCase("registrar.RegisterSingleton<Service>(new Service());")]
-    [TestCase("registrar.RegisterSingleton(new Service());")]
+    [TestCase("registrar.RegisterInstance<Service>(new Service());")]
+    [TestCase("registrar.RegisterInstance(new Service());")]
     [TestCase("registrar.RegisterTransient(() => new Service());")]
     [TestCase("registrar.RegisterScoped(() => new Service());")]
     [TestCase("registrar.RegisterSingleton(() => new Service());")]
@@ -161,7 +161,7 @@ public class MethodInjectionRegistrationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton<IService>(new Service());
+                        registrar.RegisterInstance<IService>(new Service());
                         registrar.RegisterTransient<AbstractService>(() => new Implementation());
                         registrar.RegisterTransient<Derived>();
                     });

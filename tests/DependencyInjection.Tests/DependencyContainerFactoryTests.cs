@@ -17,10 +17,10 @@ public class DependencyContainerFactoryTests
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             var error = Assert.Throws<ArgumentNullException>(() =>
-                registrar.RegisterSingleton<Foo>(instance: null!, tag));
+                registrar.RegisterInstance<Foo>(instance: null!, tag));
 
             Assert.That(error!.ParamName, Is.EqualTo("instance"));
-            registrar.RegisterSingleton(instance, tag);
+            registrar.RegisterInstance(instance, tag);
         });
 
         Assert.That(container.Resolve<Foo>(tag), Is.SameAs(instance));
@@ -31,7 +31,7 @@ public class DependencyContainerFactoryTests
     public void ValueTypeInstance_ShouldRegisterAndResolve(int instance)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
-            registrar.RegisterSingleton(instance: instance));
+            registrar.RegisterInstance(instance: instance));
 
         Assert.That(container.Resolve<int>(), Is.EqualTo(instance));
     }

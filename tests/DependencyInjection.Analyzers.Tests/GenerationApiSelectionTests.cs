@@ -168,7 +168,7 @@ public class GenerationApiSelectionTests
                             (IDependencyResolver resolver, ref CleanupCollector collector) => new Service()
                         );
                         registrar.RegisterScoped(() => new Service(), tag: "factory");
-                        registrar.RegisterSingleton(instance, tag: "instance");
+                        registrar.RegisterInstance(instance, tag: "instance");
                     });
 
                     return container.Resolve<Service>() is Service
@@ -256,7 +256,7 @@ public class GenerationApiSelectionTests
             {
                 public void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterSingleton(new Service());
+                    registrar.RegisterInstance(new Service());
                     registrar.RegisterTransient(() => new Service());
                 }
             }

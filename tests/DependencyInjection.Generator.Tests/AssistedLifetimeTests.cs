@@ -106,11 +106,11 @@ public class AssistedLifetimeTests
                 {
                     using var root = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "nested");
-                        registrar.RegisterSingleton(instance: "root", tag: "label");
+                        registrar.RegisterInstance(instance: "nested");
+                        registrar.RegisterInstance(instance: "root", tag: "label");
                         registrar.RegisterTransient<Nested>();
                     });
-                    using var child = root.CreateChild(registrar => registrar.RegisterSingleton(instance: "child", tag: "label"));
+                    using var child = root.CreateChild(registrar => registrar.RegisterInstance(instance: "child", tag: "label"));
                     using var scope = child.CreateLocalScope();
                     IDependencyResolver rootResolver = root;
                     IDependencyResolver childResolver = child;

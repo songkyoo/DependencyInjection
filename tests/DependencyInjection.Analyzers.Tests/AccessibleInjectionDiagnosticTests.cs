@@ -72,7 +72,7 @@ public class AccessibleInjectionDiagnosticTests
 
             public class Configuration
             {
-                public void Configure(IDependencyRegistrar registrar) { registrar.RegisterSingleton(new Service()); }
+                public void Configure(IDependencyRegistrar registrar) { registrar.RegisterInstance(new Service()); }
             }
             """,
             additionalReferences: MetadataReference.CreateFromImage(external)

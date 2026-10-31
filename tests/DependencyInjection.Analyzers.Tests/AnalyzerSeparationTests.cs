@@ -29,10 +29,10 @@ public class AnalyzerSeparationTests
         Assert.That(input.GetTypeByMetadataName("Macaron.DependencyInjection.DependencyRegistrarExtensions"), Is.Null);
     }
 
-    [TestCase("registrar.RegisterSingleton(new Service(1));")]
+    [TestCase("registrar.RegisterInstance(new Service(1));")]
     [TestCase("registrar.RegisterTransient(() => new Service(1));")]
     [TestCase("registrar.RegisterTransient<Service>((IDependencyResolver resolver, ref CleanupCollector collector) => new Service(1));")]
-    [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));")]
+    [TestCase("IDependencyRegistrarExtensions.RegisterInstance(registrar, new Service(1));")]
     public void AnalyzerWithoutGenerator_ShouldAllowExplicitAssistedRegistrations(string registration)
     {
         var input = CreateCompilation(

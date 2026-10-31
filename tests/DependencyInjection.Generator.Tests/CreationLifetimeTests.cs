@@ -249,8 +249,8 @@ public class CreationLifetimeTests
                     var registered = new Service("registered");
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "direct");
-                        registrar.RegisterSingleton(instance: registered);
+                        registrar.RegisterInstance(instance: "direct");
+                        registrar.RegisterInstance(instance: registered);
                     });
                     var created = container.For<Service>().Create();
 
@@ -283,7 +283,7 @@ public class CreationLifetimeTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "direct");
+                        registrar.RegisterInstance(instance: "direct");
                         registrar.RegisterTransient<Service>(() => throw new System.Exception("User factory was called."));
                     });
 
@@ -331,7 +331,7 @@ public class CreationLifetimeTests
                             resources.Add(resource);
                             return resource;
                         });
-                        registrar.RegisterSingleton(instance: "last");
+                        registrar.RegisterInstance(instance: "last");
                     });
                     using var scope = container.CreateLocalScope();
 

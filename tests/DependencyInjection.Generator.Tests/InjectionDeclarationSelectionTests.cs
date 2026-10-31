@@ -137,7 +137,7 @@ public class InjectionDeclarationSelectionTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: 42);
                         registrar.RegisterTransient<Service<int>>();
                     });
 

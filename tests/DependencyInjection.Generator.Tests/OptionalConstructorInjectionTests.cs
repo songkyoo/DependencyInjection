@@ -82,10 +82,10 @@ public class OptionalConstructorInjectionTests
                     var calls = 0;
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton<IDependency>(new Dependency(), tag: "optional");
-                        registrar.RegisterSingleton(instance: "registered", tag: "name");
+                        registrar.RegisterInstance<IDependency>(new Dependency(), tag: "optional");
+                        registrar.RegisterInstance(instance: "registered", tag: "name");
                         registrar.RegisterTransient<int>(() => ++calls, tag: "count");
-                        registrar.RegisterSingleton(instance: 9, tag: "limit");
+                        registrar.RegisterInstance(instance: 9, tag: "limit");
                         registrar.RegisterTransient<Service>();
                         registrar.RegisterTransient<IView, Service>();
                     });
@@ -123,9 +123,9 @@ public class OptionalConstructorInjectionTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton<IDependency>(new Dependency());
-                        registrar.RegisterSingleton(instance: "wrong tag");
-                        registrar.RegisterSingleton(instance: 99);
+                        registrar.RegisterInstance<IDependency>(new Dependency());
+                        registrar.RegisterInstance(instance: "wrong tag");
+                        registrar.RegisterInstance(instance: 99);
                     });
 
                     return container.For<Service>().Create().Value;
@@ -479,7 +479,7 @@ public class OptionalConstructorInjectionTests
     }
 
     [TestCase("", 3)]
-    [TestCase("registrar.RegisterSingleton(instance: 42);", 42)]
+    [TestCase("registrar.RegisterInstance(instance: 42);", 42)]
     public void NullableValueDefault_ShouldPreserveSelectedValueOverload(string dependencyRegistration, int expected)
     {
         var (compilation, _) = Generate(

@@ -44,15 +44,15 @@ public class FactoryTagTests
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
                 {
-                    registrar.RegisterSingleton(instance: "default");
-                    registrar.RegisterSingleton(instance: "tagged", tag: "dependency");
-                    registrar.RegisterSingleton(instance: "empty", tag: "");
-                    registrar.RegisterSingleton(instance: "service-tag", tag: "service");
+                    registrar.RegisterInstance(instance: "default");
+                    registrar.RegisterInstance(instance: "tagged", tag: "dependency");
+                    registrar.RegisterInstance(instance: "empty", tag: "");
+                    registrar.RegisterInstance(instance: "service-tag", tag: "service");
                     registrar.RegisterTransient<Service<string>>(tag: "service");
                     registrar.RegisterTransient<IService, Service<string>>(tag: "service");
                 });
                 using var child = container.CreateChild(registrar =>
-                    registrar.RegisterSingleton(instance: "child", tag: "dependency"));
+                    registrar.RegisterInstance(instance: "child", tag: "dependency"));
                 using var scope = child.CreateLocalScope();
 
                 return new[]
@@ -128,7 +128,7 @@ public class FactoryTagTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "tagged", tag: {{expression}});
+                        registrar.RegisterInstance(instance: "tagged", tag: {{expression}});
                         registrar.RegisterTransient<Service>(tag: "service");
                     });
 
@@ -187,7 +187,7 @@ public class FactoryTagTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "default");
+                        registrar.RegisterInstance(instance: "default");
                         registrar.RegisterTransient<Service>();
                     });
 
@@ -226,7 +226,7 @@ public class FactoryTagTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "default");
+                        registrar.RegisterInstance(instance: "default");
                         registrar.RegisterTransient<Service>();
                     });
 

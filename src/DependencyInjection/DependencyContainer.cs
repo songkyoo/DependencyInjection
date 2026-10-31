@@ -255,25 +255,25 @@ internal sealed class DependencyContainer(
             // Singleton은 등록 컨테이너의 캐시를 사용하고 Transient는 요청 resolver에 귀속한다.
             return typeRegistration switch
             {
-                TypeRegistration.Transient { Factory: var factory, Cleanup: var cleanup } =>
+                TypeRegistration.Transient { Source: var source, Cleanup: var cleanup } =>
                     dependencyContainer.CreateInstance(
                         key,
-                        factory,
+                        source,
                         cleanup,
                         resolver
                     ),
-                TypeRegistration.Scoped { Factory: var factory, Cleanup: var cleanup } =>
+                TypeRegistration.Scoped { Source: var source, Cleanup: var cleanup } =>
                     dependencyContainer.GetOrAdd(
                         scopedInstances,
                         key,
-                        factory,
+                        source,
                         cleanup
                     ),
-                TypeRegistration.Singleton { Factory: var factory, Cleanup: var cleanup } =>
+                TypeRegistration.Singleton { Source: var source, Cleanup: var cleanup } =>
                     GetOrAdd(
                         _instances,
                         key,
-                        factory,
+                        source,
                         cleanup
                     ),
                 _ => throw new InvalidOperationException($"Not supported type registration: {typeRegistration}")
@@ -291,7 +291,7 @@ internal sealed class DependencyContainer(
     private object GetOrAdd(
         Dictionary<RegistrationKey, object> instances,
         RegistrationKey key,
-        DependencyFactory<object> factory,
+        RegistrationSource source,
         Action<object>? cleanup
     )
     {
@@ -301,7 +301,7 @@ internal sealed class DependencyContainer(
         }
 
         // 공유 서비스의 의존성은 최초 조회 범위가 아니라 그 서비스를 소유한 컨테이너에 귀속한다.
-        var newInstance = CreateInstance(key, factory, cleanup, resolver: this);
+        var newInstance = CreateInstance(key, source, cleanup, resolver: this);
 
         instances.Add(key, newInstance);
 
@@ -310,7 +310,7 @@ internal sealed class DependencyContainer(
 
     private object CreateInstance(
         RegistrationKey key,
-        DependencyFactory<object> factory,
+        RegistrationSource source,
         Action<object>? cleanup,
         IDependencyResolver resolver
     )
@@ -335,13 +335,17 @@ internal sealed class DependencyContainer(
 
         try
         {
-            instance = factory.Invoke(resolver, key, ref cleanupCollector);
+            instance = source.Create(resolver, ref cleanupCollector);
+
+            if (instance is null)
+            {
+                throw new InvalidOperationException($"Factory returned null for registration: {key}");
+            }
 
             ThrowIfDisposed();
         }
         catch (Exception exception)
         {
-            // 이 팩토리의 수집 항목만 정리하고 이미 Resolve한 의존성은 기존 귀속 범위에 남긴다.
             CleanupFailedFactory(in cleanupCollector, exception);
 
             throw;

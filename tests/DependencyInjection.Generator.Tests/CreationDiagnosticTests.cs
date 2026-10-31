@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 using static Macaron.DependencyInjection.Testing.CompilationTestHelper;
@@ -121,7 +121,7 @@ public class CreationDiagnosticTests
                 public static string Run()
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: "expected", tag: "value"));
+                        registrar.RegisterInstance(instance: "expected", tag: "value"));
 
                     return container.For<Service>().Create().Value;
                 }
@@ -162,7 +162,7 @@ public class CreationDiagnosticTests
                 public static int Run()
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: 42, tag: Kind.Value));
+                        registrar.RegisterInstance(instance: 42, tag: Kind.Value));
 
                     return container.For<Service>().Create().Value;
                 }

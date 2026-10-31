@@ -128,7 +128,7 @@ public class MethodInjectionIncrementalTests
             public static string Run()
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
-                    registrar.RegisterSingleton(instance: "provided", tag: "second"));
+                    registrar.RegisterInstance(instance: "provided", tag: "second"));
                 var service = new Service();
 
                 container.For<Service>().Inject(service);

@@ -93,10 +93,10 @@ public class ConstructorIncrementalTests
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
                 {
-                    registrar.RegisterSingleton(instance: "updated");
-                    registrar.RegisterSingleton(instance: "first", tag: "first");
-                    registrar.RegisterSingleton(instance: "second", tag: "second");
-                    registrar.RegisterSingleton(instance: 42);
+                    registrar.RegisterInstance(instance: "updated");
+                    registrar.RegisterInstance(instance: "first", tag: "first");
+                    registrar.RegisterInstance(instance: "second", tag: "second");
+                    registrar.RegisterInstance(instance: 42);
                     registrar.RegisterTransient<Service>();
                     registrar.RegisterTransient<object, Service>(tag: "object");
                 });

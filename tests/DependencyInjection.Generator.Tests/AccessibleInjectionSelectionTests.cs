@@ -36,7 +36,7 @@ public class AccessibleInjectionSelectionTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: 42);
                         registrar.RegisterTransient<Service>();
                     });
 
@@ -72,9 +72,9 @@ public class AccessibleInjectionSelectionTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: 42);
                         registrar.RegisterTransient<Service>();
-                        registrar.RegisterSingleton(instance: new Service(9), tag: "explicit");
+                        registrar.RegisterInstance(instance: new Service(9), tag: "explicit");
                     });
 
                     return (container.Resolve<Service>().Value, container.For<Service>().Create().Value,
@@ -170,7 +170,7 @@ public class AccessibleInjectionSelectionTests
             {
                 public static int Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 42));
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: 42));
 
                     return container.For<Service>().Create().Value;
                 }
@@ -245,7 +245,7 @@ public class AccessibleInjectionSelectionTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: 42);
                         registrar.RegisterTransient<Service>();
                     });
 

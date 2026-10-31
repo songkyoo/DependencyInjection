@@ -157,8 +157,8 @@ public class CreationGenerationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "resolved");
-                        registrar.RegisterSingleton(instance: new[] { 1, 2 });
+                        registrar.RegisterInstance(instance: "resolved");
+                        registrar.RegisterInstance(instance: new[] { 1, 2 });
                     });
 
                     return container.For<Service>().Create().Value;
@@ -294,7 +294,7 @@ public class CreationGenerationTests
             {
                 public static string Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: "primary"));
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: "primary"));
                     return Service.From(container).Value;
                 }
             }

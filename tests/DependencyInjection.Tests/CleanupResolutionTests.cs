@@ -166,8 +166,8 @@ public class CleanupResolutionTests
         IDependencyResolver resolver = null!;
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton("registered");
-            registrar.RegisterSingleton(42);
+            registrar.RegisterInstance("registered");
+            registrar.RegisterInstance(42);
             registrar.RegisterTransient(factory: static () => new object(), cleanup: _ =>
             {
                 Assert.That(() => request(resolver), Throws.InvalidOperationException);
@@ -218,7 +218,7 @@ public class CleanupResolutionTests
     [Test]
     public void Cleanup_ShouldAllowResolveOnAnIndependentContainer()
     {
-        using var independent = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(42));
+        using var independent = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(42));
         using var container = DependencyContainerFactory.Create(registrar =>
         {
             registrar.RegisterTransient(factory: static () => new object(), cleanup: _ =>

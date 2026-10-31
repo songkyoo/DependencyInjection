@@ -33,7 +33,7 @@ public class TagValueAccessibilityTests
 
                 public static void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterSingleton(instance: "resolved", tag: Kind.Main);
+                    registrar.RegisterInstance(instance: "resolved", tag: Kind.Main);
                     registrar.RegisterTransient<Service>();
                 }
             }
@@ -215,7 +215,7 @@ public class TagValueAccessibilityTests
 
                 public static void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterSingleton(instance: "resolved", tag: {{expression}});
+                    registrar.RegisterInstance(instance: "resolved", tag: {{expression}});
                     registrar.RegisterTransient<Service>();
                 }
             }

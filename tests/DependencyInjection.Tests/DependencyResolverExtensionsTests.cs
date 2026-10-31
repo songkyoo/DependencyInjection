@@ -131,8 +131,8 @@ public class DependencyResolverExtensionsTests(bool useLocalScope)
     {
         using var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance: 7);
-            registrar.RegisterSingleton(instance: 42, tag: "answer");
+            registrar.RegisterInstance(instance: 7);
+            registrar.RegisterInstance(instance: 42, tag: "answer");
         });
         using var scope = container.CreateLocalScope();
         IDependencyResolver resolver = useLocalScope ? scope : container;

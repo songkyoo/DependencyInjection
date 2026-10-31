@@ -44,8 +44,8 @@ public class MethodInjectionGenerationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "chosen", tag: "primary");
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: "chosen", tag: "primary");
+                        registrar.RegisterInstance(instance: 42);
                     });
                     var service = Service<string>.Existing();
                     var value = 3;
@@ -88,7 +88,7 @@ public class MethodInjectionGenerationTests
             {
                 public static int Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 5));
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: 5));
                     var state = new State { Value = 10 };
                     var context = container.For<State>();
 
@@ -189,7 +189,7 @@ public class MethodInjectionGenerationTests
                 public static string Run()
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: "dependency", tag: "base"));
+                        registrar.RegisterInstance(instance: "dependency", tag: "base"));
                     var overridden = container.For<Overridden>().Create();
                     var hidden = container.For<Hidden>().Create();
                     var context = container.For<Base>();
@@ -284,7 +284,7 @@ public class MethodInjectionGenerationTests
             {
                 public static string Run()
                 {
-                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 9));
+                    using var container = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: 9));
                     var value = new External<int>();
 
                     container.For<External<int>>().Inject(value);
@@ -353,7 +353,7 @@ public class MethodInjectionGenerationTests
                 public static int Run()
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: new[] { "a", "b" }));
+                        registrar.RegisterInstance(instance: new[] { "a", "b" }));
                     var service = new Service();
 
                     container.For<Service>().Inject(service);
@@ -455,7 +455,7 @@ public class MethodInjectionGenerationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: 42);
+                        registrar.RegisterInstance(instance: 42);
                         registrar.RegisterSingleton<IService>((IDependencyResolver resolver, ref CleanupCollector collector) =>
                         {
                             var service = new Service();

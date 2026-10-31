@@ -115,15 +115,15 @@ public class AssistedRegistrationTests
     [TestCase("registrar.RegisterScoped<Service>(() => new Service(1));")]
     [TestCase("registrar.RegisterSingleton<Service>(() => new Service(1));")]
     [TestCase("registrar.Register<Service>(() => new Service(1), Lifetime.Transient);")]
-    [TestCase("registrar.RegisterSingleton<Service>(new Service(1));")]
-    [TestCase("registrar.RegisterSingleton(new Service(1));")]
+    [TestCase("registrar.RegisterInstance<Service>(new Service(1));")]
+    [TestCase("registrar.RegisterInstance(new Service(1));")]
     [TestCase("registrar.RegisterTransient(() => new Service(1));")]
     [TestCase("registrar.RegisterScoped(() => new Service(1));")]
     [TestCase("registrar.RegisterSingleton(() => new Service(1));")]
     [TestCase("IDependencyRegistrarExtensions.RegisterTransient<Service>(registrar, () => new Service(1));")]
     [TestCase(ResolverTransientRegistration)]
     [TestCase(ResolverLifetimeRegistration)]
-    [TestCase("IDependencyRegistrarExtensions.RegisterSingleton(registrar, new Service(1));")]
+    [TestCase("IDependencyRegistrarExtensions.RegisterInstance(registrar, new Service(1));")]
     [TestCase("registrar.RegisterSingleton<Service>(() => resolver.For<Service>().Create(1));")]
     [TestCase("registrar.RegisterSingleton(() => resolver.For<Service>().Create(1));")]
     public void AssistedConstructor_ShouldAllowExplicitFactoryAndInstanceRegistrations(string registration)
@@ -275,7 +275,7 @@ public class AssistedRegistrationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton<IService>(new Service(1));
+                        registrar.RegisterInstance<IService>(new Service(1));
                         registrar.RegisterTransient<AbstractService>(() => new Implementation(2));
                     });
 

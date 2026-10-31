@@ -16,7 +16,7 @@ public class AssistedIncrementalTests
             public static string Run()
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
-                    registrar.RegisterSingleton(instance: "resolved"));
+                    registrar.RegisterInstance(instance: "resolved"));
                 return container.For<Service>().Create().Value;
             }
         }
@@ -158,7 +158,7 @@ public class AssistedIncrementalTests
             {
                 public void Configure(IDependencyRegistrar registrar)
                 {
-                    registrar.RegisterSingleton(new Service());
+                    registrar.RegisterInstance(new Service());
                     registrar.RegisterTransient<Service>();
                 }
             }

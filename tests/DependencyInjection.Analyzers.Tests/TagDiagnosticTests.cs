@@ -381,7 +381,7 @@ public class TagDiagnosticTests
                 {
                     var tag = new[] { 1 };
                     using var container = DependencyContainerFactory.Create(registrar =>
-                        registrar.RegisterSingleton(instance: "tagged", tag: tag));
+                        registrar.RegisterInstance(instance: "tagged", tag: tag));
 
                     return container.Contains<string>(tag) && container.Resolve<string>(tag) == "tagged";
                 }

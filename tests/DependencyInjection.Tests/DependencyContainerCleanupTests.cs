@@ -193,9 +193,9 @@ public class DependencyContainerCleanupTests
         yield return Registration("SingletonFactory", null,
             (registrar, cleanup) => registrar.RegisterSingleton(() => new Service(), cleanup: cleanup));
         yield return Registration("InstanceWithTag", tag,
-            (registrar, cleanup) => registrar.RegisterSingleton(new Service(), cleanup: cleanup, tag: tag));
+            (registrar, cleanup) => registrar.RegisterInstance(new Service(), cleanup: cleanup, tag: tag));
         yield return Registration("Instance", null,
-            (registrar, cleanup) => registrar.RegisterSingleton(new Service(), cleanup: cleanup));
+            (registrar, cleanup) => registrar.RegisterInstance(new Service(), cleanup: cleanup));
     }
 
     private static TestCaseData Registration(

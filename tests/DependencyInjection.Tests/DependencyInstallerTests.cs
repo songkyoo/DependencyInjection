@@ -154,7 +154,7 @@ public class DependencyInstallerTests
         var failure = new ArgumentException("Creation failed.");
         var installer = new Installer(registrar =>
         {
-            registrar.RegisterSingleton(resource);
+            registrar.RegisterInstance(resource);
             registrar.RegisterSingleton<Service>(factory: (container, ref _) =>
             {
                 container.Resolve<Resource>();

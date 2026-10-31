@@ -12,7 +12,7 @@ public class NullableServiceResolutionTests(string resolverKind)
     [TestCase("service")]
     public void NullableServiceType_ShouldRemainMissingWhenUnderlyingTypeIsRegistered(string? tag)
     {
-        using var root = DependencyContainerFactory.Create(registrar => registrar.RegisterSingleton(instance: 42, tag));
+        using var root = DependencyContainerFactory.Create(registrar => registrar.RegisterInstance(instance: 42, tag));
         using var child = root.CreateChild();
         using var localScope = root.CreateLocalScope();
         using var childLocalScope = child.CreateLocalScope();
@@ -118,8 +118,8 @@ public class NullableServiceResolutionTests(string resolverKind)
         var values = new List<int?> { null, 42 };
         using var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance: values);
-            registrar.RegisterSingleton(instance: "value", tag: 42);
+            registrar.RegisterInstance(instance: values);
+            registrar.RegisterInstance(instance: "value", tag: 42);
         });
         using var child = root.CreateChild();
         using var localScope = root.CreateLocalScope();

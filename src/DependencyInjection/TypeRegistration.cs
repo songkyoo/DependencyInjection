@@ -2,9 +2,9 @@
 
 internal abstract record TypeRegistration
 {
-    internal sealed record Transient(DependencyFactory<object> Factory, Action<object>? Cleanup) : TypeRegistration;
+    internal sealed record Transient(RegistrationSource Source, Action<object>? Cleanup) : TypeRegistration;
 
-    internal sealed record Scoped(DependencyFactory<object> Factory, Action<object>? Cleanup) : TypeRegistration;
+    internal sealed record Scoped(RegistrationSource Source, Action<object>? Cleanup) : TypeRegistration;
 
-    internal sealed record Singleton(DependencyFactory<object> Factory, Action<object>? Cleanup) : TypeRegistration;
+    internal sealed record Singleton(RegistrationSource Source, Action<object>? Cleanup) : TypeRegistration;
 }

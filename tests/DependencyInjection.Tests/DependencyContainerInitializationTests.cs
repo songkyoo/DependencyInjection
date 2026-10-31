@@ -49,7 +49,7 @@ public class DependencyContainerInitializationTests
         var instance = new Resource(() => cleanups++);
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance, cleanup: null);
+            registrar.RegisterInstance(instance, cleanup: null);
         });
 
         Assert.That(cleanups, Is.Zero);
@@ -68,7 +68,7 @@ public class DependencyContainerInitializationTests
         var instance = new Resource(() => defaultCleanups++);
         var root = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(instance, cleanup: _ => customCleanups++);
+            registrar.RegisterInstance(instance, cleanup: _ => customCleanups++);
         });
 
         Assert.That(defaultCleanups, Is.Zero);

@@ -43,10 +43,10 @@ public class MethodInjectionMetadataTests
             {
                 using var container = DependencyContainerFactory.Create(registrar =>
                 {
-                    registrar.RegisterSingleton(instance: 1, tag: "first");
-                    registrar.RegisterSingleton(instance: 2, tag: "second");
-                    registrar.RegisterSingleton(instance: "a", tag: "first");
-                    registrar.RegisterSingleton(instance: "b", tag: "second");
+                    registrar.RegisterInstance(instance: 1, tag: "first");
+                    registrar.RegisterInstance(instance: 2, tag: "second");
+                    registrar.RegisterInstance(instance: "a", tag: "first");
+                    registrar.RegisterInstance(instance: "b", tag: "second");
                 });
                 var number = new Service<int>();
                 var text = new Service<string>();

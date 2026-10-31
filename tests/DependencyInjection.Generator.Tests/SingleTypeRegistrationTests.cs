@@ -40,7 +40,7 @@ public class SingleTypeRegistrationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "injected");
+                        registrar.RegisterInstance(instance: "injected");
                         registrar.{{method}}<Service>({{arguments}});
                     });
 
@@ -79,7 +79,7 @@ public class SingleTypeRegistrationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "injected");
+                        registrar.RegisterInstance(instance: "injected");
                         {{registration}}
                     });
 
@@ -170,7 +170,7 @@ public class SingleTypeRegistrationTests
                 {
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
-                        registrar.RegisterSingleton(instance: "shared");
+                        registrar.RegisterInstance(instance: "shared");
                         registrar.RegisterSingleton<Service>();
                         registrar.RegisterScoped<IService, Service>();
                     });
@@ -214,7 +214,7 @@ public class SingleTypeRegistrationTests
                     using var container = DependencyContainerFactory.Create(registrar =>
                     {
                         Install<IService>(registrar, () => new Service(1));
-                        registrar.RegisterSingleton(instance: new Service(2), tag: "instance");
+                        registrar.RegisterInstance(instance: new Service(2), tag: "instance");
                         registrar.RegisterScoped<Service>(
                             (IDependencyResolver resolver, ref CleanupCollector collector) => new Service(3),
                             tag: "scoped"

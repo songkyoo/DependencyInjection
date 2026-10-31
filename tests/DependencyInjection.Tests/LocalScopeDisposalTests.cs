@@ -162,7 +162,7 @@ public class LocalScopeDisposalTests
         var containerFailure = new InvalidOperationException("Container cleanup failed.");
         var container = DependencyContainerFactory.Create(registrar =>
         {
-            registrar.RegisterSingleton(shared, cleanup: resource =>
+            registrar.RegisterInstance(shared, cleanup: resource =>
             {
                 events.Add("shared");
                 resource.Dispose();

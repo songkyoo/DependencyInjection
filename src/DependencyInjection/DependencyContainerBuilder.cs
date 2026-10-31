@@ -11,52 +11,89 @@ internal sealed class DependencyContainerBuilder : IDependencyRegistrar
 
     #region IDependencyRegistrar Inteface
     void IDependencyRegistrar.RegisterTransient<T>(
-        DependencyFactory<T> factory,
+        RegistrationSource.Factory<T> source,
         object? tag,
         Action<T>? cleanup
     )
     {
-        AddRegistration(
-            new RegistrationKey(typeof(T), tag),
-            registration: new TypeRegistration.Transient(
-                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
-                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
-            )
-        );
+        AddRegistration(source, Lifetime.Transient, tag, cleanup);
+    }
+
+    void IDependencyRegistrar.RegisterTransient<T>(
+        RegistrationSource.ContextFactory<T> source,
+        object? tag,
+        Action<T>? cleanup
+    )
+    {
+        AddRegistration(source, Lifetime.Transient, tag, cleanup);
     }
 
     void IDependencyRegistrar.RegisterScoped<T>(
-        DependencyFactory<T> factory,
+        RegistrationSource.Factory<T> source,
         object? tag,
         Action<T>? cleanup
     )
     {
-        AddRegistration(
-            new RegistrationKey(typeof(T), tag),
-            registration: new TypeRegistration.Scoped(
-                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
-                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
-            )
-        );
+        AddRegistration(source, Lifetime.Scoped, tag, cleanup);
+    }
+
+    void IDependencyRegistrar.RegisterScoped<T>(
+        RegistrationSource.ContextFactory<T> source,
+        object? tag,
+        Action<T>? cleanup
+    )
+    {
+        AddRegistration(source, Lifetime.Scoped, tag, cleanup);
     }
 
     void IDependencyRegistrar.RegisterSingleton<T>(
-        DependencyFactory<T> factory,
+        RegistrationSource.Instance<T> source,
         object? tag,
         Action<T>? cleanup
     )
     {
-        AddRegistration(
-            new RegistrationKey(typeof(T), tag),
-            registration: new TypeRegistration.Singleton(
-                Factory: (resolver, ref collector) => factory.Invoke(resolver, ref collector),
-                Cleanup: cleanup is null ? null : instance => cleanup((T)instance)
-            )
-        );
+        AddRegistration(source, Lifetime.Singleton, tag, cleanup);
+    }
+
+    void IDependencyRegistrar.RegisterSingleton<T>(
+        RegistrationSource.Factory<T> source,
+        object? tag,
+        Action<T>? cleanup
+    )
+    {
+        AddRegistration(source, Lifetime.Singleton, tag, cleanup);
+    }
+
+    void IDependencyRegistrar.RegisterSingleton<T>(
+        RegistrationSource.ContextFactory<T> source,
+        object? tag,
+        Action<T>? cleanup
+    )
+    {
+        AddRegistration(source, Lifetime.Singleton, tag, cleanup);
     }
     #endregion
 
     #region Methods
+    private void AddRegistration<T>(
+        RegistrationSource source,
+        Lifetime lifetime,
+        object? tag,
+        Action<T>? cleanup
+    ) where T : notnull
+    {
+        Action<object>? objectCleanup = cleanup is null ? null : instance => cleanup((T)instance);
+        TypeRegistration registration = lifetime switch
+        {
+            Lifetime.Transient => new TypeRegistration.Transient(source, objectCleanup),
+            Lifetime.Scoped => new TypeRegistration.Scoped(source, objectCleanup),
+            Lifetime.Singleton => new TypeRegistration.Singleton(source, objectCleanup),
+            _ => throw new InvalidOperationException($"Not supported life time: {lifetime}")
+        };
+
+        AddRegistration(new RegistrationKey(typeof(T), tag), registration);
+    }
+
     private void AddRegistration(RegistrationKey key, TypeRegistration registration)
     {
         if (Nullable.GetUnderlyingType(key.Type) is not null)
