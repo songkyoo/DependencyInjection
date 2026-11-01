@@ -31,6 +31,12 @@ public sealed class DependencyInjectionAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(start =>
         {
             var compilation = start.Compilation;
+
+            if (compilation.ReferencedAssemblyNames.All(identity => identity.Name != "Macaron.DependencyInjection"))
+            {
+                return;
+            }
+
             var models = new InjectionAnalysisModels(compilation);
 
             start.RegisterSymbolAction(

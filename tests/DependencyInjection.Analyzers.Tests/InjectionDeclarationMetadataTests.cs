@@ -251,7 +251,7 @@ public class InjectionDeclarationMetadataTests
     [Test]
     public void ProductionAnalyzerAndAttribute_ShouldEnableMethodDeclarations()
     {
-        var input = CreateInput(
+        var input = CreateCompilation(
             """
             using Macaron.DependencyInjection;
 

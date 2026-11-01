@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -128,34 +129,56 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterPostInitializationOutput(static output =>
+        var analysisCompilations = context.CompilationProvider.SelectMany(static (compilation, cancellationToken) =>
         {
-            var hintName = GetAssemblyHintName(
-                sourceName: "DependencyRegistrarExtensions",
-                assemblyIdentity: typeof(DependencyInjectionGenerator).Assembly.FullName
+            if (compilation.ReferencedAssemblyNames.All(identity => identity.Name != "Macaron.DependencyInjection"))
+            {
+                return ImmutableArray<CSharpCompilation>.Empty;
+            }
+
+            // 출력 전에도 등록 호출의 오버로드를 판별할 수 있도록 분석용 선언을 추가한다.
+            var parseOptions = (CSharpParseOptions?)compilation.SyntaxTrees.FirstOrDefault()?.Options;
+            var registrationExtensions = CSharpSyntaxTree.ParseText(
+                text: RegistrationExtensionsSource,
+                options: parseOptions,
+                cancellationToken: cancellationToken
             );
 
-            output.AddSource(
-                hintName: $"{hintName}.g.cs",
-                sourceText: SourceText.From(RegistrationExtensionsSource, Encoding.UTF8)
-            );
+            return ImmutableArray.Create(((CSharpCompilation)compilation).AddSyntaxTrees(registrationExtensions));
         });
 
-        var requests = context
+        context.RegisterSourceOutput(
+            source: analysisCompilations,
+            action: static (output, _) =>
+            {
+                var hintName = GetAssemblyHintName(
+                    sourceName: "DependencyRegistrarExtensions",
+                    assemblyIdentity: typeof(DependencyInjectionGenerator).Assembly.FullName
+                );
+
+                output.AddSource(
+                    hintName: $"{hintName}.g.cs",
+                    sourceText: SourceText.From(RegistrationExtensionsSource, Encoding.UTF8)
+                );
+            }
+        );
+
+        var constructionCandidates = context
             .SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => ConstructionDiscovery.IsConstructionCandidate(node),
-                transform: ConstructionDiscovery.Discover
-            )
-            .Where(static request => request is not null)
-            .Select(static (request, _) => request!);
+                transform: static (syntax, _) => syntax.Node.GetReference()
+            );
 
-        var generation = requests
-            .Collect()
-            .Combine(context.CompilationProvider)
+        var generation = analysisCompilations
+            .Combine(constructionCandidates.Collect())
             .Select(static (data, cancellationToken) => ConstructionDiscovery.CreateDefinitions(
-                requests: data.Left,
-                sourceCompilation: (CSharpCompilation)data.Right,
+                requests: ConstructionDiscovery.Discover(
+                    references: data.Right,
+                    compilation: data.Left,
+                    cancellationToken
+                ),
+                sourceCompilation: data.Left,
                 cancellationToken
             ))
             .WithTrackingName("FactoryGeneration");
@@ -203,12 +226,12 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
         );
 
         context.RegisterSourceOutput(
-            source: entryPoints.Collect().Combine(context.CompilationProvider),
+            source: analysisCompilations.Combine(entryPoints.Collect()),
             action: static (output, data) =>
             {
                 foreach (var diagnostic in InjectionEntryPointValidation.Validate(
-                    references: data.Left,
-                    sourceCompilation: data.Right,
+                    references: data.Right,
+                    sourceCompilation: data.Left,
                     cancellationToken: output.CancellationToken
                 ))
                 {
@@ -231,17 +254,17 @@ public sealed class DependencyInjectionGenerator : IIncrementalGenerator
             .WithTrackingName("FactoriesSource");
 
         context.RegisterSourceOutput(
-            source: assemblyIdentity.Combine(factoriesSource),
+            source: factoriesSource.Combine(assemblyIdentity),
             action: static (output, data) =>
             {
                 var hintName = GetAssemblyHintName(
                     sourceName: "Factories",
-                    assemblyIdentity: data.Left
+                    assemblyIdentity: data.Right
                 );
 
                 output.AddSource(
                     hintName: $"{hintName}.g.cs",
-                    sourceText: SourceText.From(data.Right, Encoding.UTF8)
+                    sourceText: SourceText.From(data.Left, Encoding.UTF8)
                 );
             }
         );

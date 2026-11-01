@@ -25,11 +25,36 @@ internal static class ConstructionDiscovery
         return GenerationApiSelection.IsCandidate(simpleNameSyntax);
     }
 
-    internal static ConstructionRequest? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    internal static ImmutableArray<ConstructionRequest> Discover(
+        ImmutableArray<SyntaxReference> references,
+        CSharpCompilation compilation,
+        CancellationToken cancellationToken
+    )
     {
-        var semanticModel = context.SemanticModel;
-        var name = (SimpleNameSyntax)context.Node;
+        var requests = ImmutableArray.CreateBuilder<ConstructionRequest>();
 
+        foreach (var reference in references)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var name = (SimpleNameSyntax)reference.GetSyntax(cancellationToken);
+            var semanticModel = compilation.GetSemanticModel(name.SyntaxTree);
+
+            if (Discover(semanticModel, name, cancellationToken) is { } request)
+            {
+                requests.Add(request);
+            }
+        }
+
+        return requests.ToImmutable();
+    }
+
+    private static ConstructionRequest? Discover(
+        SemanticModel semanticModel,
+        SimpleNameSyntax name,
+        CancellationToken cancellationToken
+    )
+    {
         if (GenerationApiSelection.GetBoundMethod(name, semanticModel, cancellationToken) is not { } method)
         {
             return null;
@@ -42,7 +67,7 @@ internal static class ConstructionDiscovery
 
         if (implementationIndex < 0
             || comparer.Equals(
-                semanticModel.GetEnclosingSymbol(context.Node.SpanStart, cancellationToken)?.ContainingType,
+                semanticModel.GetEnclosingSymbol(name.SpanStart, cancellationToken)?.ContainingType,
                 definition.ContainingType
             )
         )
